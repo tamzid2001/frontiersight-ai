@@ -462,8 +462,8 @@ class H(BaseHTTPRequestHandler):
                 if not user: return self._send(401, {"error": "sign in required for server-saved scenes", "upgrade_url": "/#view-auth"})
                 plan = _plan_of(user); limit = _billing.entitlements(plan)["server_scenes"]
                 payload = body.get("payload")
-                if not isinstance(payload, dict) or "objects" not in payload and "tracks" not in payload:
-                    return self._send(400, {"error": "payload must be a scene object ({objects:[...]} or {tracks:[...]})"})
+                if not isinstance(payload, dict) or not any(k in payload for k in ("objects", "tracks", "workspace")):
+                    return self._send(400, {"error": "payload must be a scene/workspace object ({objects:[...]}, {tracks:[...]} or {workspace:{...}})"})
                 if limit is not None:
                     count = _store.one("SELECT COUNT(*) AS c FROM scenes WHERE user_id=?", (user["id"],))["c"]
                     if count >= limit:
