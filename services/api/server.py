@@ -33,13 +33,19 @@ def _rate_ok(ip: str, limit: int = RATE_LIMIT) -> bool:
 # --- accounts, billing, entitlements -------------------------------------
 from services.api import store as _store
 from integrations import billing as _billing
+from services.api import workspace_http as _workspace
 
 def _auth_user(handler):
+    if _workspace.enabled():
+        actor = _workspace.identity(handler)
+        return {"id": actor.user_id, "name": "Clerk member", "email": "", "clerk_plan": actor.plan}
     auth = handler.headers.get("Authorization", "")
     token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else None
     return _store.user_for_token(token)
 
 def _plan_of(user) -> str:
+    if user and "clerk_plan" in user:
+        return user["clerk_plan"]
     return _store.plan_for(user["id"]) if user else "explorer"
 
 def _fernet():
@@ -117,14 +123,14 @@ class H(BaseHTTPRequestHandler):
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
                 "tracks": "/api/tracks", "from-paths": "/api/tracks/from-paths", "me": "/api/me", "signup": "/api/auth/signup",
-                "login": "/api/auth/login", "logout": "/api/auth/logout",
+                "login": "/api/auth/login", "logout": "/api/auth/logout", "auth-config": "/api/auth/config",
                 "checkout": "/api/billing/checkout", "portal": "/api/billing/portal",
                 "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
                 "scenes": "/api/scenes", "scenedel": "/api/scenes/delete", "sceneupd": "/api/scenes/update",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
                 "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support", "mcp": "/api/mcp",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
-                "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
+                "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js", "contact": "/contact.html"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
         b = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code); self.send_header("Content-Type", ctype)
@@ -140,6 +146,8 @@ class H(BaseHTTPRequestHandler):
                           parse_constant=_bad_const)
     def do_GET(self):
         route = self._route()
+        if _workspace.handle(self, route, "GET"):
+            return
         try:
             if route in ("/robots.txt", "/sitemap.xml") or self.path.split("?")[0] in ("/robots.txt", "/sitemap.xml"):
                 import datetime as _dt
@@ -218,6 +226,8 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(400, {"error": str(e)[:300]})
     def do_POST(self):
+        if _workspace.handle(self, self._route(), self.command):
+            return
         route = self._route()
         try:
             if route.startswith("/api/billing/webhook"):

@@ -168,12 +168,25 @@
     {
       "source": "/sam-default.jpg",
       "destination": "/api/index?ep=samdefault"
+    },
+    {
+      "source": "/api/auth/config",
+      "destination": "/api/index?ep=auth-config"
+    },
+    {
+      "source": "/contact.html",
+      "destination": "/api/index?ep=contact"
     }
   ],
   "functions": {
     "api/index.py": {
       "includeFiles": "{engine,agents,integrations,services,apps}/**",
       "maxDuration": 60
+    }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "feat/enterprise-web-20261027": false
     }
   }
 }

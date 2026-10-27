@@ -730,14 +730,25 @@ function toast(msg, kind="ok"){const host=$("toasts");if(!host)return;const d=do
  setTimeout(()=>{d.style.opacity="0";d.style.transition="opacity .4s";setTimeout(()=>d.remove(),420);},4200);}
 
 // ---- server accounts (first-party auth; Clerk/OIDC can replace the provider) ----
-function sessionToken(){return localStorage.getItem("fs-session")||"";}
-function serverUser(){try{return JSON.parse(localStorage.getItem("fs-user")||"null");}catch(e){return null;}}
+function sessionToken(){return window.__clerkMode ? (window.Clerk?.session ? "clerk-session" : "") : localStorage.getItem("fs-session")||"";}
+function htmlText(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function serverUser(){if(window.__clerkMode){const user=window.Clerk?.user;return user?{id:user.id+":"+(window.Clerk.organization?.id||"personal"),name:user.fullName||"Member"}:null;}try{return JSON.parse(localStorage.getItem("fs-user")||"null");}catch(e){return null;}}
 function profile(){return serverUser();}
 function sceneStoreKey(){const p=serverUser();return "fs-my-scenes:"+(p?("u"+p.id):"guest");}
 function runsKey(){const p=serverUser();return "fs-runs:"+(p?("u"+p.id):"guest");}
-async function api(path, opts={}){const tok=sessionToken();
- const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json",...(tok?{"Authorization":"Bearer "+tok}:{}),...(opts.headers||{})}});
+const uncertainSceneWrites=new Map();
+async function api(path, opts={}){const tok=window.__clerkMode ? await window.Clerk?.session?.getToken() : sessionToken();
+ const identityAtStart=serverUser()?.id;
+ const signature=path+String(opts.body||"");
+ if(window.__clerkMode&&path.startsWith("/api/scenes")&&opts.method){
+  if(!uncertainSceneWrites.has(signature))uncertainSceneWrites.set(signature,crypto.randomUUID());
+  opts={...opts,headers:{...(opts.headers||{}),"Idempotency-Key":uncertainSceneWrites.get(signature)},signal:AbortSignal.timeout(20000)};
+ }
+ const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json",...(tok?{"Authorization":"Bearer "+tok}:{}),...(window.__clerkMode?{"X-Workspace-Organization":window.Clerk.organization?.id||"personal"}:{}),...(opts.headers||{})}});
  let body={};try{body=await r.json();}catch(e){}
+ if(window.__clerkMode&&identityAtStart!==serverUser()?.id)throw new Error("Workspace changed during request; refresh before continuing.");
+ if(r.ok)uncertainSceneWrites.delete(signature);
+ if(uncertainSceneWrites.size>100)uncertainSceneWrites.delete(uncertainSceneWrites.keys().next().value);
  return {status:r.status, body};}
 state.me=null;
 async function refreshMe(){const {body}=await api("/api/me");state.me=body;
@@ -757,7 +768,7 @@ async function refreshMe(){const {body}=await api("/api/me");state.me=body;
  if(body.authenticated)loadOrg();else{const oc=$("org-card");if(oc)oc.textContent="Sign in to see your organisation.";}
  const card=$("me-card");
  if(card)card.innerHTML=body.authenticated
-  ? `Signed in as <b>${body.user.email}</b> · plan <b>${body.plan}</b>${body.subscription?` · subscription: ${body.subscription.status}${body.subscription.cancel_at_period_end?" (cancels at period end)":""}`:" · no subscription"}<br>Entitlements: SAM video ${body.entitlements.sam_video?"✓":"—"} · server scenes ${body.entitlements.server_scenes===null?"unlimited":body.entitlements.server_scenes} · Monte-Carlo ≤ ${body.entitlements.mc_runs===null?"unlimited":body.entitlements.mc_runs} · your Meta key ${body.meta_key.configured?("saved (…"+body.meta_key.last4+")"):"not saved"}<br>Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment"}`
+  ? `Signed in as <b>${htmlText(body.user.email)}</b> · plan <b>${body.plan}</b>${body.subscription?` · subscription: ${body.subscription.status}${body.subscription.cancel_at_period_end?" (cancels at period end)":""}`:" · no subscription"}<br>Entitlements: SAM video ${body.entitlements.sam_video?"✓":"—"} · server scenes ${body.entitlements.server_scenes===null?"unlimited":body.entitlements.server_scenes} · Monte-Carlo ≤ ${body.entitlements.mc_runs===null?"unlimited":body.entitlements.mc_runs} · your Meta key ${body.meta_key.configured?("saved (…"+body.meta_key.last4+")"):"not saved"}<br>Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment"}`
   : `Not signed in (guest / Explorer). Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment — subscriptions are disabled, waitlist is open."}`;
  return body;}
 function refreshAuthUI(){refreshMe();}
@@ -934,7 +945,7 @@ $("sam-build").onclick=async()=>{if(state.samCaptures.length<2){samStatus("Segme
 state.playSpeed=1; state._playLast=null;
 document.querySelectorAll(".speedseg button").forEach(b=>b.onclick=()=>{
  state.playSpeed=+b.dataset.speed;
- document.querySelectorAll(".speedseg button").forEach(x=>x.classList.toggle("on",x===b));});
+ document.querySelectorAll(".speedseg button").forEach(x=>{x.classList.toggle("on",x===b);x.setAttribute("aria-pressed",String(x===b));});});
 $("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.playing?"⏸ Pause":"▶ Play";
  state._playLast=null;
  if(state.playing){const step=(ts)=>{if(!state.playing)return;
@@ -1020,7 +1031,7 @@ function wsLocalSave(list){try{localStorage.setItem(wsKey(),JSON.stringify(list.
 state.workspaces=[]; state.openWorkspace=null;
 function wsNormalizeLocal(w){return {...w, server:false, key:"local:"+w.id};}
 function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
- return {key:"server:"+s.id, server:true, id:s.id, name:s.name||w.name||"workspace",
+ return {key:"server:"+s.id, server:true, id:s.id, version:s.version, name:s.name||w.name||"workspace",
   kind:w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
   objects:w.objects||(s.payload&&s.payload.objects)||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
   captures:w.captures||null, image:w.image||null};}
@@ -1042,7 +1053,7 @@ function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
  if(!state.workspaces.length){host.innerHTML='<p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p>';return;}
  if(!mine.length){host.innerHTML='<p class="dim">No workspace matches that search.</p>';return;}
  host.innerHTML=mine.map((w,i)=>`<div class="labobj ws-card" data-key="${w.key}">
-  <b>${w.kind==="frames"?"▣":"✦"} ${w.name}</b>
+  <b>${w.kind==="frames"?"▣":"✦"} ${htmlText(w.name)}</b>
   <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
   <span class="pill ghost">${w.server?"server":"this browser"}</span>
   <span class="dim">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</span>
@@ -1068,10 +1079,12 @@ function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
 async function persistWorkspace(w){
  if(sessionToken()&&!w.legacy){
   const payload={workspace:{kind:w.kind,objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
-  if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload})});
-   if(out.status===200)return true;}
+  if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload,expectedVersion:w.version})});
+   if(out.status===200){w.version=out.body.version||w.version;return true;}
+   toast((out.body.error||"Update failed")+". Refresh and review before retrying.","err");return false;}
   const out=await api("/api/scenes",{method:"POST",body:JSON.stringify({name:w.name,payload})});
-  if(out.status===201){w.server=true;w.id=out.body.id;return true;}
+  if(out.status===201||out.status===200&&out.body.replayed){w.server=true;w.id=out.body.id;w.version=out.body.version;return true;}
+  if(window.__clerkMode){toast((out.body.error||"Server save failed")+". No browser fallback was silently created.","err");return false;}
   if(out.status===402){toast(out.body.error+" — saving in this browser instead.","warn");}
  }
  const list=wsLocalList().filter(x=>x.id!==w.id);
@@ -1079,7 +1092,7 @@ async function persistWorkspace(w){
   objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null});
  return wsLocalSave(list);}
 async function deleteWorkspace(w){
- if(w.server&&sessionToken()){await api("/api/scenes/delete",{method:"POST",body:JSON.stringify({id:w.id})});}
+ if(w.server&&sessionToken()){const out=await api("/api/scenes/delete",{method:"POST",body:JSON.stringify({id:w.id,expectedVersion:w.version})});if(out.status!==200){toast(out.body.error||"Delete failed","err");return false;}}
  wsLocalSave(wsLocalList().filter(x=>x.id!==w.id));
  if(state.openWorkspace&&state.openWorkspace.key===w.key)state.openWorkspace=null;
  toast(`Workspace "${w.name}" deleted.`);}
@@ -1127,3 +1140,31 @@ $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capt
   el.innerHTML=`<b>${d.name} v${d.version}</b> · protocol ${d.protocol} · ${(d.tools||[]).length} tools<br>`+
    (d.tools||[]).map(t=>`<code>${t.name}</code>`).join(" · ");
  }catch(e){el.textContent="MCP endpoint unreachable from this browser.";}})();
+
+// Clerk is opt-in; tokens remain inside its SDK, never localStorage.
+(async function initializeClerk(){
+ try {
+  const response=await fetch("/api/auth/config",{cache:"no-store"});const config=await response.json();
+  if(config.provider!=="clerk")return;
+  window.__clerkMode=true;localStorage.removeItem("fs-session");localStorage.removeItem("fs-user");
+  const issuer=new URL(config.issuer);
+  if(issuer.protocol!=="https:"||issuer.origin!==config.issuer||!/^pk_(test|live)_/.test(config.publishableKey))throw new Error("Clerk configuration incomplete");
+  const script=document.createElement("script");script.async=true;script.crossOrigin="anonymous";
+  script.setAttribute("data-clerk-publishable-key",config.publishableKey);
+  script.src=issuer.origin+"/npm/@clerk/clerk-js@6.42.0/dist/clerk.browser.js";
+  await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.head.append(script);});
+  await window.Clerk.load();
+  const target=document.createElement("section");target.id="clerk-account-controls";
+  const user=document.createElement("div"),org=document.createElement("div"),signIn=document.createElement("button");
+  signIn.textContent="Sign in with Clerk";signIn.onclick=()=>window.Clerk.openSignIn();
+  target.append(user,org,signIn);$("view-auth").prepend(target);
+  window.Clerk.mountUserButton(user);window.Clerk.mountOrganizationSwitcher(org,{hidePersonal:false});
+  signIn.hidden=Boolean(window.Clerk.user);
+  const old=$("auth-signedout");if(old)old.hidden=true;
+  const settings=document.createElement("button");settings.textContent="Account and organization settings";
+  settings.onclick=()=>window.Clerk.organization?window.Clerk.openOrganizationProfile():window.Clerk.openUserProfile();target.prepend(settings);
+  let previous;
+  window.Clerk.addListener(()=>{signIn.hidden=Boolean(window.Clerk.user);const next=serverUser()?.id;if(next===previous)return;previous=next;
+   state.workspaces=[];state.openWorkspace=null;uncertainSceneWrites.clear();renderWorkspaces();refreshMe();loadWorkspaces();});
+ } catch {toast("Clerk account setup is unavailable. Saved cloud workspaces require a valid signed-in session.","err");}
+})();

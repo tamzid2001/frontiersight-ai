@@ -45,10 +45,10 @@ def test_custom_endpoints_via_http():
     import json as _json, threading, urllib.request
     from http.server import ThreadingHTTPServer
     from services.api.server import H
-    srv = ThreadingHTTPServer(("127.0.0.1", 8799), H)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     def post(path, payload):
-        req = urllib.request.Request(f"http://127.0.0.1:8799{path}", method="POST",
+        req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}{path}", method="POST",
                                      data=_json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         return _json.loads(urllib.request.urlopen(req, timeout=10).read())
     tracks = [{"object_id": "forklift-1", "category": "forklift", "space": "pixel", "radius": 18,
@@ -66,6 +66,7 @@ def test_custom_endpoints_via_http():
         {"t": 1, "records": [{"box": {"x1": 25, "y1": 0, "x2": 65, "y2": 40}}]}]})
     assert len(tr["tracks"]) == 1 and len(tr["tracks"][0]["points"]) == 2
     srv.shutdown()
+    srv.server_close()
 
 def test_validate_scene_schema():
     from integrations.meta.spark import validate_scene, ModelError
@@ -99,15 +100,16 @@ def test_scene_endpoint_offline(monkeypatch):
     out = _json.loads(urllib.request.urlopen(req, timeout=10).read())
     assert out["source"] == "OFFLINE_HEURISTIC" and len(out["scene"]["objects"]) >= 2
     srv.shutdown()
+    srv.server_close()
 
 def test_counterfactual_agent_target_decel_via_http():
     import json as _json, threading, urllib.request
     from http.server import ThreadingHTTPServer
     from services.api.server import H
-    srv = ThreadingHTTPServer(("127.0.0.1", 8803), H)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     def post(path, payload):
-        req = urllib.request.Request(f"http://127.0.0.1:8803{path}", method="POST",
+        req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}{path}", method="POST",
                                      data=_json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         return _json.loads(urllib.request.urlopen(req, timeout=30).read())
     base = {"scenario": "warehouse-multi", "speed_reduction_pct": 40, "intervention_t": 1.0}
@@ -120,6 +122,7 @@ def test_counterfactual_agent_target_decel_via_http():
     other_agent = post("/api/counterfactual", {**base, "agent_id": "robot-1", "target_id": "forklift-1"})
     assert other_agent["agent_id"] == "robot-1"
     srv.shutdown()
+    srv.server_close()
 
 def test_multi_trajectories_by_actor():
     from engine import scenarios as _scen

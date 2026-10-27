@@ -116,11 +116,14 @@ def test_indie_track_not_startup():
 def test_sam_vision_and_site_upgrades():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     js = (ROOT / "apps" / "web" / "app.js").read_text()
-    for marker in ['id="sam-panel"', 'id="sam-canvas"', 'id="play-speed"', 'id="cf-export"',
+    for marker in ['id="sam-panel"', 'id="sam-canvas"', 'class="speedseg"', 'id="cf-export"',
                    'id="ws-search"', 'id="clear-data"', 'id="lab-clear-all"', 'id="foot-version"',
                    "application/ld+json", 'class="skip"']:
         assert marker in html, marker
     assert js.count('$("play").onclick') == 1 and "samCaptures" in js
+    assert 'document.querySelectorAll(".speedseg button")' in js
+    for speed in ["0.5", "1", "2"]:
+        assert f'data-speed="{speed}"' in html
 
 
 def test_review_fixes_present():
