@@ -101,7 +101,9 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
     other = _by_id[_fp["pair"][1]] if _fp and len(tracks) > 1 else tracks[-1]
     t0 = max(agent.points[0][0], other.points[0][0])
     pa, pb = agent.position_at(t0), other.position_at(t0)
-    va, vb = agent.velocity_at(1), other.velocity_at(1)
+    from engine.geometry import Vec as _Vec
+    va = agent.velocity_at(1) if len(agent.points) > 1 else _Vec(0, 0)
+    vb = other.velocity_at(1) if len(other.points) > 1 else _Vec(0, 0)
 
     hypothesis = {"hypothesis": f"Reduce {agent.object_id} speed by {speed_reduction_pct:.0f}% from t={intervention_t}s",
                   "intervention": {"speed_reduction_pct": speed_reduction_pct, "intervention_time_s": intervention_t},

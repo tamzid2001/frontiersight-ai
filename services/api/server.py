@@ -37,7 +37,12 @@ def parse_tracks(payload: list):
     if not isinstance(payload, list) or not 2 <= len(payload) <= 24:
         raise ValueError("tracks must be a list of 2..24 objects")
     tracks = []
+    seen_ids = set()
     for raw in payload:
+        oid = str(raw.get("object_id", ""))[:64]
+        if not oid or oid in seen_ids: raise ValueError(f"duplicate or missing object_id: {oid!r} (ids must be unique)")
+        seen_ids.add(oid)
+        if not 0 <= float(raw.get("radius", 0.0)) <= 100: raise ValueError(f"track {oid}: radius out of range [0,100]")
         pts = raw.get("points", [])
         if not 2 <= len(pts) <= 5000: raise ValueError(f"track {raw.get('object_id')}: need 2..5000 points")
         points = [(float(t), Vec(float(x), float(y))) for t, x, y in pts]
@@ -55,7 +60,8 @@ def get_scenario(name: str) -> dict:
 def report_for(name: str, run_dict: dict | None = None) -> dict:
     sc = get_scenario(name)
     return {"experiment_id": f"fs-{name}", "kind": sc["kind"], "disclaimer": sc["disclaimer"],
-            "source_digest": __import__("hashlib").sha256(name.encode()).hexdigest(),
+            "source_digest": __import__("hashlib").sha256(
+                json.dumps(scen.scenario_to_dict(sc), sort_keys=True).encode()).hexdigest(),
             "calibration": sc["calibration"], "ground_truth": sc["ground_truth"],
             "run": run_dict, "validation_cases": validation_cases(),
             "labels": {"deterministic_fixture_verified": True, "unit_tests": "see CI",
@@ -83,7 +89,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.6.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.7.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",

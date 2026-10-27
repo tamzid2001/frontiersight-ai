@@ -3,6 +3,8 @@ from engine.geometry import Vec
 from engine.iou_tracking import build_tracks, iou
 from engine.multi import analyse_all, simulate_agent, focus_pair
 from engine.kinematics import Calibration
+from engine.tracking import Track
+from engine.geometry import Vec
 from engine import scenarios as scen
 from services.api.server import parse_tracks
 
@@ -126,3 +128,16 @@ def test_multi_trajectories_by_actor():
     r = simulate_agent((a.position_at(t0), a.velocity_at(1), a.radius),
                        [(t.object_id, t.position_at(t0), t.velocity_at(1), t.radius) for t in sc["tracks"][1:]], 1.0, 40)
     assert set(r["trajectories_by_actor"]) == set(r["per_actor"])
+
+def test_single_point_track_reports_insufficient_not_crash():
+    from engine.kinematics import analyse_pair as ap
+    a = Track("a", "forklift", "pixel", [(0.0, Vec(5, 5))], 4, "MODEL_DERIVED")
+    b = Track("b", "pedestrian", "pixel", [(0.0, Vec(50, 5)), (1.0, Vec(45, 5))], 4, "MODEL_DERIVED")
+    out = ap(a, b, Calibration(None))
+    assert out["event"] is None and "insufficient" in out["reason"]
+
+def test_parse_tracks_rejects_duplicate_ids_and_bad_radius():
+    base = {"category": "robot", "points": [[0, 0, 0], [1, 3, 0]], "radius": 1}
+    with pytest.raises(ValueError): parse_tracks([{"object_id": "x", **base}, {"object_id": "x", **base}])
+    with pytest.raises(ValueError): parse_tracks([{"object_id": "x", **base, "radius": -2},
+                                                  {"object_id": "y", **base}])

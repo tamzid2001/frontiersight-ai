@@ -53,3 +53,11 @@ def test_theme_and_grouped_nav():
     assert html.count('data-view=') <= 8                       # grouped nav, not 9 flat tabs
     assert 'data-theme-mode="system"' in html and "prefers-color-scheme" in html
     assert '[data-theme="light"]' in css and 'id="cf-map"' in html and 'id="cf-target"' in html and 'id="cf-decel"' in html
+
+def test_inspector_inside_studio_and_entities():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    s = html.index('<section id="view-studio"'); e = html.index('</section>', s)
+    assert 'id="inspector-body"' in html[s:e]
+    assert "function drawEntity" in js and '"forklift"' in js and "labelPill" in js
+    assert "--accent-ink" in (ROOT / "apps" / "web" / "app.css").read_text()

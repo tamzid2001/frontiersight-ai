@@ -34,6 +34,11 @@ def analyse_pair(a: Track, b: Track, cal: Calibration, horizon: float = 6.0,
     """Proximity analysis over the overlapping observed window. Uses each track's
     latest finite-difference velocity at the window start (documented assumption)."""
     if a.space != b.space: raise ValueError("tracks must share a coordinate space")
+    if len(a.points) < 2 or len(b.points) < 2:
+        return {"pair": [a.object_id, b.object_id], "event": None,
+                "reason": "insufficient observations: a track has fewer than 2 points, so no velocity can be estimated",
+                "d_min": None, "closing": False, "ttc_s": None, "units": a.space,
+                "metric_claims": a.space == "world"}
     t0 = max(a.points[0][0], b.points[0][0]); t1 = min(a.points[-1][0], b.points[-1][0])
     if t1 <= t0: return {"pair": [a.object_id, b.object_id], "event": None,
                          "reason": "no overlapping observed window"}
