@@ -568,7 +568,8 @@ function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,st
    if(sel){x.strokeStyle=col;x.lineWidth=1.6;x.setLineDash([4,4]);x.beginPath();x.arc(a,b,r+8,0,7);x.stroke();x.setLineDash([]);}
    const ahead=posOnPath(o,state.lab.t+0.35);let hd=state["lhd_"+o.id]||0;
    if(ahead&&(ahead[0]!==pos[0]||ahead[1]!==pos[1])){hd=Math.atan2(-(ahead[1]-pos[1]),ahead[0]-pos[0]);state["lhd_"+o.id]=hd;}
-   drawEntity(x,o.category,a,b,Math.max(10,r),hd,state.lab.t*7);
+   if(o.custom)drawCustom2D(x,o,a,b,Math.max(10,r),hd);
+   else drawEntity(x,o.category,a,b,Math.max(10,r),hd,state.lab.t*7);
    _labLabels.push([`${o.id}${o.speed?` · ${o.speed} m/s`:" · static"}`,a+r+9,b-9,col]);}}
  _labLabels.forEach(L=>labelPill(x,L[0],L[1],L[2],L[3]));
  const live=$("lab-live");if(live){let best=null;
@@ -593,7 +594,7 @@ document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace
 function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
  if(state.labTitle)labSetTitle(state.labTitle,false);
  el.innerHTML=state.lab.objects.length?state.lab.objects.map(o=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${o.id}">
-  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.id}</b> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
+  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.displayName||o.id}</b>${o.custom?' <span class="pill ghost">custom ✦</span>':""} <span class="dim">${o.id}</span> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
   <div class="row labctl">
    <label>Speed m/s<input type="number" step="0.1" min="0" max="8" value="${o.speed}" data-f="speed"></label>
    <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
@@ -686,8 +687,22 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    labStatus(`Waypoint removed from ${wh.o.id}.`);}
   else{const[sx,sy]=stagePos(e);const ph=hitPath(sx,sy);if(ph)select(ph.o);}});
 })();
-$("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
+function buildPalette(){const sel=$("lab-new-cat");if(!sel)return;const cur=sel.value;
+ sel.innerHTML=["forklift","pedestrian","robot","vehicle","cyclist","shelf"]
+  .map(c=>`<option value="${c}">${c[0].toUpperCase()+c.slice(1)}${c==="shelf"?" (static)":""}</option>`).join("")+
+  (state.customObjects&&state.customObjects.length
+   ?`<optgroup label="My objects">${state.customObjects.map(o=>`<option value="custom:${o.id}">✦ ${o.spec.name}</option>`).join("")}</optgroup>`:"");
+ if([...sel.options].some(o=>o.value===cur))sel.value=cur;}
+function labAddCustom(rec){const spec=rec.spec;
+ const o=labAdd(spec.base_category,null,spec.base_category==="shelf"?0:1.2,spec.radius,0,"stop","straight");
+ o.custom={id:rec.id,spec,image:rec.image||null};o.displayName=spec.name;
+ labRenderList();labDraw();return o;}
+$("lab-add").onclick=()=>{const v=$("lab-new-cat").value;
+ if(v.startsWith("custom:")){const rec=(state.customObjects||[]).find(x=>x.id===v.slice(7));
+  if(rec){const o=labAddCustom(rec);labStatus(`${spec_name(o)} added — click the stage to lay its path.`);return;}}
+ const cat=v;const o=labAdd(cat);
  labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
+function spec_name(o){return o.displayName||o.id;}
 document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
  if(b.dataset.tpl==="near-miss"){labAdd("forklift",[[1,7],[7.5,7],[13,7]],1.6,0.9,0);labAdd("pedestrian",[[8.6,13],[8.0,9],[8.5,5.5],[9.2,1]],1.55,0.45,0,"stop","smooth");}
  if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[6,6.8],[10,8],[15,11]],2.4,1.1,0,"stop","smooth");labAdd("cyclist",[[9,13.5],[8.6,8],[9.2,3],[9.5,0.5]],1.9,0.5,0.5,"stop","smooth");labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1,"stop","smooth");}
@@ -792,7 +807,8 @@ function suggestedName(base){if(base)return base;
  return `${cats} · ${state.lab.objects.length} components · ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;}
 function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;state.labUpdatedAt=Date.now();
  labSetTitle(scene.name||"",false);
- (scene.objects||[]).forEach(o=>labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
+ (scene.objects||[]).forEach(o=>{const nl=labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight");
+  if(o.custom){nl.custom=o.custom;nl.displayName=o.displayName||o.custom.spec.name;}});
  labStatus(label);labDraw();}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-prompt").addEventListener("input",()=>{$("lab-prompt-count").textContent=$("lab-prompt").value.length;});
@@ -1460,3 +1476,81 @@ $("voice-fallback").onclick = () => {
   rec.onerror = e => micStatus("Browser speech recognition error: " + e.error);
   rec.start();
 };
+
+
+// ---- custom objects: Muse-designed, Muse Image-rendered, saved to your profile ----
+state.customObjects = state.customObjects || [];
+state._sprites = state._sprites || {};
+function objStoreKey(){const u=(typeof serverUser==="function")?serverUser():null;return "fs-custom-objects:"+(u?("u"+u.id):"guest");}
+function drawCustom2D(x,o,cx,cy,r,hd){
+ const spec=o.custom.spec;
+ const img=o.custom.image?getSprite(o.custom.id,o.custom.image):null;
+ x.save();x.translate(cx,cy);x.rotate(hd||0);
+ if(img&&img.complete&&img.naturalWidth){
+  const s=r*2.1;x.beginPath();x.roundRect(-s/2,-s/2,s,s,s*0.22);x.clip();
+  x.drawImage(img,-s/2,-s/2,s,s);x.restore();
+  x.save();x.translate(cx,cy);x.strokeStyle=spec.palette.accent;x.lineWidth=2;
+  x.beginPath();x.roundRect(-s/2,-s/2,s,s,s*0.22);x.stroke();x.restore();return;}
+ // vector fallback: top-view parts from the same recipe the 3D view builds
+ const k=r/(spec.radius||0.8);
+ for(const part of spec.parts){const col=spec.palette[part.color]||part.color||spec.palette.body;
+  x.fillStyle=col;const[px,,pz]=part.pos,[sx,,sz]=part.size;
+  if(part.shape==="box")x.fillRect((px-sx/2)*k,(pz-sz/2)*k,sx*k,sz*k);
+  else{x.beginPath();x.arc(px*k,pz*k,Math.max(sx,sz)/2*k,0,7);x.fill();}}
+ x.restore();}
+function getSprite(id,src){if(!state._sprites[id]){const im=new Image();im.src=src;state._sprites[id]=im;}
+ return state._sprites[id];}
+async function resizeImageForSave(dataUrl,max=256){
+ if(!dataUrl||!dataUrl.startsWith("data:"))return dataUrl;
+ try{const img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=dataUrl;});
+  const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",0.78);}catch(e){return null;}}
+async function loadCustomObjects(){
+ let local=[];try{local=JSON.parse(localStorage.getItem(objStoreKey())||"[]");}catch(e){}
+ let server=[];
+ if(sessionToken()){try{const out=await api("/api/objects");
+   if(out.status===200)server=out.body.objects.map(o=>({id:o.id,name:o.name,spec:o.spec,image:o.image,server:true}));}catch(e){}}
+ const byId=new Map();
+ for(const o of server)byId.set(o.id,o);
+ for(const o of local)if(!byId.has(o.id))byId.set(o.id,o);
+ state.customObjects=[...byId.values()];
+ buildPalette();}
+async function saveCustomObject(rec){
+ if(sessionToken()){
+  const out=await api("/api/objects",{method:"POST",body:JSON.stringify({spec:rec.spec,image:rec.image})});
+  if(out.status===201){rec.id=out.body.id;rec.server=true;}
+  else if(out.status===402){toast(out.body.error+" — saved in this browser instead.","warn");}
+ }
+ if(!rec.server){
+  const list=[rec,...(JSON.parse(localStorage.getItem(objStoreKey())||"[]")).filter(x=>x.id!==rec.id)];
+  try{localStorage.setItem(objStoreKey(),JSON.stringify(list.slice(0,30)));}
+  catch(e){toast("Browser storage is full — this object lives in the scene but was not saved to the library.","err");return rec;}
+ }
+ if(!state.customObjects.some(x=>x.id===rec.id))state.customObjects.unshift(rec);
+ buildPalette();return rec;}
+$("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
+ if(desc.length<3){$("obj-status").textContent="Describe the object first (a few words).";return;}
+ const btn=$("obj-gen");btn.disabled=true;btn.textContent="Designing…";
+ $("obj-status").textContent="Muse Spark is designing the build spec, then Muse Image renders it (10–40s)…";
+ try{
+  const resp=await fetch("/api/meta/object",{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({description:desc})});
+  const out=await resp.json();
+  if(!(resp.status===200&&out.spec)){throw new Error(out.error||out.detail||("HTTP "+resp.status));}
+  const image=await resizeImageForSave(out.image_data_url);
+  const rec={id:"local-"+Date.now(),name:out.spec.name,spec:out.spec,image,server:false};
+  await saveCustomObject(rec);
+  const placed=labAddCustom(rec);
+  $("obj-preview").innerHTML=`<div class="card" style="margin-top:10px">
+   ${image?`<img src="${image}" alt="${out.spec.name} reference render" style="width:100%;border-radius:10px">`:""}
+   <p><b>${out.spec.name}</b> <span class="pill ghost">${out.source==="MODEL_DERIVED"?"Muse Spark + Muse Image":"offline procedural"}</span><br>
+   <span class="dim">${out.spec.description||""} Footprint radius ${out.spec.radius} m · height ${out.spec.height_m} m ·
+   ${out.spec.parts.length} construction parts · saved to ${rec.server?"your server profile":"this browser"} and placed in your scene as <b>${placed.id}</b>.</span></p>
+   ${out.image_note?`<p class="dim">${out.image_note}</p>`:""}</div>`;
+  $("obj-status").textContent="";
+  toast(`“${out.spec.name}” created and saved — it is now in the component palette under My objects.`);
+ }catch(e){$("obj-status").textContent="Could not create that object: "+e.message;}
+ finally{btn.disabled=false;btn.textContent="Generate object";}};
+loadCustomObjects();

@@ -275,3 +275,33 @@ def test_voice_endpoint_validation_and_stub(api, monkeypatch):
     with pytest.raises(ValueError): voice.validate_wav(b"RIFFxxxxWAVEbad")
     facts = voice.validate_wav(wav(0.5))
     assert facts["sample_rate"] == 24000
+
+def test_custom_objects_generate_and_profile(api, monkeypatch):
+    from integrations.meta import spark
+    monkeypatch.setattr(spark, "design_custom_object",
+                        lambda d: ({"name": "Scissor Lift", "base_category": "vehicle", "radius": 1.0,
+                                    "height_m": 2.6, "palette": {"body": "#f2b04a", "accent": "#38c6d9", "dark": "#2c3444"},
+                                    "parts": [{"shape": "box", "size": [1.6, 0.4, 0.9], "pos": [0, 0.3, 0], "color": "body"}],
+                                    "description": "test"}, {"model": "muse-spark-1.3"}))
+    import services.api.server as srv
+    monkeypatch.setattr("integrations.meta.image.generate_illustration",
+                        lambda prompt: {"data": [{"b64_json": "AAAA"}], "model": "muse-image-1.0"})
+    s, out = call(api, "/api/meta/object", {"description": "a yellow scissor lift"})
+    assert s == 200 and out["spec"]["name"] == "Scissor Lift" and out["source"] == "MODEL_DERIVED"
+    assert out["image_data_url"].startswith("data:image/webp")
+    with pytest.raises(spark.ModelError):
+        spark.validate_custom_object({"name": "X", "parts": [{"shape": "torus", "size": [1, 1, 1], "pos": [0, 0, 0]}]})
+    # profile persistence: guest cannot sync, signed-in user can, and it lists back
+    s, out = call(api, "/api/objects", {"spec": out["spec"] if False else {
+        "name": "Scissor Lift", "base_category": "vehicle", "radius": 1.0, "height_m": 2.6,
+        "palette": {"body": "#f2b04a", "accent": "#38c6d9", "dark": "#2c3444"},
+        "parts": [{"shape": "box", "size": [1.6, 0.4, 0.9], "pos": [0, 0.3, 0], "color": "body"}]}})
+    assert s == 401
+    token = signup(api, "maker@example.com")
+    spec = {"name": "Scissor Lift", "base_category": "vehicle", "radius": 1.0, "height_m": 2.6,
+            "palette": {"body": "#f2b04a", "accent": "#38c6d9", "dark": "#2c3444"},
+            "parts": [{"shape": "box", "size": [1.6, 0.4, 0.9], "pos": [0, 0.3, 0], "color": "body"}]}
+    s, out = call(api, "/api/objects", {"spec": spec, "image": "data:image/jpeg;base64,AAAA"}, token)
+    assert s == 201, out
+    s, out = call(api, "/api/objects", method="GET", token=token)
+    assert len(out["objects"]) == 1 and out["objects"][0]["spec"]["name"] == "Scissor Lift"

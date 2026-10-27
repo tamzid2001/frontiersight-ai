@@ -124,7 +124,7 @@ class H(BaseHTTPRequestHandler):
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
                 "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support", "mcp": "/api/mcp",
                 "authconfig": "/api/auth/config", "clerksync": "/api/auth/clerk-sync", "clerkwh": "/api/webhooks/clerk",
-                "transcribe": "/api/meta/transcribe",
+                "transcribe": "/api/meta/transcribe", "genobj": "/api/meta/object", "objects": "/api/objects", "objdel": "/api/objects/delete",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -158,7 +158,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.31.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.32.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 return self._send(200, _mcp.catalog())
@@ -203,6 +203,13 @@ class H(BaseHTTPRequestHandler):
                     scenes += [{"id": r["id"], "name": r["name"], "created_at": r["created_at"], "shared": True,
                                 "org": m["org"], "payload": json.loads(r["payload"])} for r in shared]
                 return self._send(200, {"scenes": scenes, "plan": _plan_of(user), "org": m["org"] if m else None})
+            if route.startswith("/api/objects"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                rows = _store.q("SELECT id, name, spec, image, created_at FROM custom_objects WHERE user_id=? ORDER BY created_at DESC", (user["id"],))
+                return self._send(200, {"objects": [{"id": r["id"], "name": r["name"],
+                                                     "spec": json.loads(r["spec"]), "image": r["image"],
+                                                     "created_at": r["created_at"]} for r in rows]})
             if route.startswith("/api/org"):
                 user = _auth_user(self)
                 if not user: return self._send(401, {"error": "sign in required"})
@@ -552,6 +559,52 @@ class H(BaseHTTPRequestHandler):
                           __import__("time").time(), _m["org"] if _m else None))
                 _store.audit(user["id"], "scene_saved", sid, org=_m["org"] if _m else "")
                 return self._send(201, {"id": sid, "plan": plan, "limit": limit})
+            if route.startswith("/api/meta/object"):
+                from integrations.meta import spark as _spark, image as _img
+                desc = str(body.get("description", "")).strip()
+                if not desc: return self._send(400, {"error": "describe the object first"})
+                try:
+                    spec, meta = _spark.design_custom_object(desc)
+                    source = "MODEL_DERIVED"
+                except BlockedCredentials:
+                    spec, meta, source = _spark.procedural_object(desc), None, "OFFLINE_PROCEDURAL"
+                image_data = None; image_note = None
+                if source == "MODEL_DERIVED":
+                    try:
+                        img = _img.generate_illustration(
+                            f"Clean isolated product render of {desc} ({spec['name']}), three-quarter view, "
+                            "plain dark studio background, photorealistic, no people, no text, no watermark")
+                        row = (img.get("data") or [{}])[0]
+                        if row.get("b64_json"): image_data = "data:image/webp;base64," + row["b64_json"]
+                        elif row.get("url"): image_data = row["url"]
+                    except Exception as e:
+                        image_note = f"Reference image unavailable ({str(e)[:140]}); the object still works as a vector/3D build."
+                return self._send(200, {"spec": spec, "image_data_url": image_data,
+                                        "source": source, "model_call": meta, "image_note": image_note})
+            if route.startswith("/api/objects/delete"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                _store.q("DELETE FROM custom_objects WHERE id=? AND user_id=?", (str(body.get("id", "")), user["id"]))
+                return self._send(200, {"ok": True})
+            if route.startswith("/api/objects"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required to sync objects to your profile"})
+                plan = _plan_of(user)
+                from integrations.meta.spark import validate_custom_object as _voc
+                spec = _voc(body.get("spec") or {})
+                count = _store.one("SELECT COUNT(*) AS c FROM custom_objects WHERE user_id=?", (user["id"],))["c"]
+                if plan == "explorer" and count >= 12:
+                    raise _billing.PaymentRequired("custom_objects (limit 12)", plan)
+                import uuid as _uuid
+                oid = "obj-" + _uuid.uuid4().hex[:12]
+                img = body.get("image")
+                if img is not None and len(str(img)) > 400_000:
+                    return self._send(400, {"error": "image thumbnail too large (max ~300 KB) — resize before saving"})
+                _store.q("INSERT INTO custom_objects(id, user_id, name, spec, image, created_at) VALUES(?,?,?,?,?,?)",
+                         (oid, user["id"], spec["name"], json.dumps(spec),
+                          str(img) if img else None, __import__("time").time()))
+                _store.audit(user["id"], "object_created", spec["name"])
+                return self._send(201, {"id": oid, "spec": spec})
             if route.startswith("/api/meta/transcribe"):
                 import base64 as _b64
                 from integrations.meta import voice as _voice

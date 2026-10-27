@@ -49,6 +49,8 @@ def db() -> sqlite3.Connection:
           org TEXT, action TEXT NOT NULL, detail TEXT, ts REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS org_members(user_id INTEGER PRIMARY KEY, org TEXT NOT NULL,
           role TEXT NOT NULL DEFAULT 'member', created_at REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS custom_objects(id TEXT PRIMARY KEY, user_id INTEGER NOT NULL,
+          name TEXT NOT NULL, spec TEXT NOT NULL, image TEXT, created_at REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS support_tickets(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL,
           subject TEXT NOT NULL, message TEXT NOT NULL, plan TEXT, status TEXT NOT NULL DEFAULT 'open',
           created_at REAL NOT NULL);

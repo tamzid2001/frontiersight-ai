@@ -28,7 +28,27 @@ function wheel(r, x, z) {
   m.rotation.x = Math.PI / 2; m.position.set(x, r, z); return m;
 }
 
+function buildCustom(spec) {
+  const g = new THREE.Group();
+  const pal = spec.palette || {};
+  for (const part of spec.parts || []) {
+    const color = new THREE.Color(pal[part.color] || part.color || pal.body || "#9aa7b8");
+    const [sx, sy, sz] = part.size, [px, py, pz] = part.pos;
+    let m;
+    if (part.shape === "cylinder") m = new THREE.Mesh(new THREE.CylinderGeometry(sx / 2, sx / 2, sy, 20), mat(color.getHex(), 0.6));
+    else if (part.shape === "sphere") m = new THREE.Mesh(new THREE.SphereGeometry(sx / 2, 20, 14), mat(color.getHex(), 0.55));
+    else if (part.shape === "capsule") m = new THREE.Mesh(new THREE.CapsuleGeometry(sx / 2, Math.max(0.05, sy - sx), 6, 14), mat(color.getHex(), 0.6));
+    else if (part.shape === "cone") m = new THREE.Mesh(new THREE.ConeGeometry(sx / 2, sy, 20), mat(color.getHex(), 0.6));
+    else m = box(sx, sy, sz, color.getHex());
+    m.position.set(px, py, pz);
+    g.add(m);
+  }
+  g.userData.noScale = true;
+  return g;
+}
+
 function buildEntity(o) {
+  if (o._lab && o._lab.custom && o._lab.custom.spec) return buildCustom(o._lab.custom.spec);
   const g = new THREE.Group();
   const c = REALC[o.category] || REALC.object;
   if (o.category === "forklift") {
@@ -74,7 +94,7 @@ function buildEntity(o) {
     g.add(box(1.2, 0.7, 0.8, c, 0, 0.45, 0));
   }
   const s = THREE.MathUtils.clamp((o.radius || BASER[o.category] || 0.6) / (BASER[o.category] || 0.6), 0.6, 1.8);
-  if (o.category !== "pedestrian" && o.category !== "cyclist") g.scale.setScalar(s);
+  if (!g.userData.noScale && o.category !== "pedestrian" && o.category !== "cyclist") g.scale.setScalar(s);
   return g;
 }
 

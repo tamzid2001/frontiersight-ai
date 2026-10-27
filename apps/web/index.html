@@ -77,11 +77,11 @@
     <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub repository ↗</a></div>
    <p class="dim" id="hero-diag">Loading diagnostics…</p>
    <div class="proofstrip" aria-label="Measured facts about this build">
-    <div><b>42</b><span>tests in CI</span></div>
+    <div><b>84</b><span>tests in CI</span></div>
     <div><b>7</b><span>analytical validation cases</span></div>
-    <div><b>5</b><span>built-in scenarios</span></div>
-    <div><b>9</b><span>agent workflow stages</span></div>
-    <div><b>0</b><span>runtime dependencies</span></div>
+    <div><b>5</b><span>curved-path scenarios</span></div>
+    <div><b>8</b><span>MCP tools exposed</span></div>
+    <div><b>4</b><span>Meta models integrated</span></div>
    </div>
   </div>
   <div class="card demo-card hero-video" id="demo-video">
@@ -322,6 +322,14 @@
     <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
     <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>
    <p id="lab-gen-status" role="status" class="dim">Muse proposes the scene; you edit every waypoint before anything is analysed. Offline, a labelled keyword template is used instead — never passed off as a model call.</p>
+   <h3>✦ Create object with Muse</h3>
+   <p class="dim">Describe any object — Muse Spark designs a buildable version (footprint, palette,
+   construction parts) and Muse Image renders a reference. It becomes a real component below and is
+   saved to your profile (server when signed in, this browser as guest).</p>
+   <input id="obj-desc" type="text" placeholder="e.g. a yellow scissor lift with a platform basket" aria-label="Describe a new object" style="width:100%">
+   <div class="row"><button id="obj-gen">Generate object</button>
+   <span id="obj-status" class="dim" role="status"></span></div>
+   <div id="obj-preview"></div>
    <h3>Components</h3>
    <div class="row"><select id="lab-new-cat">
      <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
