@@ -18,6 +18,35 @@ from integrations.meta.spark import BlockedCredentials, ModelError
 WEB = Path(__file__).resolve().parents[2] / "apps" / "web"
 TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}
 _cache: dict = {}
+MAX_BODY = 12 * 1024 * 1024          # 12 MB hard ingest bound
+RATE_LIMIT, RATE_WINDOW = 120, 60.0  # POST requests per IP per minute (best-effort, per-instance)
+_hits: dict = {}
+
+def _rate_ok(ip: str) -> bool:
+    import time
+    now = time.time()
+    bucket = [t for t in _hits.get(ip, []) if now - t < RATE_WINDOW]
+    bucket.append(now); _hits[ip] = bucket
+    return len(bucket) <= RATE_LIMIT
+
+def parse_tracks(payload: list):
+    """Validate user-supplied tracks. Hard bounds; invalid input raises ValueError
+    with a precise reason — never silently repaired into a plausible scene."""
+    from engine.tracking import Track
+    from engine.geometry import Vec
+    if not isinstance(payload, list) or not 2 <= len(payload) <= 24:
+        raise ValueError("tracks must be a list of 2..24 objects")
+    tracks = []
+    for raw in payload:
+        pts = raw.get("points", [])
+        if not 2 <= len(pts) <= 5000: raise ValueError(f"track {raw.get('object_id')}: need 2..5000 points")
+        points = [(float(t), Vec(float(x), float(y))) for t, x, y in pts]
+        tracks.append(Track(str(raw.get("object_id", f"obj-{len(tracks)+1}"))[:64],
+                            str(raw.get("category", "object"))[:32],
+                            raw.get("space", "pixel"), points,
+                            float(raw.get("radius", 0.0)), str(raw.get("source", "USER_UPLOADED"))[:32],
+                            [tuple(o) for o in raw.get("occluded", [])]))
+    return tracks
 
 def get_scenario(name: str) -> dict:
     if name not in _cache: _cache[name] = scen.build(name)
@@ -41,6 +70,8 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
+                "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
+                "tracks": "/api/tracks",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -52,7 +83,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.1.1"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.2.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -74,7 +105,46 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         route = self._route()
         try:
+            if int(self.headers.get("Content-Length", 0) or 0) > MAX_BODY:
+                return self._send(413, {"error": f"payload exceeds {MAX_BODY // (1024*1024)} MB ingest bound"})
+            if not _rate_ok(self.client_address[0]):
+                return self._send(429, {"error": "rate limit exceeded (120 POST/min per client)"})
             body = self._body()
+            if route.startswith("/api/analyze-custom"):
+                tracks = parse_tracks(body.get("tracks", []))
+                mpp = body.get("metres_per_pixel")
+                if mpp is not None:
+                    from engine.kinematics import to_world as _tw
+                    _cal = Calibration(float(mpp)); _cal.validate()
+                    tracks = [_tw(t, _cal) for t in tracks]
+                custom = {"id": str(body.get("id", "custom-scene"))[:64], "kind": "USER_UPLOADED",
+                          "calibration": {"metres_per_pixel": mpp, "frame": body.get("frame", "user-supplied")},
+                          "tracks": tracks, "ground_truth": {}, "description": "user-uploaded scene",
+                          "disclaimer": "User-uploaded scene; no ground truth held. Metric claims only if calibration declared."}
+                run = run_analysis(custom, float(body.get("speed_reduction_pct", 40)),
+                                   float(body.get("intervention_t", 1.0)), bool(body.get("human_approved", False)),
+                                   body.get("idempotency_key"))
+                return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(custom)})
+            if route.startswith("/api/counterfactual-custom"):
+                from engine.counterfactual import SimParams
+                from engine.multi import simulate_agent
+                tracks = parse_tracks(body.get("tracks", []))
+                agent_id = body.get("agent_id", tracks[0].object_id)
+                agent = next((t for t in tracks if t.object_id == agent_id), tracks[0])
+                t0 = agent.points[0][0]
+                others = [(t.object_id, t.position_at(max(t0, t.points[0][0])),
+                           t.velocity_at(1) if len(t.points) > 1 else __import__("engine.geometry", fromlist=["Vec"]).Vec(0, 0),
+                           t.radius) for t in tracks if t.object_id != agent.object_id]
+                r = simulate_agent((agent.position_at(t0), agent.velocity_at(1), agent.radius), others,
+                                   float(body.get("intervention_t", 1.0)), float(body.get("speed_reduction_pct", 40)),
+                                   SimParams(duration=6.0, dt=0.02))
+                return self._send(200, r)
+            if route.startswith("/api/tracks"):
+                from engine.iou_tracking import build_tracks
+                built = build_tracks(body.get("frames", []), str(body.get("category", "object"))[:32],
+                                     float(body.get("iou_threshold", 0.2)))
+                return self._send(200, {"tracks": [scen.track_to_dict(t) for t in built],
+                                        "note": "MODEL_DERIVED tracks associated by greedy IoU (engine/iou_tracking.py); pixel space"})
             if route.startswith("/api/analyze"):
                 sc = get_scenario(body.get("scenario", "warehouse-near-miss"))
                 run = run_analysis(sc, float(body.get("speed_reduction_pct", 40)),

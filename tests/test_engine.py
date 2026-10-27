@@ -55,7 +55,7 @@ def test_scenarios_ground_truth_separate():
     for name in scen.SCENARIOS:
         sc = scen.build(name)
         d = scen.scenario_to_dict(sc)
-        assert d["kind"] == "SYNTHETIC_FIXTURE" and "ground_truth" in d and len(d["tracks"]) == 2
+        assert d["kind"] == "SYNTHETIC_FIXTURE" and "ground_truth" in d and len(d["tracks"]) >= 2
 
 def test_near_miss_scenario_detected_safe_passing_not():
     from engine.kinematics import analyse_pair as ap

@@ -86,17 +86,19 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
 
     analysis = {}
     def _extract():
-        pairs = []
-        for i, a in enumerate(tracks):
-            for b in tracks[i + 1:]:
-                pairs.append(analyse_pair(a, b, cal))
+        from engine.multi import analyse_all
+        pairs = analyse_all(tracks, cal)
         diags = {t.object_id: diagnostics(t, jump_threshold=2.0, max_plausible_accel=8.0) for t in tracks}
         ev = {t.object_id: evidence_report(t) for t in tracks}
         analysis.update({"pairs": pairs, "diagnostics": diags, "evidence": ev})
         return ({"pairs": pairs, "track_diagnostics": diags}, {"pairs": pairs, "diags": diags})
     stage("scene_extraction", "deterministic-engine", _extract)
 
-    agent, other = tracks[0], tracks[1]
+    from engine.multi import focus_pair
+    _fp = focus_pair(analysis.get("pairs", [])) if analysis.get("pairs") else None
+    _by_id = {t.object_id: t for t in tracks}
+    agent = _by_id[_fp["pair"][0]] if _fp else tracks[0]
+    other = _by_id[_fp["pair"][1]] if _fp and len(tracks) > 1 else tracks[-1]
     t0 = max(agent.points[0][0], other.points[0][0])
     pa, pb = agent.position_at(t0), other.position_at(t0)
     va, vb = agent.velocity_at(1), other.velocity_at(1)

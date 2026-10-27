@@ -1,20 +1,70 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/", "destination": "/api/index?ep=home" },
-    { "source": "/app.css", "destination": "/api/index?ep=css" },
-    { "source": "/app.js", "destination": "/api/index?ep=js" },
-    { "source": "/api/health", "destination": "/api/index?ep=health" },
-    { "source": "/api/diagnostics", "destination": "/api/index?ep=diagnostics" },
-    { "source": "/api/scenarios", "destination": "/api/index?ep=scenarios" },
-    { "source": "/api/analyze", "destination": "/api/index?ep=analyze" },
-    { "source": "/api/counterfactual", "destination": "/api/index?ep=counterfactual" },
-    { "source": "/api/report", "destination": "/api/index?ep=report" },
-    { "source": "/api/validate", "destination": "/api/index?ep=validate" },
-    { "source": "/api/meta/hypothesis", "destination": "/api/index?ep=hypothesis" },
-    { "source": "/api/meta/segment", "destination": "/api/index?ep=segment" }
+    {
+      "source": "/",
+      "destination": "/api/index?ep=home"
+    },
+    {
+      "source": "/app.css",
+      "destination": "/api/index?ep=css"
+    },
+    {
+      "source": "/app.js",
+      "destination": "/api/index?ep=js"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/index?ep=health"
+    },
+    {
+      "source": "/api/diagnostics",
+      "destination": "/api/index?ep=diagnostics"
+    },
+    {
+      "source": "/api/scenarios",
+      "destination": "/api/index?ep=scenarios"
+    },
+    {
+      "source": "/api/analyze",
+      "destination": "/api/index?ep=analyze"
+    },
+    {
+      "source": "/api/counterfactual",
+      "destination": "/api/index?ep=counterfactual"
+    },
+    {
+      "source": "/api/report",
+      "destination": "/api/index?ep=report"
+    },
+    {
+      "source": "/api/validate",
+      "destination": "/api/index?ep=validate"
+    },
+    {
+      "source": "/api/meta/hypothesis",
+      "destination": "/api/index?ep=hypothesis"
+    },
+    {
+      "source": "/api/meta/segment",
+      "destination": "/api/index?ep=segment"
+    },
+    {
+      "source": "/api/analyze-custom",
+      "destination": "/api/index?ep=analyze-custom"
+    },
+    {
+      "source": "/api/counterfactual-custom",
+      "destination": "/api/index?ep=counterfactual-custom"
+    },
+    {
+      "source": "/api/tracks",
+      "destination": "/api/index?ep=tracks"
+    }
   ],
   "functions": {
-    "api/index.py": { "includeFiles": "{engine,agents,integrations,services,apps}/**" }
+    "api/index.py": {
+      "includeFiles": "{engine,agents,integrations,services,apps}/**"
+    }
   }
 }

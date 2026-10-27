@@ -40,9 +40,26 @@ and Muse Image illustrations go live — the deterministic verdicts do not chang
    approves, and a hash-bound evidence packet separates `MODEL_DERIVED`,
    `DETERMINISTIC`, `FIXTURE`, and `ASSUMPTION` content.
 
-Three synthetic scenarios with separately-held ground truth ship in
-`fixtures/` (warehouse near-miss, safe passing, occlusion & uncertainty) —
-regenerate them with `python3 scripts/generate_fixtures.py`.
+Five synthetic scenarios with separately-held ground truth ship in
+`fixtures/` (warehouse near-miss, safe passing, occlusion & uncertainty,
+five-entity warehouse-multi, four-user intersection-crossing) — regenerate
+them with `python3 scripts/generate_fixtures.py`.
+
+## Upload your own scenes (Upload Lab)
+
+- **Video**: load a clip locally in the browser, pause on a moment, capture the
+  frame and segment it with SAM 3.1 (one concept per call). Captured boxes are
+  associated across frames into tracks by a deterministic greedy-IoU tracker
+  (`engine/iou_tracking.py`; SAM ids are only stable within one response).
+- **Image**: SAM 3.1 segmentation overlay with boxes, ids and confidences.
+- **Track JSON**: paste tracks you already have; schema-validated with hard
+  bounds (`services/api/server.py: parse_tracks`) — invalid input is rejected
+  with a reason, never repaired into a plausible scene.
+- Custom scenes run the same pipeline: all-pairs proximity analysis, and a
+  multi-object counterfactual where one agent brakes against every other
+  actor (`engine/multi.py`). Declare metres-per-pixel or results stay in
+  pixel space. Uploaded scenes are analysed statelessly and kept only in your
+  browser's local storage; ingest is bounded (12 MB, 120 POST/min/client).
 
 ## Evidence, not adjectives
 

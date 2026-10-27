@@ -10,6 +10,7 @@
  <div class="brand">◉ Frontier<b>Sight</b> <span class="tag">AI</span></div>
  <nav id="tabs">
   <button data-view="home" class="on">Home</button><button data-view="workspace">Workspace</button>
+  <button data-view="upload">Upload Lab</button>
   <button data-view="studio">Video Studio</button><button data-view="inspector">Motion Inspector</button>
   <button data-view="counterfactual">Counterfactual</button><button data-view="agents">Agent Trace</button>
   <button data-view="evidence">Evidence</button><button data-view="settings">Settings</button>
@@ -60,6 +61,33 @@
   <aside class="card"><h3>Analysis events</h3><ul id="events"><li class="dim">Run analysis to detect events.</li></ul>
    <button id="analyze">Run analysis</button><p id="analyze-status" role="status"></p>
    <h3>Objects</h3><ul id="objects"></ul></aside>
+ </div>
+</section>
+
+<section id="view-upload" class="view"><h2>Upload Lab — your own scenes</h2>
+ <p class="dim">Three ways in: <b>(1)</b> video → play it here, capture frames, segment each with SAM 3.1, and we associate boxes into tracks by IoU;
+ <b>(2)</b> a still image → SAM 3.1 segmentation overlay; <b>(3)</b> track JSON you already have. Media is processed in your browser and
+ sent only to this server's Meta proxy when you click Segment — never stored. Detections are image-space: declare a scale or results stay in pixels.</p>
+ <div class="studio">
+  <div class="card stagecard">
+   <input type="file" id="up-file" accept="video/*,image/*">
+   <video id="up-video" controls playsinline style="width:100%;display:none;border-radius:12px"></video>
+   <img id="up-img" style="width:100%;display:none;border-radius:12px" alt="uploaded still">
+   <canvas id="up-canvas" width="880" height="560"></canvas>
+   <p class="dim">Segmentation overlays and captured frames appear on the canvas. Captured frames: <b id="up-count">0</b></p>
+  </div>
+  <aside class="card"><h3>Segment &amp; build</h3>
+   <label>Object concept (one noun phrase)<input id="up-concept" value="person" style="width:100%"></label>
+   <label>Second concept (optional)<input id="up-concept2" value="forklift" style="width:100%"></label>
+   <button id="up-segment">Capture frame &amp; segment (SAM 3.1)</button>
+   <button id="up-tracks" class="ghostbtn">Build tracks from captures</button>
+   <label>Scale, metres per pixel (optional — blank = pixel space)<input id="up-scale" type="number" step="0.001" min="0" placeholder="e.g. 0.05" style="width:100%"></label>
+   <button id="up-analyze">Analyse uploaded scene →</button>
+   <p id="up-status" role="status" class="dim"></p>
+   <h3>…or paste track JSON</h3>
+   <textarea id="up-json" rows="7" style="width:100%" placeholder='[{"object_id":"forklift-1","category":"forklift","radius":10,"points":[[0,100,200],[1,160,200]]}, {"object_id":"pedestrian-1","category":"pedestrian","radius":6,"points":[[0,300,80],[1,300,140]]}]'></textarea>
+   <button id="up-json-btn" class="ghostbtn">Analyse JSON tracks</button>
+  </aside>
  </div>
 </section>
 

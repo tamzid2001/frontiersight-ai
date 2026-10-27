@@ -39,6 +39,23 @@ def build(name: str) -> dict:
         cal, desc = {"metres_per_pixel": 0.05, "frame": "warehouse floor plan (synthetic)"}, \
             "Pedestrian is occluded behind shelving from t=3.0s to t=4.5s; identity and motion are uncertain across the gap."
         occl = {"pedestrian-1": (3.0, 4.5)}
+    elif name == "warehouse-multi":
+        gt = {"forklift-1": ("forklift", lambda t: Vec(1.0 + 1.6 * t, 5.0), 0.9),
+              "pedestrian-1": ("pedestrian", lambda t: Vec(8.6, 12.0 - 1.55 * t), 0.45),
+              "robot-1": ("robot", lambda t: Vec(13.5 - 1.1 * t, 3.2), 0.55),
+              "forklift-2": ("forklift", lambda t: Vec(2.0 + 0.9 * t, 10.5), 0.9),
+              "shelf-row": ("shelf", lambda t: Vec(11.0, 7.0), 1.1)}
+        cal, desc = {"metres_per_pixel": 0.05, "frame": "warehouse floor plan (synthetic)"}, \
+            "Five-entity warehouse: two forklifts, a pedestrian, a mobile robot and a static shelf row. Multiple pairs converge."
+        occl = {}
+    elif name == "intersection-crossing":
+        gt = {"vehicle-1": ("vehicle", lambda t: Vec(0.5 + 2.2 * t, 6.5), 1.1),
+              "cyclist-1": ("cyclist", lambda t: Vec(9.0, 12.5 - 1.9 * t), 0.5),
+              "pedestrian-1": ("pedestrian", lambda t: Vec(12.5 - 1.3 * t, 5.6), 0.45),
+              "pedestrian-2": ("pedestrian", lambda t: Vec(4.0 + 0.8 * t, 1.0), 0.45)}
+        cal, desc = {"metres_per_pixel": 0.08, "frame": "intersection plan (synthetic)"}, \
+            "Four road users cross a synthetic intersection; vehicle, cyclist and two pedestrians create several closing pairs."
+        occl = {}
     else:
         raise KeyError(name)
     tracks, ground_truth = [], {}
@@ -52,7 +69,7 @@ def build(name: str) -> dict:
             "calibration": cal, "tracks": tracks, "ground_truth": ground_truth,
             "disclaimer": "Synthetic fixture with known ground truth. Results validate the analysis pipeline on synthetic data only — not performance on real industrial video."}
 
-SCENARIOS = ["warehouse-near-miss", "safe-passing", "occlusion-uncertainty"]
+SCENARIOS = ["warehouse-near-miss", "safe-passing", "occlusion-uncertainty", "warehouse-multi", "intersection-crossing"]
 
 def track_to_dict(tr: Track) -> dict:
     return {"object_id": tr.object_id, "category": tr.category, "space": tr.space, "radius": tr.radius,
