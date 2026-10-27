@@ -247,3 +247,22 @@ input[type="range"]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;b
 /* small fields inside component cards keep the same language, tighter */
 .labctl input,.labctl select{min-height:36px;padding:6px 9px;font-size:13.5px;border-radius:9px}
 .approvalbox input[type="text"]{min-height:var(--field-h)}
+
+/* ---- transport bars: range gets the space, selects stay compact ---- */
+.transport input[type="range"]{flex:1 1 160px;min-width:120px}
+.transport select{width:auto;flex:0 0 auto;min-height:38px}
+.transport button{flex:0 0 auto}
+
+/* ---- file inputs: styled selector button + dropzone feel ---- */
+input[type="file"]{width:100%;padding:10px 12px;color:var(--dim);
+ background:var(--panel2);border:1.5px dashed color-mix(in srgb,var(--cyan) 40%,var(--line));
+ border-radius:var(--field-r);font:inherit;font-size:13.5px;cursor:pointer;
+ transition:border-color .16s ease, background-color .16s ease}
+input[type="file"]:hover{border-color:var(--cyan);background:color-mix(in srgb,var(--panel2) 88%,var(--cyan) 12%)}
+input[type="file"]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+input[type="file"]::file-selector-button{
+ background:var(--cyan);color:var(--accent-ink);border:0;border-radius:9px;
+ padding:9px 15px;margin-right:12px;font:inherit;font-size:13.5px;font-weight:650;cursor:pointer;
+ transition:filter .15s ease, transform .1s ease}
+input[type="file"]::file-selector-button:hover{filter:brightness(1.1)}
+input[type="file"]::file-selector-button:active{transform:scale(.97)}

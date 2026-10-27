@@ -180,3 +180,9 @@ def test_3d_and_mcp_assets():
     assert (ROOT / "apps/web/vendor/three.module.min.js").stat().st_size > 500_000
     assert (ROOT / "apps/web/vendor/THREE-LICENSE.txt").exists()
     assert (ROOT / "services/api/mcp.py").exists() and (ROOT / "scripts/mcp_stdio.py").exists()
+
+
+def test_transport_and_file_input_css():
+    css = (ROOT / "apps" / "web" / "app.css").read_text()
+    assert '.transport input[type="range"]{flex:1 1 160px' in css
+    assert "::file-selector-button" in css
