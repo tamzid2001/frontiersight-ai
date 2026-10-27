@@ -128,6 +128,14 @@
     {
       "source": "/api/support",
       "destination": "/api/index?ep=support"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/index"
     }
   ],
   "functions": {

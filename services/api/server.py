@@ -139,7 +139,22 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.15.0"})
+            if self.path.split("?")[0] in ("/robots.txt", "/sitemap.xml"):
+                import datetime as _dt
+                base = os.environ.get("APP_BASE_URL", "https://frontiersight-ai.vercel.app").rstrip("/")
+                if self.path.startswith("/robots.txt"):
+                    return self._send(200, f"User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {base}/sitemap.xml\n".encode(), "text/plain")
+                today = _dt.date.today().isoformat()
+                xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+                       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+                       'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n'
+                       f' <url><loc>{base}/</loc><lastmod>{today}</lastmod>'
+                       '<changefreq>weekly</changefreq><priority>1.0</priority>'
+                       '<image:image><image:loc>https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg</image:loc>'
+                       '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
+                       '</urlset>\n')
+                return self._send(200, xml.encode(), "application/xml")
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.16.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",

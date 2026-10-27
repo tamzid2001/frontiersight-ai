@@ -179,3 +179,5 @@ header{justify-content:flex-end}
  .brandsub{display:none}
  header{justify-content:space-between}
 }
+
+.socialrow{align-items:center}.socialrow a{display:inline-flex;gap:6px;align-items:center}

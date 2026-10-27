@@ -153,3 +153,13 @@ def test_curved_paths_ui_and_schema():
 def test_sidebar_brand_block():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     assert 'class="sidebrand"' in html and "Quantura Studio" in html and 'class="logomark"' in html
+
+def test_sitemap_robots_and_meta():
+    xml = None
+    import urllib.request
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    for marker in ['name="theme-color"', 'property="og:site_name"', 'name="robots"',
+                   "youtube.com/@quanturaaimarketforecast", "hello@quantura.studio", '"sameAs"']:
+        assert marker in html, marker
+    src = (ROOT / "services/api/server.py").read_text()
+    assert "/sitemap.xml" in src and "/robots.txt" in src and "Sitemap:" in src

@@ -584,7 +584,7 @@ async function refreshMe(){const {body}=await api("/api/me");state.me=body;
   if(badge)badge.classList.add("hidden");
   if(so)so.classList.remove("hidden");if(si)si.classList.add("hidden");
  }
- loadOrg();
+ if(body.authenticated)loadOrg();else{const oc=$("org-card");if(oc)oc.textContent="Sign in to see your organisation.";}
  const card=$("me-card");
  if(card)card.innerHTML=body.authenticated
   ? `Signed in as <b>${body.user.email}</b> · plan <b>${body.plan}</b>${body.subscription?` · subscription: ${body.subscription.status}${body.subscription.cancel_at_period_end?" (cancels at period end)":""}`:" · no subscription"}<br>Entitlements: SAM video ${body.entitlements.sam_video?"✓":"—"} · server scenes ${body.entitlements.server_scenes===null?"unlimited":body.entitlements.server_scenes} · Monte-Carlo ≤ ${body.entitlements.mc_runs===null?"unlimited":body.entitlements.mc_runs} · your Meta key ${body.meta_key.configured?("saved (…"+body.meta_key.last4+")"):"not saved"}<br>Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment"}`
