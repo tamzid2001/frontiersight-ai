@@ -444,7 +444,7 @@ $("cta-video").onclick=()=>{showView("home");document.getElementById("demo-video
 $("demo-play").onclick=()=>{const f=$("demo-frame");
  f.innerHTML='<iframe src="https://www.youtube-nocookie.com/embed/mYTkPqigoz8?autoplay=1&rel=0" title="FrontierSight AI demo video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';};
 $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark…";
- const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss"})});
+ const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss",model:selectedModel()})});
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};
 
 diag();
@@ -769,12 +769,13 @@ function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
   tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
  if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");
  return tracks;}
+function selectedModel(){const s=$("model-select");return s?s.value:"muse-spark-1.3";}
 async function analyzeCustom(tracks,label){
  const ctrl=new AbortController(); const killer=setTimeout(()=>ctrl.abort(),95000);
  let r;
  try{
   const res=await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,
-   body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
+   body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,model:selectedModel(),
     speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:runApproved()})});
   const text=await res.text();
   try{ r=JSON.parse(text); }catch(e){ throw new Error(`server returned HTTP ${res.status} (non-JSON). The analysis likely timed out — press Run analysis again.`); }
@@ -839,6 +840,18 @@ function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;
  labStatus(label);labDraw();}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-prompt").addEventListener("input",()=>{$("lab-prompt-count").textContent=$("lab-prompt").value.length;});
+const MODEL_HINTS={"muse-spark-1.3":"Latest Spark — balanced cost and quality for scene design and hypotheses.",
+ "muse-spark-1.2":"Previous Spark generation.","muse-spark-1.1":"Earliest Spark — the budget option.",
+ "muse-spark-1.3-contributor":"Spark 1.3 in discounted Contributor mode (same capabilities, lower price).",
+ "muse-spark-1.2-contributor":"Spark 1.2 in discounted Contributor mode.",
+ "muse-wonder-1.0":"Most capable Meta model — deeper reasoning for complex scenes; higher cost per call."};
+function paintModelHint(){const s=$("model-select"),h=$("model-hint");
+ if(h)h.textContent=(MODEL_HINTS[s.value]||"")+" SAM 3.1, Muse Image and Voice keep their dedicated models.";}
+$("model-select").value=localStorage.getItem("fs-model")||"muse-spark-1.3";
+paintModelHint();
+$("model-select").addEventListener("change",()=>{localStorage.setItem("fs-model",$("model-select").value);
+ paintModelHint();
+ toast(`Reasoning model: ${$("model-select").selectedOptions[0].textContent} — used for scene generation, hypotheses and object design.`);});
 $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
  if(desc.length<8){$("lab-gen-status").textContent="Describe the scene in a sentence or two first (at least a few words).";return;}
  if(desc.length>4000){$("lab-gen-status").textContent=`Your description is ${desc.length} characters — the limit is 4000. Shorten it a little and try again.`;return;}
@@ -1602,7 +1615,7 @@ $("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
  $("obj-status").textContent="Muse Spark is designing the build spec, then Muse Image renders it (10–40s)…";
  try{
   const resp=await fetch("/api/meta/object",{method:"POST",headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({description:desc})});
+   body:JSON.stringify({description:desc,model:selectedModel()})});
   const out=await resp.json();
   if(!(resp.status===200&&out.spec)){throw new Error(out.error||out.detail||("HTTP "+resp.status));}
   const image=await resizeImageForSave(out.image_data_url);
