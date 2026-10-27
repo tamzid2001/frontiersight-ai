@@ -155,7 +155,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.18.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.19.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -272,20 +272,20 @@ class H(BaseHTTPRequestHandler):
                                    body.get("idempotency_key"))
                 return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(custom)})
             if route.startswith("/api/counterfactual-custom"):
-                from engine.counterfactual import SimParams
-                from engine.multi import simulate_agent
+                from engine.pathsim import simulate_on_paths
                 tracks = parse_tracks(body.get("tracks", []))
                 agent_id = body.get("agent_id", tracks[0].object_id)
                 agent = next((t for t in tracks if t.object_id == agent_id), None)
                 if agent is None: return self._send(400, {"error": f"unknown agent_id: {agent_id}"})
-                t0 = agent.points[0][0]
-                others = [(t.object_id, t.position_at(max(t0, t.points[0][0])),
-                           t.velocity_at(1) if len(t.points) > 1 else __import__("engine.geometry", fromlist=["Vec"]).Vec(0, 0),
-                           t.radius) for t in tracks if t.object_id != agent.object_id]
-                r = simulate_agent((agent.position_at(t0), agent.velocity_at(1), agent.radius), others,
-                                   float(body.get("intervention_t", 1.0)), float(body.get("speed_reduction_pct", 40)),
-                                   SimParams(duration=6.0, dt=0.02, braking_decel=float(body.get("braking_decel", 2.5))))
-                r["agent_id"] = agent.object_id
+                _others = [t for t in tracks if t.object_id != agent.object_id]
+                _mc_req = int(body.get("mc_runs", 100))
+                _mc_limit = _billing.entitlements(_plan_of(_auth_user(self)))["mc_runs"]
+                if _mc_limit is not None and _mc_req > _mc_limit:
+                    raise _billing.PaymentRequired(f"mc_runs (limit {_mc_limit})", _plan_of(_auth_user(self)))
+                r = simulate_on_paths(agent, _others, float(body.get("intervention_t", 1.0)),
+                                      float(body.get("speed_reduction_pct", 40)),
+                                      braking_decel=float(body.get("braking_decel", 2.5)),
+                                      position_sigma=0.15, mc_runs=_mc_req, seed=42)
                 return self._send(200, r)
             if route.startswith("/api/tracks/from-paths"):
                 from engine.curves import sample_tracks
@@ -314,7 +314,6 @@ class H(BaseHTTPRequestHandler):
                                    body.get("idempotency_key"))
                 return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(sc)})
             if route.startswith("/api/counterfactual"):
-                from engine.counterfactual import SimParams, simulate
                 sc = get_scenario(body.get("scenario", "warehouse-near-miss"))
                 by_id = {t.object_id: t for t in sc["tracks"]}
                 agent = by_id.get(body.get("agent_id"), sc["tracks"][0])
@@ -322,29 +321,16 @@ class H(BaseHTTPRequestHandler):
                 others = [t for t in sc["tracks"] if t.object_id != agent.object_id
                           and (not target or t.object_id == target)]
                 if not others: return self._send(400, {"error": "no comparison actor selected"})
-                params = SimParams(duration=6.0, dt=0.02, braking_decel=float(body.get("braking_decel", 2.5)))
-                t0 = agent.points[0][0]
-                results, worst = {}, None
-                for o in others:
-                    ot = max(t0, o.points[0][0])
-                    r = simulate(agent.position_at(t0), agent.velocity_at(1), o.position_at(ot), o.velocity_at(1),
-                                 float(body.get("intervention_t", 1.0)), float(body.get("speed_reduction_pct", 40)),
-                                 params, agent.radius, o.radius)
-                    results[o.object_id] = {"original": r["original"], "counterfactual": r["counterfactual"],
-                                            "delta_d_min": r["delta_d_min"], "trajectories": r["trajectories"],
-                                            "radius_sum": agent.radius + o.radius, "manifest_hash": r["manifest_hash"]}
-                    if worst is None or r["original"]["d_min"] < results[worst]["original"]["d_min"]: worst = o.object_id
-                fo = by_id[worst]; ot = max(t0, fo.points[0][0])
                 _mc_req = int(body.get("mc_runs", 200))
                 _mc_limit = _billing.entitlements(_plan_of(_auth_user(self)))["mc_runs"]
                 if _mc_limit is not None and _mc_req > _mc_limit:
                     raise _billing.PaymentRequired(f"mc_runs (limit {_mc_limit})", _plan_of(_auth_user(self)))
-                mc = simulate(agent.position_at(t0), agent.velocity_at(1), fo.position_at(ot), fo.velocity_at(1),
-                              float(body.get("intervention_t", 1.0)), float(body.get("speed_reduction_pct", 40)),
-                              params, agent.radius, fo.radius, position_sigma=0.15, mc_runs=_mc_req, seed=42)
-                return self._send(200, {"agent_id": agent.object_id, "focus_other": worst, "results": results,
-                                        "monte_carlo": mc.get("monte_carlo"), "manifest_hash": mc["manifest_hash"],
-                                        "params": mc["params"], "assumptions": mc["assumptions"]})
+                from engine.pathsim import simulate_on_paths
+                out = simulate_on_paths(agent, others, float(body.get("intervention_t", 1.0)),
+                                        float(body.get("speed_reduction_pct", 40)),
+                                        braking_decel=float(body.get("braking_decel", 2.5)),
+                                        position_sigma=0.15, mc_runs=_mc_req, seed=42)
+                return self._send(200, out)
             if route.startswith("/api/meta/hypothesis"):
                 sc = get_scenario(body.get("scenario", "warehouse-near-miss"))
                 cal = Calibration(sc["calibration"].get("metres_per_pixel"))

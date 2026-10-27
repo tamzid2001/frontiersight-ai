@@ -12,7 +12,7 @@ import hashlib, json, time, uuid
 from dataclasses import dataclass, field
 from engine.geometry import Vec
 from engine.kinematics import Calibration, analyse_pair
-from engine.counterfactual import SimParams, simulate
+from engine.pathsim import simulate_on_paths
 from engine.tracking import diagnostics
 from engine.uncertainty import evidence_report
 from integrations.meta import spark
@@ -144,13 +144,17 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
     sim = {}
     def _sim():
         if _sim_error: raise ValueError(_sim_error)
-        r = simulate(pa, va, pb, vb, intervention_t=float(iv["intervention_time_s"]),
-                     speed_reduction_pct=float(iv["speed_reduction_pct"]),
-                     params=SimParams(duration=6.0, dt=0.02), radius_a=agent.radius, radius_b=other.radius,
-                     position_sigma=0.15, mc_runs=200, seed=42)
-        sim.update(r); return ({"original": r["original"], "counterfactual": r["counterfactual"],
-                                "delta_d_min": r["delta_d_min"], "monte_carlo": r.get("monte_carlo"),
-                                "manifest_hash": r["manifest_hash"]}, r["manifest_hash"])
+        full = simulate_on_paths(agent, [other], intervention_t=float(iv["intervention_time_s"]),
+                                 speed_reduction_pct=float(iv["speed_reduction_pct"]),
+                                 position_sigma=0.15, mc_runs=200, seed=42)
+        r = full["results"][other.object_id]
+        sim.update({"original": r["original"], "counterfactual": r["counterfactual"],
+                    "delta_d_min": r["delta_d_min"], "monte_carlo": full.get("monte_carlo"),
+                    "manifest_hash": full["manifest_hash"], "params": full["params"],
+                    "assumptions": full["assumptions"], "model": "pathsim-v1"})
+        return ({"original": r["original"], "counterfactual": r["counterfactual"],
+                 "delta_d_min": r["delta_d_min"], "monte_carlo": full.get("monte_carlo"),
+                 "manifest_hash": full["manifest_hash"], "model": "pathsim-v1 (path-following)"}, full["manifest_hash"])
     stage("simulation", "deterministic-engine", _sim)
 
     def _verify():

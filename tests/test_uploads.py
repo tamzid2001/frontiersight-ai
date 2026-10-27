@@ -60,7 +60,7 @@ def test_custom_endpoints_via_http():
     out2 = post("/api/analyze-custom", {"tracks": tracks, "metres_per_pixel": 0.05})
     assert out2["run"]["findings"]["pairs"][0]["metric_claims"] is True
     cf = post("/api/counterfactual-custom", {"tracks": tracks, "agent_id": "forklift-1", "speed_reduction_pct": 50})
-    assert "per_actor" in cf and "pedestrian-1" in cf["per_actor"]
+    assert "pedestrian-1" in cf["results"] and cf["results"]["pedestrian-1"]["delta_d_min"] >= 0
     tr = post("/api/tracks", {"category": "person", "frames": [
         {"t": 0, "records": [{"box": {"x1": 0, "y1": 0, "x2": 40, "y2": 40}}]},
         {"t": 1, "records": [{"box": {"x1": 25, "y1": 0, "x2": 65, "y2": 40}}]}]})
@@ -116,7 +116,7 @@ def test_counterfactual_agent_target_decel_via_http():
     one = post("/api/counterfactual", {**base, "target_id": "pedestrian-1"})
     assert list(one["results"]) == ["pedestrian-1"] and one["focus_other"] == "pedestrian-1"
     hard = post("/api/counterfactual", {**base, "target_id": "pedestrian-1", "braking_decel": 5.5})
-    assert hard["params"]["decel"] == 5.5 and hard["results"]["pedestrian-1"]["trajectories"]["original"]
+    assert hard["params"]["braking_decel"] == 5.5 and hard["results"]["pedestrian-1"]["trajectories"]["original"]
     other_agent = post("/api/counterfactual", {**base, "agent_id": "robot-1", "target_id": "forklift-1"})
     assert other_agent["agent_id"] == "robot-1"
     srv.shutdown()

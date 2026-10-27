@@ -49,21 +49,37 @@ def analyse_pair(a: Track, b: Track, cal: Calibration, horizon: float = 6.0,
     va = a.velocity_at(_nearest_index(a, t0)); vb = b.velocity_at(_nearest_index(b, t0))
     cpa = closest_approach(pa, va, pb, vb, horizon)
     ttc = time_to_collision(pa, va, pb, vb, a.radius, b.radius, horizon)
+    # Measured proximity along the ACTUAL (possibly curved) trajectories:
+    # sample both tracks over the shared window — no straight-line assumption.
+    measured_d, measured_t, measured_contact = math.inf, t0, False
+    _steps = max(1, int((t1 - t0) / 0.05))
+    for _i in range(_steps + 1):
+        _t = t0 + (t1 - t0) * _i / _steps
+        _d = a.position_at(_t).dist(b.position_at(_t))
+        if _d < measured_d: measured_d, measured_t = _d, _t
+        if _d <= a.radius + b.radius: measured_contact = True
     # Metric claims derive ONLY from the track space. A calibration object does
     # not convert coordinates by itself (use to_world first); pixel tracks with
     # a declared calibration are reported in px until converted.
     units = _units
     event = None
-    if ttc is not None:
+    if measured_contact:
+        event = {"type": "contact_in_window", "d_min": round(measured_d, 4), "units": units,
+                 "at_time_s": round(measured_t, 3)}
+    elif ttc is not None:
         event = {"type": "predicted_contact", "ttc_s": round(ttc, 3), "at_time_s": round(t0 + ttc, 3)}
-    elif cpa.closing and cpa.d_min < near_miss_distance:
-        event = {"type": "near_miss", "d_min": round(cpa.d_min, 4), "units": units,
-                 "t_star_s": round(t0 + cpa.t_star, 3) if math.isfinite(cpa.t_star) else None}
+    elif cpa.closing and min(cpa.d_min, measured_d) < near_miss_distance:
+        event = {"type": "near_miss", "d_min": round(min(cpa.d_min, measured_d), 4), "units": units,
+                 "t_star_s": round(measured_t, 3)}
     return {"pair": [a.object_id, b.object_id], "space": a.space, "units": units,
             "metric_claims": a.space == "world",
             "window": [t0, t1], "d_min": round(cpa.d_min, 4), "closing": cpa.closing,
             "ttc_s": None if ttc is None else round(ttc, 3), "event": event,
-            "assumptions": ["constant-velocity extrapolation over the stated horizon",
+            "measured": {"d_min": round(measured_d, 4), "t_at_d_min": round(measured_t, 3),
+                         "contact": measured_contact,
+                         "method": "sampled along actual trajectories at 50 ms over the shared window"},
+            "assumptions": ["CPA/TTC: constant-velocity extrapolation over the stated horizon",
+                            "measured_*: sampled along the actual (possibly curved) trajectories",
                             "finite-difference velocity at window start", f"near-miss threshold {near_miss_distance} {units}"]}
 
 def _nearest_index(track: Track, t: float) -> int:
