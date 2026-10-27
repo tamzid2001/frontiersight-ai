@@ -1,0 +1,84 @@
+{
+  "name": "@quantura/enterprise-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Clerk-verified, Firestore-backed tenant workspaces and authenticated MCP for Quantura websites",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "coverage": "c8 --all --include=src/**/*.ts --reporter=text --reporter=cobertura --reporter=lcov --check-coverage --lines=90 --branches=80 --functions=90 npm test",
+    "build": "tsc --pretty false",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@clerk/backend": "3.26.4",
+    "@google-cloud/firestore": "9.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "mcp-handler": "2.3.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@clerk/nextjs": "7.9.22",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "c8": "12.0.0",
+    "next": "16.4.3",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "typescript": "7.0.2"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "firebase",
+    "scripts/check-coverage.py",
+    "COVERAGE.md"
+  ],
+  "exports": {
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./openapi": {
+      "types": "./dist/openapi.d.ts",
+      "import": "./dist/openapi.js"
+    },
+    "./pricing": {
+      "types": "./dist/pricing.d.ts",
+      "import": "./dist/pricing.js"
+    },
+    "./firestore": {
+      "types": "./dist/firestore.d.ts",
+      "import": "./dist/firestore.js"
+    },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "import": "./dist/policy.js"
+    }
+  },
+  "peerDependencies": {
+    "@clerk/nextjs": "7.9.22",
+    "next": "16.4.3",
+    "react": "19.2.9",
+    "react-dom": "19.2.9"
+  }
+}

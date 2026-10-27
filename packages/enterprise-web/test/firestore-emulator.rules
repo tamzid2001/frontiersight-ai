@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // These applications access Firestore through verified server handlers.
+    // Admin IAM credentials bypass rules; tenant checks are enforced in code.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

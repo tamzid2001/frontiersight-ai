@@ -1,0 +1,9 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "records", "fieldPath": "payload", "indexes": [] },
+    { "collectionGroup": "idempotency", "fieldPath": "result", "indexes": [] },
+    { "collectionGroup": "idempotency", "fieldPath": "expiresAt", "indexes": [] },
+    { "collectionGroup": "request_budgets", "fieldPath": "expiresAt", "indexes": [] }
+  ]
+}

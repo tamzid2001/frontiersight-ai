@@ -1,0 +1,5 @@
+// MERGE into reviewed existing rules. A wider existing allow can override this deny.
+// Server SDK authorization/IAM remains mandatory; Admin clients bypass these rules.
+match /quantura_web/{product}/tenants/{tenant}/{document=**} {
+  allow read, write: if false;
+}
