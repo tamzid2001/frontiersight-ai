@@ -1,75 +1,91 @@
 """Synthetic demonstration scenarios with KNOWN ground truth.
 
-Ground truth (analytic trajectories) is stored separately from the
-'observations' the analysis pipeline consumes, so evaluation is never circular:
-observations are sampled (and, for the occlusion scenario, deliberately
-withheld) from ground truth by this generator with a fixed seed."""
+Ground truth (the path definitions: waypoints, curve type, speed) is stored
+separately from the 'observations' the analysis pipeline consumes, so
+evaluation is never circular: observations are sampled from ground-truth
+paths at 10 Hz (and, for the occlusion scenario, deliberately withheld
+across the occlusion window).
+
+Motion is defined the same way users define it in Create Lab: waypoints +
+straight-or-smooth (Catmull-Rom) paths, arc-length parameterised by
+engine/curves.py, so speeds are physically consistent along curves.
+Straight warehouse aisles stay straight; crossings, turns and patrols curve."""
 from __future__ import annotations
-import json, math
-from pathlib import Path
-from .geometry import Vec
+import json
+from pathlib import Path as FilePath
+from .curves import Path
 from .tracking import Track
 
 DT = 0.1
 DURATION = 8.0
 
-def _sample(fn, t_end=DURATION, omit=None):
+# oid -> (category, waypoints, speed m/s, radius m, curve, mode)
+SPECS: dict[str, dict] = {
+    "warehouse-near-miss": {
+        "desc": "Forklift travels the aisle east at 1.6 m/s; a pedestrian crosses south on a curved path. Their paths converge mid-aisle.",
+        "actors": {
+            "forklift-1": ("forklift", [[1.0, 5.0], [13.0, 5.0]], 1.6, 0.9, "straight", "stop"),
+            "pedestrian-1": ("pedestrian", [[8.6, 12.5], [8.0, 9.0], [8.5, 5.5], [9.2, 1.0]], 1.55, 0.45, "smooth", "stop"),
+        }, "occl": {}},
+    "safe-passing": {
+        "desc": "Forklift and pedestrian travel gently curved parallel lanes with >5 m separation throughout.",
+        "actors": {
+            "forklift-1": ("forklift", [[1.0, 4.0], [7.0, 3.6], [13.0, 4.2]], 1.4, 0.9, "smooth", "stop"),
+            "pedestrian-1": ("pedestrian", [[12.0, 9.5], [7.0, 9.9], [1.0, 9.3]], 1.2, 0.45, "smooth", "stop"),
+        }, "occl": {}},
+    "occlusion-uncertainty": {
+        "desc": "A pedestrian on a curved crossing path is occluded behind shelving from t=3.0s to t=4.5s; identity and motion are uncertain across the gap.",
+        "actors": {
+            "forklift-1": ("forklift", [[1.0, 6.0], [13.0, 6.0]], 1.2, 0.9, "straight", "stop"),
+            "pedestrian-1": ("pedestrian", [[7.5, 11.0], [6.8, 8.0], [7.6, 4.0], [8.2, 0.8]], 1.1, 0.45, "smooth", "stop"),
+        }, "occl": {"pedestrian-1": (3.0, 4.5)}},
+    "warehouse-multi": {
+        "desc": "Five-entity warehouse: two forklifts, a pedestrian on a curved crossing, a robot on a smooth patrol loop, and a static shelf row. Multiple pairs converge.",
+        "actors": {
+            "forklift-1": ("forklift", [[1.0, 5.0], [13.0, 5.0]], 1.6, 0.9, "straight", "stop"),
+            "pedestrian-1": ("pedestrian", [[8.6, 12.5], [8.0, 9.0], [8.5, 5.5], [9.2, 1.0]], 1.55, 0.45, "smooth", "stop"),
+            "robot-1": ("robot", [[13.5, 3.2], [9.0, 1.4], [4.0, 2.2], [3.0, 5.5], [8.0, 6.4]], 1.1, 0.55, "smooth", "loop"),
+            "forklift-2": ("forklift", [[2.0, 10.5], [7.0, 11.3], [12.5, 10.2]], 0.9, 0.9, "smooth", "stop"),
+            "shelf-row": ("shelf", [[11.0, 7.0]], 0.0, 1.1, "straight", "stop"),
+        }, "occl": {}},
+    "intersection-crossing": {
+        "desc": "A vehicle turns through a synthetic intersection on a curved path while a cyclist and two pedestrians cross on curved paths — several closing pairs.",
+        "actors": {
+            "vehicle-1": ("vehicle", [[0.5, 6.5], [6.0, 6.2], [10.0, 7.5], [13.0, 10.5]], 2.2, 1.1, "smooth", "stop"),
+            "cyclist-1": ("cyclist", [[9.0, 12.5], [8.6, 8.0], [9.2, 3.0], [9.5, 0.5]], 1.9, 0.5, "smooth", "stop"),
+            "pedestrian-1": ("pedestrian", [[12.5, 5.6], [9.0, 5.2], [5.0, 6.0], [1.5, 5.4]], 1.3, 0.45, "smooth", "stop"),
+            "pedestrian-2": ("pedestrian", [[4.0, 1.0], [7.0, 1.6], [11.0, 1.2]], 0.8, 0.45, "smooth", "stop"),
+        }, "occl": {}},
+}
+
+def _sample(path: Path, speed: float, mode: str, omit=None):
     pts, t = [], 0.0
-    while t <= t_end + 1e-9:
-        if not (omit and omit[0] <= t <= omit[1]): pts.append((round(t, 3), fn(t)))
+    while t <= DURATION + 1e-9:
+        if not (omit and omit[0] <= t <= omit[1]):
+            pts.append((round(t, 3), path.position_at_time(t, speed, 0.0, mode)))
         t = round(t + DT, 10)
     return pts
 
 def build(name: str) -> dict:
-    if name == "warehouse-near-miss":
-        gt = {"forklift-1": ("forklift", lambda t: Vec(1.0 + 1.6 * t, 5.0), 0.9),
-              "pedestrian-1": ("pedestrian", lambda t: Vec(8.6, 12.0 - 1.55 * t), 0.45)}
-        cal, desc = {"metres_per_pixel": 0.05, "frame": "warehouse floor plan (synthetic)"}, \
-            "Forklift travels east at 1.6 m/s; pedestrian crosses south at 1.55 m/s. Paths converge mid-aisle."
-        occl = {}
-    elif name == "safe-passing":
-        gt = {"forklift-1": ("forklift", lambda t: Vec(1.0 + 1.4 * t, 4.0), 0.9),
-              "pedestrian-1": ("pedestrian", lambda t: Vec(12.0 - 1.2 * t, 9.5), 0.45)}
-        cal, desc = {"metres_per_pixel": 0.05, "frame": "warehouse floor plan (synthetic)"}, \
-            "Forklift and pedestrian pass on parallel lanes with >5 m separation throughout."
-        occl = {}
-    elif name == "occlusion-uncertainty":
-        gt = {"forklift-1": ("forklift", lambda t: Vec(1.0 + 1.2 * t, 6.0), 0.9),
-              "pedestrian-1": ("pedestrian", lambda t: Vec(7.5, 11.0 - 1.1 * t), 0.45)}
-        cal, desc = {"metres_per_pixel": 0.05, "frame": "warehouse floor plan (synthetic)"}, \
-            "Pedestrian is occluded behind shelving from t=3.0s to t=4.5s; identity and motion are uncertain across the gap."
-        occl = {"pedestrian-1": (3.0, 4.5)}
-    elif name == "warehouse-multi":
-        gt = {"forklift-1": ("forklift", lambda t: Vec(1.0 + 1.6 * t, 5.0), 0.9),
-              "pedestrian-1": ("pedestrian", lambda t: Vec(8.6, 12.0 - 1.55 * t), 0.45),
-              "robot-1": ("robot", lambda t: Vec(13.5 - 1.1 * t, 3.2), 0.55),
-              "forklift-2": ("forklift", lambda t: Vec(2.0 + 0.9 * t, 10.5), 0.9),
-              "shelf-row": ("shelf", lambda t: Vec(11.0, 7.0), 1.1)}
-        cal, desc = {"metres_per_pixel": 0.05, "frame": "warehouse floor plan (synthetic)"}, \
-            "Five-entity warehouse: two forklifts, a pedestrian, a mobile robot and a static shelf row. Multiple pairs converge."
-        occl = {}
-    elif name == "intersection-crossing":
-        gt = {"vehicle-1": ("vehicle", lambda t: Vec(0.5 + 2.2 * t, 6.5), 1.1),
-              "cyclist-1": ("cyclist", lambda t: Vec(9.0, 12.5 - 1.9 * t), 0.5),
-              "pedestrian-1": ("pedestrian", lambda t: Vec(12.5 - 1.3 * t, 5.6), 0.45),
-              "pedestrian-2": ("pedestrian", lambda t: Vec(4.0 + 0.8 * t, 1.0), 0.45)}
-        cal, desc = {"metres_per_pixel": 0.08, "frame": "intersection plan (synthetic)"}, \
-            "Four road users cross a synthetic intersection; vehicle, cyclist and two pedestrians create several closing pairs."
-        occl = {}
-    else:
-        raise KeyError(name)
+    if name not in SPECS: raise KeyError(name)
+    spec = SPECS[name]
     tracks, ground_truth = [], {}
-    for oid, (cat, fn, radius) in gt.items():
-        omit = occl.get(oid)
-        tracks.append(Track(oid, cat, "world", _sample(fn, omit=omit), radius, "FIXTURE", [omit] if omit else []))
-        ground_truth[oid] = {"category": cat, "radius": radius,
-                             "analytic": "linear constant-velocity (see engine/scenarios.py)",
-                             "occluded_window": omit}
-    return {"id": name, "description": desc, "kind": "SYNTHETIC_FIXTURE",
-            "calibration": cal, "tracks": tracks, "ground_truth": ground_truth,
-            "disclaimer": "Synthetic fixture with known ground truth. Results validate the analysis pipeline on synthetic data only — not performance on real industrial video."}
+    for oid, (cat, wps, speed, radius, curve, mode) in spec["actors"].items():
+        path = Path(wps, curve, closed=(mode == "loop"))
+        omit = spec["occl"].get(oid)
+        tracks.append(Track(oid, cat, "world", _sample(path, speed, mode, omit),
+                            radius, "FIXTURE", [omit] if omit else []))
+        ground_truth[oid] = {"category": cat, "radius": radius, "waypoints": wps,
+                             "curve": curve, "mode": mode, "speed_m_s": speed,
+                             "analytic": "Catmull-Rom spline through waypoints, arc-length parameterised (engine/curves.py)"
+                                         if curve == "smooth" else "straight polyline through waypoints, arc-length parameterised",
+                             "occluded_window": list(omit) if omit else None}
+    return {"id": name, "description": spec["desc"], "kind": "SYNTHETIC_FIXTURE",
+            "calibration": {"metres_per_pixel": 0.05, "frame": "floor plan (synthetic)"},
+            "tracks": tracks, "ground_truth": ground_truth,
+            "disclaimer": "Synthetic fixture with known ground truth (path definitions held separately). Results validate the analysis pipeline on synthetic data only — not performance on real industrial video."}
 
-SCENARIOS = ["warehouse-near-miss", "safe-passing", "occlusion-uncertainty", "warehouse-multi", "intersection-crossing"]
+SCENARIOS = list(SPECS)
 
 def track_to_dict(tr: Track) -> dict:
     return {"object_id": tr.object_id, "category": tr.category, "space": tr.space, "radius": tr.radius,
@@ -82,7 +98,7 @@ def scenario_to_dict(sc: dict) -> dict:
             "tracks": [track_to_dict(t) for t in sc["tracks"]], "ground_truth": sc["ground_truth"]}
 
 def export_fixtures(out_dir: str) -> list:
-    out = Path(out_dir); out.mkdir(parents=True, exist_ok=True); written = []
+    out = FilePath(out_dir); out.mkdir(parents=True, exist_ok=True); written = []
     for name in SCENARIOS:
         p = out / f"{name}.json"; p.write_text(json.dumps(scenario_to_dict(build(name)), indent=1)); written.append(str(p))
     return written
