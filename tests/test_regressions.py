@@ -80,5 +80,11 @@ def test_onboarding_rows_keep_labels():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     js = (ROOT / "apps" / "web" / "app.js").read_text()
     assert html.count('class="ob-mark"') == 3 and "Run the warehouse near-miss demo" in html
-    body = js[js.index("function renderOnboard"):js.index("renderOnboard();")]
+    _s = js.index("function renderOnboard"); body = js[_s:js.index("renderOnboard();", _s)]
     assert 'querySelector(".ob-mark")' in body and "firstChild" not in body
+
+
+def test_architecture_text_theme_aware():
+    css = (ROOT / "apps" / "web" / "app.css").read_text()
+    assert "color:var(--code)" in css and "#a9c6d8" in css  # token defined for dark, overridden for light
+    assert css.count("--code:") >= 2
