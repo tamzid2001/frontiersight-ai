@@ -14,7 +14,8 @@ async function diag(){try{const d=await(await fetch("/api/diagnostics")).json();
  $("hero-diag").textContent=`Meta: ${d.meta_configured?"configured":"not configured"} · Spark ${d.spark_model} · SAM ${d.sam_model} · mode ${d.mode}`;
  $("diag").textContent=JSON.stringify(d,null,2);}catch(e){$("mode").textContent="● API OFFLINE";}}
 
-async function loadScenarios(){const d=await(await fetch("/api/scenarios")).json();
+async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).json();}
+ catch(e){$("scenario-list").innerHTML='<div class="card wide"><h3>Could not load scenarios</h3><p class="dim">The API is unreachable. Check <code>/api/health</code>, then reload. Nothing has been simulated or hidden.</p><button onclick="location.reload()">Reload</button></div>';return;}
  $("scenario-select").innerHTML=d.scenarios.map(s=>`<option value="${s.id}">${s.id}</option>`).join("");
  $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card"><h3>${s.id}</h3><p class="dim">${s.description}</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
  const v=await(await fetch("/api/validate")).json();
@@ -45,12 +46,16 @@ $("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.
  if(state.playing){const step=()=>{if(!state.playing)return;state.t+=0.05;if(state.t>8)state.t=0;draw();requestAnimationFrame(step);};step();}};
 
 $("analyze").onclick=async()=>{$("analyze-status").textContent="Running bounded agent workflow…";
- const r=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({scenario:state.scenario,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})})).json();
+ let r;try{r=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({scenario:state.scenario,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})})).json();}
+ catch(e){$("analyze-status").textContent="Analysis failed: API unreachable. No results were fabricated.";return;}
+ if(!r.run){$("analyze-status").textContent="Analysis failed: "+(r.error||r.detail||"unknown error");return;}
  state.run=r.run;const pairs=r.run.findings.pairs||[];
  const evs=[];pairs.forEach(p=>{if(p.event)evs.push({...p.event,pair:p.pair});});
  $("events").innerHTML=evs.length?evs.map((e,i)=>`<li class="ev" data-t="${e.at_time_s||e.t_star_s||0}">⚠ <b>${e.type}</b> ${e.pair.join(" ↔ ")}<br><span class="dim">${e.ttc_s!=null?"TTC "+e.ttc_s+"s":e.d_min!=null?"d_min "+e.d_min+" "+(e.units||""):""} · click to seek</span></li>`).join(""):'<li class="dim">No proximity events above threshold in this scenario.</li>';
- document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});
+ document.querySelectorAll(".ev").forEach(el=>{el.tabIndex=0;el.setAttribute("role","button");
+  const seek=()=>{state.t=+el.dataset.t;draw();};el.onclick=seek;
+  el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();seek();}};});
  $("analyze-status").textContent=`Run ${r.run.run_id} · ${r.run.mode} · ${r.run.stages.filter(s=>s.status==="completed").length}/${r.run.stages.length} stages completed`;
  renderTrace(r.run);renderInspector(r);drawCfFromRun(r.run);};
 function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s.status}"><b>${s.name}</b> · ${s.status} · <span class="dim">${s.attribution}${s.artifact?" · artifact "+s.artifact:""}${s.retries?" · retries "+s.retries:""}</span><br><span class="dim mono">${JSON.stringify(s.detail).slice(0,320)}</span></li>`).join("");}
@@ -73,7 +78,7 @@ function drawCf(r){const c=$("cf-chart"),x=c.getContext("2d"),W=c.width,H=c.heig
  x.fillStyle="#e8edf6";x.font="13px system-ui";x.fillText("— original",52,24);x.fillStyle="#2dd4a8";x.fillText("— counterfactual",150,24);
  x.fillStyle="#8fa0b8";x.fillText("time → 6s",W-90,H-8);x.fillText("distance (m)",6,20);}
 let deb;$("sr").oninput=e=>{$("sr-val").textContent=e.target.value+"%";clearTimeout(deb);deb=setTimeout(runCf,350);};
-$("it").oninput=e=>{$("it-val").textContent=(+e.target.value).toFixed(2).replace(/0+$/,"").replace(/\.$/,".0")+"s";clearTimeout(deb);deb=setTimeout(runCf,350);};
+$("it").oninput=e=>{$("it-val").textContent=(+e.target.value).toFixed(2)+"s";clearTimeout(deb);deb=setTimeout(runCf,350);};
 $("cf-run").onclick=runCf;
 
 $("export-json").onclick=async()=>{const name=state.scenario||"warehouse-near-miss";
