@@ -270,6 +270,9 @@ $("export-html").onclick=async()=>{const name=state.scenario||"warehouse-near-mi
 function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();}
 $("cta-demo").onclick=()=>{goto("studio");$("analyze").click();};
 $("cta-create").onclick=()=>goto("create");
+$("cta-video").onclick=()=>{showView("home");document.getElementById("demo-video").scrollIntoView({behavior:"smooth",block:"center"});};
+$("demo-play").onclick=()=>{const f=$("demo-frame");
+ f.innerHTML='<iframe src="https://www.youtube-nocookie.com/embed/mYTkPqigoz8?autoplay=1&rel=0" title="FrontierSight AI demo video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';};
 $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark…";
  const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss"})});
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};

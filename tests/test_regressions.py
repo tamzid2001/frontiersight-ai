@@ -68,3 +68,10 @@ def test_pricing_and_auth_are_honest():
     assert "Billing is not enabled" in html and "device-local" in html
     assert "stripe" not in html.lower() and "checkout" not in html.lower()
     assert 'data-theme-mode="system"' in html
+
+def test_demo_video_integrated():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    assert "i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg" in html
+    assert "youtube-nocookie.com/embed/mYTkPqigoz8" in js and 'id="demo-play"' in html
+    assert "autoplay=1" in js  # only inside the click handler's iframe, never on load

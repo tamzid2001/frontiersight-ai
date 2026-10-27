@@ -10,6 +10,7 @@ Theme 2: *Push the Frontier*. Owner: Quantura Studio.
 > deterministic physics engine decides — with a human approving the evidence
 > before it leaves the building.
 
+**Demo video:** https://youtu.be/mYTkPqigoz8
 **Live demo:** https://frontiersight-ai.vercel.app · **Repo:** https://github.com/tamzid2001/frontiersight-ai
 
 ## Run it locally (one command, no keys needed)

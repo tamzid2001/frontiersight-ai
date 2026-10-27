@@ -4,6 +4,7 @@
 - **Owner:** Quantura Studio · **Track:** Startup · **Theme:** Push the Frontier
 - **Repo:** https://github.com/tamzid2001/frontiersight-ai
 - **Live app:** https://frontiersight-ai.vercel.app
+- **Demo video:** https://youtu.be/mYTkPqigoz8
 - **Deadline:** Nov 4, 2026, 9:00 PM ET
 
 ## Problem

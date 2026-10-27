@@ -81,3 +81,11 @@ button:disabled{opacity:.55;cursor:wait}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 #tabs button[aria-current="page"]{color:var(--ink)}
 .ob-row{margin:6px 0}.ob-row.done{color:var(--teal)}
+
+.demo-card{margin-top:16px}
+.demo-frame{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#000}
+.demo-frame img{display:block;width:100%;height:auto}
+.demo-frame button{position:absolute;inset:0;margin:auto;width:84px;height:84px;border-radius:50%;
+ background:rgba(10,14,22,.72);color:#fff;font-size:30px;border:2px solid rgba(255,255,255,.85);cursor:pointer}
+.demo-frame button:hover{background:var(--red)}
+.demo-frame iframe{display:block;width:100%;aspect-ratio:16/9;border:0}
