@@ -27,7 +27,7 @@ Owner: **Quantura Studio**. Submissions close **Nov 4, 2026, 9:00 PM ET**.
 
 ```bash
 git clone https://github.com/tamzid2001/frontiersight-ai && cd frontiersight-ai
-python3 -m pytest -q                                     # 41 tests, fully offline
+python3 -m pytest -q                                     # 42 tests, fully offline
 PYTHONPATH=. python3 -m services.api.server --port 8000  # → http://127.0.0.1:8000
 ```
 
@@ -103,7 +103,7 @@ browser) — per the official [Meta Model API docs](https://dev.meta.ai/docs).
 
 ## Honest labels (kept separate in every evidence report)
 
-- `deterministic_fixture_verified` — yes (41 tests + 7 analytical validation cases, CI green)
+- `deterministic_fixture_verified` — yes (42 tests + 7 analytical validation cases, CI green)
 - `meta_api_integration_verified` — yes, measured (see above)
 - `real_video_evaluation_completed` — **not yet**; SAM video-mode tracking on real industrial
   footage is API-integrated but unbenchmarked
@@ -132,7 +132,7 @@ frontiersight-ai/
 ## Testing
 
 ```bash
-python3 -m pytest -q        # unit/property/integration-style API tests (41)
+python3 -m pytest -q        # unit/property/integration-style API tests (42)
 PYTHONPATH=. python3 -m services.api.server --smoke   # health + UI smoke
 ```
 
