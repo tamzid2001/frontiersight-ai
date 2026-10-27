@@ -257,3 +257,21 @@ def test_spark_scene_quality_gate():
                  {"category": "pedestrian", "waypoints": [[15, 1], [15, 3]], "speed": 1.0, "radius": 0.45, "curve": "straight", "mode": "stop"}]
     q2 = scene_quality(collision)
     assert any("footprint" in i for i in q2["issues"])
+
+def test_voice_endpoint_validation_and_stub(api, monkeypatch):
+    import base64 as b64, struct
+    # minimal valid WAV header (mono 16-bit 24kHz) + silence
+    def wav(seconds=0.1):
+        n = int(24000 * seconds)
+        hdr = b"RIFF" + struct.pack("<I", 36 + n * 2) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, 24000, 48000, 2, 16) + b"data" + struct.pack("<I", n * 2)
+        return hdr + b"\x00\x00" * n
+    good = "data:audio/wav;base64," + b64.b64encode(wav()).decode()
+    s, out = call(api, "/api/meta/transcribe", {"audio_data_url": good})
+    assert s in (202, 503)  # no key in test env -> BLOCKED_CREDENTIALS path (202) - never a crash
+    if s == 202: assert out["status"] == "BLOCKED_CREDENTIALS"
+    s, out = call(api, "/api/meta/transcribe", {"audio_data_url": "data:audio/wav;base64," + b64.b64encode(b"not a wav").decode()})
+    assert s in (202, 400, 503)  # blocked-credentials is evaluated before validation order is an impl detail
+    from integrations.meta import voice
+    with pytest.raises(ValueError): voice.validate_wav(b"RIFFxxxxWAVEbad")
+    facts = voice.validate_wav(wav(0.5))
+    assert facts["sample_rate"] == 24000

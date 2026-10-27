@@ -124,6 +124,7 @@ class H(BaseHTTPRequestHandler):
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
                 "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support", "mcp": "/api/mcp",
                 "authconfig": "/api/auth/config", "clerksync": "/api/auth/clerk-sync", "clerkwh": "/api/webhooks/clerk",
+                "transcribe": "/api/meta/transcribe",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -157,7 +158,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.30.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.31.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 return self._send(200, _mcp.catalog())
@@ -551,6 +552,22 @@ class H(BaseHTTPRequestHandler):
                           __import__("time").time(), _m["org"] if _m else None))
                 _store.audit(user["id"], "scene_saved", sid, org=_m["org"] if _m else "")
                 return self._send(201, {"id": sid, "plan": plan, "limit": limit})
+            if route.startswith("/api/meta/transcribe"):
+                import base64 as _b64
+                from integrations.meta import voice as _voice
+                raw = str(body.get("audio_data_url", ""))
+                if "," not in raw: return self._send(400, {"error": "audio_data_url must be a base64 data URL of a WAV file"})
+                try: wav = _b64.b64decode(raw.split(",", 1)[1], validate=True)
+                except Exception: return self._send(400, {"error": "audio_data_url is not valid base64"})
+                bias = body.get("language_bias") or None
+                if bias is not None and not (isinstance(bias, list) and 1 <= len(bias) <= 3
+                                              and all(isinstance(x, str) for x in bias)):
+                    return self._send(400, {"error": "language_bias must be a list of 1-3 language names"})
+                try:
+                    out = _voice.transcribe_wav(wav, str(body.get("mode", "PUSH_TO_TALK")), bias)
+                except BlockedCredentials as e:
+                    return self._send(202, {"status": "BLOCKED_CREDENTIALS", "detail": str(e)})
+                return self._send(200, out)
             if route.startswith("/api/meta/segment-video"):
                 user = _auth_user(self)
                 plan = _plan_of(user)

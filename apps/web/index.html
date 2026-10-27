@@ -306,6 +306,18 @@
   <aside class="card"><h3>✦ Generate with Muse Spark</h3>
    <textarea id="lab-prompt" rows="3" maxlength="4000" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
    <p class="dim" style="margin:2px 0 8px"><span id="lab-prompt-count">0</span> / 4000 characters</p>
+   <div class="row">
+    <button id="mic-btn" type="button">🎙 Speak instead</button>
+    <select id="voice-lang" aria-label="Dictation language" style="max-width:190px">
+     <option value="">Auto-detect language</option><option>English</option><option>Spanish</option>
+     <option>Hindi</option><option>French</option><option>German</option><option>Portuguese</option>
+     <option>Japanese</option><option>Korean</option><option>Mandarin Chinese</option></select>
+    <span id="voice-src" class="pill ghost hidden"></span>
+    <button id="voice-fallback" type="button" class="ghostbtn hidden">Use browser speech instead</button>
+   </div>
+   <p id="mic-status" class="dim" role="status">Or dictate it: press the mic, speak your scene, press Stop.
+   Audio goes to Meta only when you press Stop — nothing is recorded or stored here — and the transcript
+   lands in the box above for you to edit before generating.</p>
    <div class="row"><button id="lab-generate">Generate scene</button>
     <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
     <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>

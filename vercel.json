@@ -180,6 +180,10 @@
     {
       "source": "/api/webhooks/clerk",
       "destination": "/api/index?ep=clerkwh"
+    },
+    {
+      "source": "/api/meta/transcribe",
+      "destination": "/api/index?ep=transcribe"
     }
   ],
   "functions": {

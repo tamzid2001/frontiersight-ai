@@ -1352,3 +1352,111 @@ $("help-search").addEventListener("input",e=>{const q=e.target.value.toLowerCase
 document.querySelectorAll("[data-help-jump]").forEach(b=>b.onclick=()=>{
  const el=document.getElementById(b.dataset.helpJump);
  if(el){el.style.display="";el.scrollIntoView({behavior:"smooth",block:"start"});}});
+
+
+// ---- voice dictation: mic -> browser WAV encode -> Muse Voice Transcribe ----
+const voice = { rec: null, chunks: [], stream: null, started: 0, timer: null };
+function micStatus(m) { const e = $("mic-status"); if (e) e.textContent = m; }
+function encodeWavPcm16(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const wstr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  wstr(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); wstr(8, "WAVE");
+  wstr(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); wstr(36, "data"); v.setUint32(40, samples.length * 2, true);
+  samples.forEach((s, i) => v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(s * 32767))), true));
+  return new Blob([buf], { type: "audio/wav" });
+}
+async function blobToWav24k(blob) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC();
+  const decoded = await ac.decodeAudioData(await blob.arrayBuffer());
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * 24000), 24000);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const rendered = await off.startRendering();
+  ac.close();
+  return encodeWavPcm16(rendered.getChannelData(0), 24000);
+}
+function setTranscript(text, label) {
+  const ta = $("lab-prompt");
+  const cur = ta.value.trim();
+  ta.value = cur ? (cur + (/\s$/.test(ta.value) ? "" : " ") + text) : text;
+  ta.dispatchEvent(new Event("input"));
+  const chip = $("voice-src");
+  chip.textContent = label; chip.classList.remove("hidden");
+  ta.focus();
+}
+async function stopRecording() {
+  if (!voice.rec) return;
+  const rec = voice.rec; voice.rec = null;
+  clearInterval(voice.timer);
+  $("mic-btn").classList.remove("recording"); $("mic-btn").textContent = "🎙 Speak instead";
+  rec.stop();
+}
+$("mic-btn").onclick = async () => {
+  if (voice.rec) { stopRecording(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+    micStatus("This browser cannot record audio. You can still type the scene above.");
+    return;
+  }
+  micStatus("Requesting microphone access…");
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { micStatus("Microphone access was denied. Allow the mic in your browser's site settings, or type the scene above."); return; }
+  voice.stream = stream; voice.chunks = [];
+  const rec = new MediaRecorder(stream);
+  voice.rec = rec; voice.started = Date.now();
+  rec.ondataavailable = e => { if (e.data.size) voice.chunks.push(e.data); };
+  rec.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    const secs = (Date.now() - voice.started) / 1000;
+    micStatus("Transcribing with Muse Voice Transcribe…");
+    try {
+      const raw = new Blob(voice.chunks, { type: rec.mimeType || "audio/webm" });
+      const wav = await blobToWav24k(raw);
+      if (wav.size > 9 * 1024 * 1024) { micStatus("That take is too long for one transcription — keep it under about 2 minutes."); return; }
+      const dataUrl = await new Promise(res => { const fr = new FileReader();
+        fr.onload = () => res(fr.result); fr.readAsDataURL(wav); });
+      const lang = $("voice-lang").value;
+      const resp = await fetch("/api/meta/transcribe", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_data_url: dataUrl, language_bias: lang ? [lang] : null }) });
+      const out = await resp.json();
+      if (resp.status === 200 && !out.transcript) {
+        micStatus("Meta heard no speech in that take — try again a little closer to the microphone, or type the scene.");
+      } else if (resp.status === 200 && out.transcript) {
+        setTranscript(out.transcript, `Heard via Muse Voice Transcribe · ${secs.toFixed(1)}s of audio`);
+        micStatus(`Transcribed by ${out.model} in ${(out.latency_ms / 1000).toFixed(1)}s — edit the text above, then Generate scene.`);
+      } else {
+        micStatus("Transcription did not complete: " + (out.error || out.detail || ("HTTP " + resp.status)) +
+          ("webkitSpeechRecognition" in window || "SpeechRecognition" in window
+            ? " You can try your browser's built-in speech recognition instead (different provider, labelled as such)."
+            : " You can still type the scene above."));
+        if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
+          $("voice-fallback").classList.remove("hidden");
+      }
+    } catch (e) { micStatus("Transcription failed in the browser: " + e.message + " — the typed flow still works."); }
+  };
+  rec.start(250);
+  $("mic-btn").classList.add("recording");
+  const tick = () => { const s = Math.floor((Date.now() - voice.started) / 1000);
+    $("mic-btn").textContent = `■ Stop · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    if (s >= 120) { micStatus("Two-minute cap reached — transcribing what we have."); stopRecording(); } };
+  tick(); voice.timer = setInterval(tick, 500);
+  micStatus("Recording… speak your scene now (for example: “a forklift crosses an aisle while a pedestrian walks the other way”), then press Stop.");
+};
+$("voice-fallback").onclick = () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { micStatus("This browser has no built-in speech recognition either — typing is the way."); return; }
+  const langMap = { "": navigator.language || "en-US", English: "en-US", Spanish: "es-ES", Hindi: "hi-IN",
+    French: "fr-FR", German: "de-DE", Portuguese: "pt-PT", Japanese: "ja-JP", Korean: "ko-KR", "Mandarin Chinese": "zh-CN" };
+  const rec = new SR();
+  rec.lang = langMap[$("voice-lang").value] || "en-US";
+  rec.interimResults = false;
+  micStatus("Listening with your browser's speech recognition (not Meta)…");
+  rec.onresult = e => { const text = e.results[0][0].transcript;
+    setTranscript(text, "Heard via your browser's speech recognition (not Meta)");
+    micStatus("Browser transcription added above — edit it, then Generate scene."); };
+  rec.onerror = e => micStatus("Browser speech recognition error: " + e.error);
+  rec.start();
+};

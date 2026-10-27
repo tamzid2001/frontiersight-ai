@@ -300,3 +300,5 @@ button.pulse{animation:pulseGlow 1.6s ease-in-out infinite;border-color:var(--cy
 .ws-menu .sep{height:1px;background:var(--line);margin:5px 4px}
 .ws-rename{width:100%;margin:0 0 8px}
 @media(max-width:900px){#workspace-list{grid-template-columns:1fr}}
+
+#mic-btn.recording{background:var(--red);color:#fff;animation:pulseGlow 1.4s ease-in-out infinite}
