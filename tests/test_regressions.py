@@ -50,7 +50,7 @@ def test_create_lab_spawn_visibility_and_sections():
 def test_theme_and_grouped_nav():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     css = (ROOT / "apps" / "web" / "app.css").read_text()
-    assert html.count('data-view=') <= 8                       # grouped nav, not 9 flat tabs
+    assert html.count('data-view=') <= 9                       # grouped nav (7 sections + Settings + Help)
     assert 'data-theme-mode="system"' in html and "prefers-color-scheme" in html
     assert '[data-theme="light"]' in css and 'id="cf-map"' in html and 'id="cf-target"' in html and 'id="cf-decel"' in html
 
@@ -223,3 +223,11 @@ def test_spark_quality_and_no_beta():
     assert "(beta)" not in html
     assert "hitPath" in js and "nearestWpSegment" in js and "pathDrag" not in js or "pathDrag" in js
     assert "refreshAll3DThemes" in (ROOT / "apps/web/three-view.js").read_text()
+
+
+def test_help_section_and_footer_link():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'id="view-help"' in html and 'data-foot="help"' in html
+    for anchor in ["help-start", "help-create", "help-analysis", "help-accounts", "help-mcp", "help-trouble", "help-contact"]:
+        assert f'id="{anchor}"' in html, anchor
+    assert 'id="help-search"' in html

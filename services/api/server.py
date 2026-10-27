@@ -157,7 +157,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.29.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.30.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 return self._send(200, _mcp.catalog())

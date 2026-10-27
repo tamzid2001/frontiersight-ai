@@ -1344,3 +1344,11 @@ async function initClerk() {
   }
 }
 initClerk();
+
+// ---- help search + jump navigation ----
+$("help-search").addEventListener("input",e=>{const q=e.target.value.toLowerCase();
+ document.querySelectorAll(".help-block").forEach(b=>{
+  b.style.display=!q||b.textContent.toLowerCase().includes(q)?"":"none";});});
+document.querySelectorAll("[data-help-jump]").forEach(b=>b.onclick=()=>{
+ const el=document.getElementById(b.dataset.helpJump);
+ if(el){el.style.display="";el.scrollIntoView({behavior:"smooth",block:"start"});}});

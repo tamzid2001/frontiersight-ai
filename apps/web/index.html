@@ -60,6 +60,7 @@
  <button data-view="evidence">▤&nbsp; Evidence &amp; Trace</button>
  <div class="navspacer"></div>
  <button data-view="settings">⚙&nbsp; Settings</button>
+ <button data-view="help">?&nbsp; Help &amp; guides</button>
 </nav>
 <section id="view-home" class="view on">
  <div class="hero-grid">
@@ -562,6 +563,123 @@
  <p>Material changes will be dated here. Questions or requests: open an issue on the GitHub repository.</p>
 </section>
 
+
+<section id="view-help" class="view legal"><h2>Help &amp; guides</h2>
+ <p class="sub">Everything FrontierSight does, how to drive it, and what to do when something
+ looks wrong. Search this page, or jump to a topic.</p>
+ <input id="help-search" type="text" placeholder="Search help… (e.g. curved path, 402, workspace, MCP)" aria-label="Search help">
+ <div class="row" style="margin:12px 0">
+  <button class="ghostbtn" data-help-jump="help-start">Getting started</button>
+  <button class="ghostbtn" data-help-jump="help-create">Create Lab &amp; paths</button>
+  <button class="ghostbtn" data-help-jump="help-analysis">Analysis explained</button>
+  <button class="ghostbtn" data-help-jump="help-accounts">Accounts &amp; plans</button>
+  <button class="ghostbtn" data-help-jump="help-mcp">API &amp; MCP</button>
+  <button class="ghostbtn" data-help-jump="help-trouble">Troubleshooting</button>
+  <button class="ghostbtn" data-help-jump="help-contact">Contact &amp; support</button>
+ </div>
+
+ <div class="card wide help-block" id="help-start"><h3>Getting started (2 minutes)</h3>
+  <ol>
+   <li><b>Watch or run the demo.</b> Overview → <i>Run the warehouse near-miss demo</i>, or open the
+   Video Studio and press <b>Run analysis</b>. Events appear on the right; click one and the player seeks to it.</li>
+   <li><b>Make your own world.</b> Create Lab loads with a near-miss template. Drag waypoints, change
+   speeds, then <b>Run analysis</b>. Or describe a scene in words and let Muse Spark design it.</li>
+   <li><b>Ask “what if?”.</b> In Counterfactual, pick the agent that should have braked, drag the
+   intervention sliders or a preset, and read the per-actor results — including when braking helps
+   one actor and hurts another (that happens, and the tool shows it rather than hiding it).</li>
+  </ol>
+  <p class="dim">No account or key is needed for any of this. Live Meta features light up automatically
+  when the deployment has a key configured (see the badge in the top bar).</p></div>
+
+ <div class="card wide help-block" id="help-create"><h3>Create Lab &amp; path editing</h3>
+  <ul>
+   <li><b>Add a component</b> (forklift, pedestrian, robot, vehicle, cyclist, static shelf) — it appears
+   on the stage selected. Click the stage to lay its path; choose <i>straight lines</i> or
+   <i>smooth curve</i> per component (curves are Catmull-Rom splines driven at constant,
+   physically-limited speed — objects slow for tight turns and brake to a stop, just like the analysis assumes).</li>
+   <li><b>Click any path</b> to select its component. Then: click <b>near the line</b> to insert a point
+   exactly there, click <b>empty stage</b> to append, <b>drag points</b> to reshape,
+   <b>Shift-drag a path</b> to move it whole, <b>right-click or double-click a point</b> to delete it,
+   <b>Delete/Backspace</b> removes the last point. Hovering a path shows a pointer — paths are meant to be grabbed.</li>
+   <li><b>Path modes:</b> <i>stop</i> (ends and holds), <i>loop</i> (patrol), <i>ping-pong</i> (back and forth).
+   Amber warnings flag turns tighter than the vehicle can physically make, paths leaving the stage,
+   or routes through a shelf — fix them by widening the curve.</li>
+   <li><b>2D/3D:</b> both views edit and preview the same scene on the same clock; 3D adds orbit and
+   ground-click waypoint placement (drag points in 2D). Your per-section view choice is remembered.</li>
+   <li><b>Generate with Muse:</b> describe the scene (up to 4,000 characters). Muse returns components,
+   curved paths and speeds that are schema-validated and then scored by the engine (interaction quality,
+   shelf collisions, turn warnings) — a poor first draft is retried once with the exact issues fed back.
+   The scene is auto-labelled; press <b>Save workspace</b> to keep it. It also appears in the
+   Video Studio dropdown under <i>My workspaces</i>.</li>
+   <li><b>Workspaces:</b> save labs and SAM frame sets, then search, open, update, rename or delete them
+   from Workspace (⋯ menu on each card). Guests keep them in this browser; signed-in users sync to the server.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-analysis"><h3>Analysis explained (honestly)</h3>
+  <ul>
+   <li><b>Measured</b> numbers are sampled along the actual (curved) trajectories at 50 ms —
+   closest distance, contact, when it happened. <b>Predicted</b> CPA/TTC is a constant-velocity
+   extrapolation shown next to it. An LLM never produces these numbers.</li>
+   <li><b>Calibration rule:</b> without a declared scale, results stay in <b>pixels</b> and the tool
+   refuses metric claims rather than inventing metres. Create Lab scenes are in metres by construction.</li>
+   <li><b>Counterfactuals</b> replay paths with a braking agent (path-following simulation +
+   Monte-Carlo intervals). They are conditional predictions under listed assumptions —
+   <b>not safety certifications</b>, and every evidence packet says so.</li>
+   <li><b>Evidence export</b> requires a named human's approval of that exact run (Evidence view).
+   The approval is recorded inside the exported packet; the hash chain makes tampering detectable.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-accounts"><h3>Accounts, plans &amp; billing</h3>
+  <ul>
+   <li><b>Sign in</b> with Clerk (when configured on the deployment) or email/password. Guests can use
+   everything in Explorer; signing in adds server-saved workspaces.</li>
+   <li><b>Explorer (free):</b> all built-in scenarios, Create Lab, prompt-to-scene, deterministic
+   analysis, evidence export, 10 server-saved scenes, Monte-Carlo up to 200 runs.</li>
+   <li><b>Researcher ($19/mo via Clerk/Stripe when enabled):</b> your own Meta API key (BYOK, encrypted),
+   SAM 3.1 video-mode tracking, unlimited server scenes, Monte-Carlo up to 2,000, priority support.</li>
+   <li><b>Team (custom):</b> shared org workspace and roles, org audit log, onboarding; SSO/SAML, VPC
+   and SLA are scoped in the contract (Pricing → Request a quote).</li>
+   <li>Seeing <b>402</b>? You hit a plan gate — the message names the limit and the plan that removes it.
+   Seeing <b>BLOCKED_CREDENTIALS</b>? The deployment has no Meta key configured; fixture/demo mode still works fully.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-mcp"><h3>API &amp; MCP</h3>
+  <p>The deterministic engine is exposed two ways:</p>
+  <ul>
+   <li><b>REST:</b> the same endpoints the UI uses (see Settings for the live <code>/api/me</code>,
+   scenarios, analysis, counterfactual, SAM and billing surfaces).</li>
+   <li><b>MCP server:</b> <code>POST /api/mcp</code> — connect Claude Code in one line:
+   <code>claude mcp add --transport http frontiersight https://frontiersight-ai.vercel.app/api/mcp</code>,
+   or run it offline from a clone: <code>python3 scripts/mcp_stdio.py</code>. Eight deterministic
+   tools (scenarios, measured analysis, path-following counterfactuals, curve sampling, scene
+   validation). By design, no MCP tool spends Meta credits or bypasses the human approval gate.
+   Full guide: <code>docs/MCP.md</code> in the repository.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-trouble"><h3>Troubleshooting</h3>
+  <ul>
+   <li><b>Analysis seems stuck:</b> live runs include a Muse call and can take 5–25 s (the button
+   shows an elapsed timer). Past ~95 s the UI aborts with a named error — press Run again.</li>
+   <li><b>“SAM returned zero matches”:</b> a valid result, shown as-is. Try a clearer concept
+   (one short noun phrase, e.g. “forklift”), a sharper frame, or the default example frame.</li>
+   <li><b>Export is locked:</b> evidence downloads unlock only after a named human approves that
+   run in the Evidence view — by design.</li>
+   <li><b>3D won’t open:</b> your browser/GPU declined WebGL; the app returns to 2D with your scene
+   untouched. Nothing depends on 3D.</li>
+   <li><b>My workspace is gone:</b> guest workspaces live in this browser (clearing site data deletes
+   them). Sign in to keep them on the server.</li>
+   <li><b>The timer looks wrong:</b> playback is true delta-time (0.5×/1×/2× are exact); if a scene
+   is longer than the scrub range, open it via Workspace so the range rescales.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-contact"><h3>Contact &amp; support</h3>
+  <p>Signed-in users can open a support request in <b>Settings → Support</b> (paid plans go to the
+  priority queue). Otherwise: email <a href="mailto:hello@quantura.studio">hello@quantura.studio</a>,
+  file an issue on <a href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub</a>,
+  or watch the <a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">3-minute demo</a> again —
+  most “how do I…” questions are answered in it.</p></div>
+</section>
+
 <section id="view-settings" class="view"><h2>System settings</h2>
  <div class="card wide"><h3>Your plan &amp; account</h3><div id="me-card" class="mono dim">Loading account…</div>
  <div class="row"><button id="manage-billing" class="ghostbtn">Manage billing (Stripe portal)</button>
@@ -593,7 +711,7 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
 
 <footer>
  <div class="flinks">
-  <button type="button" class="flink" data-foot="home">Overview</button><button type="button" class="flink" data-foot="pricing">Pricing</button><button type="button" class="flink" data-foot="terms">Terms of Service</button>
+  <button type="button" class="flink" data-foot="home">Overview</button><button type="button" class="flink" data-foot="pricing">Pricing</button><button type="button" class="flink" data-foot="help">Help &amp; guides</button><button type="button" class="flink" data-foot="terms">Terms of Service</button>
   <button type="button" class="flink" data-foot="privacy">Privacy Policy</button><a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Demo video ↗</a>
   <a href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub ↗</a>
  </div>
