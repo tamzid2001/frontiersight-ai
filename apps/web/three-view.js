@@ -105,6 +105,11 @@ function create(container, hooks) {
   function rebuild(items) {
     world.clear(); state.entities.clear();
     for (const o of items) {
+      if (o.lines) for (const ln of o.lines) {
+        const pts = ln.pts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
+        world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.LineBasicMaterial({ color: ln.color, transparent: true, opacity: ln.opacity ?? 0.8 })));
+      }
       if (o.pathPts && o.pathPts.length > 1) {
         const pts = o.pathPts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
@@ -117,6 +122,7 @@ function create(container, hooks) {
         }
       }
       const ent = buildEntity(o);
+      if (o.opacity !== undefined) ent.traverse(m => { if (m.material) { m.material = m.material.clone(); m.material.transparent = true; m.material.opacity = o.opacity; } });
       world.add(ent); state.entities.set(o.id, ent);
     }
     state.sig = hooks.sig ? hooks.sig() : "";
@@ -216,4 +222,44 @@ export function refreshLab3DTheme() {
   if (!C) return;
   const cs = getComputedStyle(document.documentElement);
   C.scene.background = new THREE.Color(cs.getPropertyValue("--canvas").trim() || "#0a0e1a");
+}
+
+
+// ---- Counterfactual 3D: agent (cf), ghost (original), other actors ----
+let F = null;
+function cfPos(item, t) {
+  const rows = item._rows; if (!rows || !rows.length) return null;
+  let best = rows[0];
+  for (const r of rows) if (Math.abs(r[0] - t) < Math.abs(best[0] - t)) best = r;
+  return item._at === "agent" ? [best[1], best[2]] : [best[3], best[4]];
+}
+export function showCf3D(container, hooks) {
+  const key = hooks.extent ? hooks.extent().join("x") : "16x14";
+  if (F && F._extentKey !== key) { container.innerHTML = ""; F.stop(); F = null; }
+  if (!F) { F = create(container, { ...hooks, pos: cfPos }); F._extentKey = key; }
+  F.start();
+  return F;
+}
+export function hideCf3D() { if (F) F.stop(); }
+export function syncCf3D(cf, meta, t, force = false) {
+  if (!F || !F.visible || !cf) return;
+  const focus = cf.focus_other, fr = cf.results[focus]; if (!fr) return;
+  const agentMeta = meta[cf.agent_id] || { category: "object", radius: 0.6 };
+  const items = [
+    { id: cf.agent_id, category: agentMeta.category, radius: agentMeta.radius, _at: "agent",
+      _rows: fr.trajectories.counterfactual,
+      lines: [{ pts: fr.trajectories.counterfactual.map(r => [r[1], r[2]]), color: 0x2dd4a8, opacity: 0.95 },
+              { pts: fr.trajectories.original.map(r => [r[1], r[2]]), color: 0x8fa0b8, opacity: 0.55 }] },
+    { id: cf.agent_id + "-ghost", category: agentMeta.category, radius: agentMeta.radius, _at: "agent",
+      _rows: fr.trajectories.original, opacity: 0.35, lines: [] },
+  ];
+  for (const [oid, r] of Object.entries(cf.results)) {
+    const m = meta[oid] || { category: "object", radius: 0.5 };
+    items.push({ id: oid, category: m.category, radius: m.radius, _at: "other",
+      _rows: r.trajectories.counterfactual,
+      lines: [{ pts: r.trajectories.counterfactual.map(p => [p[3], p[4]]), color: 0x8fa0b8, opacity: 0.6 }] });
+  }
+  const sig = "cf:" + cf.agent_id + ":" + focus + ":" + Object.keys(cf.results).join(",");
+  if (force || sig !== F.sig) { F.rebuild(items); F.sig = sig; }
+  F.setTime(items, t);
 }

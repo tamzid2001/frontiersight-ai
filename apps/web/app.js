@@ -71,7 +71,8 @@ function showView(v){
   if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
  if(v==="create"&&typeof labDraw==="function")labDraw();
- if(v==="counterfactual"&&state.data){populateCfScene();populateCfAgents();if(state.cfData){drawCfMap();drawCfChart();}}}
+ if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
+   if(!changed&&state.cfData){drawCfMap();drawCfChart();}});}}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 function goto(v){showView(v);}
 
@@ -111,7 +112,7 @@ function resetRunState(){state.run=null;state.cfData=null;state.highlight=null;s
  if(typeof syncApprovalUI==="function")syncApprovalUI();}
 window.pick=async id=>{let d;try{d=await(await fetch("/api/scenarios?name="+id)).json();}
  catch(e){toast("Could not load scenario "+id+" — check the API and try again.","err");return;}
- resetRunState();state.data=d;state.scenario=id;state.t=0;
+ resetRunState();state.data=d;state.scenario=id;state.t=0;state.dataUpdatedAt=Date.now();
  $("scenario-select").value=id;renderObjects();draw();populateCfScene();goto("studio");};
 function populateStudioWorkspaces(){const sel=$("scenario-select");if(!sel)return;
  const cur=sel.value;
@@ -135,6 +136,7 @@ async function loadWorkspaceIntoStudio(w){
  if(!tracks&&w.objects)tracks=await objectsToTracks(w.objects);
  if(!tracks||!tracks.length){toast("That workspace has no analysable tracks yet.","warn");return;}
  resetRunState();
+ state.dataUpdatedAt=Date.now();
  state.data={id:"ws-"+w.id,description:`Your workspace "${w.name}"`,kind:"USER_UPLOADED",
   calibration:{metres_per_pixel:null,frame:tracks[0].space==="world"?"Create Lab stage (metres)":"image (pixels)"},
   disclaimer:"User workspace. Metric claims only when tracks are in world space.",
@@ -265,7 +267,29 @@ function normalizeCf(r){if(r.results)return r;
    radius_sum:(radii[out.agent_id]||0)+(radii[oid]||0)};
   if(!out.focus_other||v.original_d_min<out.results[out.focus_other].original.d_min)out.focus_other=oid;}
  return out;}
+function currentSceneKey(){if(!state.data)return "none";
+ return (state.scenario||state.data.id||"")+"|"+state.data.tracks.map(t=>t.object_id+":"+t.points.length).join(",");}
+function cfParamKey(){return currentSceneKey()+"|sr="+$("sr").value+"|it="+$("it").value+"|dec="+$("cf-decel").value
+ +"|agent="+($("cf-agent").value||"")+"|target="+($("cf-target").value||"");}
+let _cfSyncTimer=null;
+function syncCounterfactual(){populateCfScene();populateCfAgents();
+ clearTimeout(_cfSyncTimer);
+ _cfSyncTimer=setTimeout(()=>{const key=cfParamKey();
+  if(state.cfDataKey===key)return;         // already showing exactly this scene+params
+  runCf();},220);}
+async function syncLabToCfIfNewer(){
+ if(!(state.labUpdatedAt> (state.dataUpdatedAt||0)) || state.lab.objects.length<2) return false;
+ const tracks=await objectsToTracks(state.lab.objects);
+ if(!tracks.length) return false;
+ resetRunState();
+ state.data={id:"lab-current",description:"Current Create Lab scene",kind:"USER_UPLOADED",
+  calibration:{metres_per_pixel:null,frame:"Create Lab stage (metres)"},
+  disclaimer:"Current Create Lab scene, sampled server-side.",tracks,ground_truth:{}};
+ state.scenario="lab-current";state.dataUpdatedAt=Date.now();
+ renderObjects();draw();
+ return true;}
 async function runCf(){if(!state.data){$("cf-results").textContent="Load or create a scene first.";return;}
+ const _keyAtStart=cfParamKey();
  const custom=state.data.kind==="USER_UPLOADED";
  const body=custom?{tracks:state.data.tracks,agent_id:$("cf-agent").value||state.data.tracks[0].object_id,
    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,braking_decel:+$("cf-decel").value}
@@ -276,7 +300,7 @@ async function runCf(){if(!state.data){$("cf-results").textContent="Load or crea
   {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();}
  catch(e){$("cf-results").textContent="Simulation failed: API unreachable.";return;}
  if(r.error){$("cf-results").textContent="Simulation failed: "+r.error;return;}
- r=normalizeCf(r);state.cfData=r;state.cfT=0;
+ r=normalizeCf(r);state.cfData=r;state.cfDataKey=_keyAtStart;state.cfT=0;
  const focus=r.focus_other,fr=r.results[focus];
  $("cf-results").innerHTML=`agent <b>${r.agent_id}</b> · focus pair vs <b>${focus}</b><br>`+
   Object.entries(r.results).map(([oid,v])=>`${oid}: d_min ${v.original.d_min} m → <b>${v.counterfactual.d_min} m</b> (Δ ${v.delta_d_min>=0?"+":""}${v.delta_d_min}) ${v.counterfactual.contact?"· ⚠ still contact":"· contact avoided"}`).join("<br>")+
@@ -289,7 +313,8 @@ function cfBounds(r){let xs=[],ys=[];for(const v of Object.values(r.results)){
 function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy)*0.92;
  return (x,y)=>[W/2-(b.x0+b.x1)/2*s+x*s, H/2+(b.y0+b.y1)/2*s-y*s];}
 function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t)<Math.abs(best[0]-t))best=p;}return best;}
-function drawCfMap(){const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
+function drawCfMap(){if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
+ const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
  const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other;
@@ -315,7 +340,7 @@ function drawCfMap(){const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x
  x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
  x.fillText(r.agent_id+" (counterfactual)",a2+13,b2+4);x.fillText("◇ closest approach "+cpa[5].toFixed(2)+" m",cx+12,cy-10);
  $("cf-clock").textContent="t = "+state.cfT.toFixed(2)+"s";$("cf-scrub").value=state.cfT;}
-function drawCfFromRun(run){ if(state.data&&$("cf-scene")){ populateCfScene(); if(state.cfData)runCf(); } }
+function drawCfFromRun(run){ if(state.data&&$("cf-scene")) syncCounterfactual(); }
 function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);const f=r.results[r.focus_other];if(!f)return;
@@ -334,6 +359,30 @@ function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;con
 $("cf-run").onclick=()=>runCf();
 [["sr","sr-val",v=>v+"%"],["it","it-val",v=>(+v).toFixed(2)+"s"],["cf-decel","dec-val",v=>v+" m/s\u00b2"]].forEach(([id,lbl,f])=>{
  const el=$(id);if(!el)return;el.addEventListener("input",()=>{$(lbl).textContent=f(el.value);clearTimeout(window._cfDeb);window._cfDeb=setTimeout(runCf,300);});});
+state.cfView="2d";
+async function setCfView(v){state.cfView=v;
+ $("cf-view-2d").setAttribute("aria-pressed",String(v==="2d"));
+ $("cf-view-3d").setAttribute("aria-pressed",String(v==="3d"));
+ $("cf-map").classList.toggle("hidden",v==="3d");
+ $("cf-3d").classList.toggle("hidden",v!=="3d");
+ if(v==="3d"){
+  try{
+   if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
+   const mod=window.__lab3dMod;
+   const meta={};(state.data?state.data.tracks:[]).forEach(tr=>meta[tr.object_id]={category:tr.category,radius:tr.radius});
+   const hooks={extent:()=>{if(!state.cfData)return [16,14];
+     let mx=1,my=1;Object.values(state.cfData.results).forEach(r=>{
+      r.trajectories.counterfactual.forEach(p=>{mx=Math.max(mx,p[1],p[3]);my=Math.max(my,p[2],p[4]);});});
+     return [Math.max(8,Math.ceil(mx*1.15)),Math.max(8,Math.ceil(my*1.15))];}};
+   mod.showCf3D($("cf-3d"),hooks);
+   window.__cf3dSync=(cf,t)=>{const m2={};(state.data?state.data.tracks:[]).forEach(tr=>m2[tr.object_id]={category:tr.category,radius:tr.radius});
+    mod.syncCf3D(cf,m2,t);};
+   if(state.cfData)mod.syncCf3D(state.cfData,meta,state.cfT,true);
+  }catch(e){toast("3D view unavailable (WebGL): "+e.message+" — the 2D map is unaffected.","err");setCfView("2d");}
+ } else if(window.__lab3dMod){window.__lab3dMod.hideCf3D();window.__cf3dSync=null;}
+}
+$("cf-view-2d").onclick=()=>setCfView("2d");
+$("cf-view-3d").onclick=()=>setCfView("3d");
 $("cf-scrub").oninput=e=>{state.cfT=+e.target.value;drawCfMap();drawCfChart();};
 $("cf-play").onclick=()=>{state.cfPlaying=!state.cfPlaying;$("cf-play").textContent=state.cfPlaying?"⏸ Pause":"▶ Play comparison";
  state._cfLast=null;
@@ -397,7 +446,8 @@ function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
 const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
-function labAdd(cat,waypoints,speed,radius,delay,mode,curve){
+function touchLab(){state.labUpdatedAt=Date.now();}
+function labAdd(cat,waypoints,speed,radius,delay,mode,curve){touchLab();
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
   speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",curve:curve||"straight",waypoints:waypoints||[]};
  if(!o.waypoints.length){const s=LAB_SLOTS[state.lab.objects.length%LAB_SLOTS.length];o.waypoints=[[s[0],s[1]]];o.spawned=true;}
@@ -576,11 +626,11 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
  c.addEventListener("pointermove",e=>{if(!drag)return;moved=true;const[px,py]=evPos(e);
   drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);labDraw();});
  c.addEventListener("pointercancel",()=>{drag=null;});
- c.addEventListener("pointerup",e=>{const wasDrag=!!drag;if(drag&&moved){drag=null;labRenderList();labDraw();return;}drag=null;
+ c.addEventListener("pointerup",e=>{const wasDrag=!!drag;if(drag&&moved){drag=null;touchLab();labRenderList();labDraw();return;}drag=null;
   if(wasDrag){labRenderList();labDraw();return;}
   if(c._suppressAdd){c._suppressAdd=false;return;}
   const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
-  const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));labRenderList();labDraw();});})();
+  const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));touchLab();labRenderList();labDraw();});})();
 $("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
  labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
 document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
@@ -645,7 +695,7 @@ async function analyzeCustom(tracks,label){
   labStatus("Analysis failed: "+e.message); const as=$("analyze-status"); if(as)as.textContent="Custom analysis failed: "+e.message;
   throw e;
  }finally{ clearTimeout(killer); }
- state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;
+ state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;state.dataUpdatedAt=Date.now(); syncCounterfactual();
  try{const mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem("fs-my-scenes",JSON.stringify(mine.slice(-10)));}catch(e){}
  renderObjects();draw();renderTrace(r.run);renderInspector(r);goto("studio");
  $("analyze-status").textContent=`Custom run ${r.run.run_id} · ${r.run.mode} · ${r.scenario.tracks.length} objects · ${r.run.findings.pairs.length} pairs analysed`;
@@ -684,7 +734,7 @@ function labSetTitle(name,saved){state.labTitle=name||"Untitled scene";
 function suggestedName(base){if(base)return base;
  const cats=[...new Set(state.lab.objects.map(o=>o.category))].join(" + ")||"scene";
  return `${cats} · ${state.lab.objects.length} components · ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;}
-function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;
+function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;state.labUpdatedAt=Date.now();
  labSetTitle(scene.name||"",false);
  (scene.objects||[]).forEach(o=>labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
  labStatus(label);labDraw();}

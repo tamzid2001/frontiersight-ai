@@ -116,7 +116,7 @@ def test_indie_track_not_startup():
 def test_sam_vision_and_site_upgrades():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     js = (ROOT / "apps" / "web" / "app.js").read_text()
-    for marker in ['id="sam-panel"', 'id="sam-canvas"', 'id="play-speed"', 'id="cf-export"',
+    for marker in ['id="sam-panel"', 'id="sam-canvas"', 'class="speedseg"', 'id="cf-export"',
                    'id="ws-search"', 'id="clear-data"', 'id="lab-clear-all"', 'id="foot-version"',
                    "application/ld+json", 'class="skip"']:
         assert marker in html, marker
@@ -208,3 +208,9 @@ def test_studio_3d_and_delta_playback():
     assert 'id="studio-3d"' in html and "setStudioView" in js and "syncStudio3D" in js
     assert "state._playLast" in js and "data-speed" in html  # delta-time, not frame-stepped
     assert 'id="play-speed"' not in html
+
+def test_cf_3d_and_sync():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'id="cf-3d"' in html and "setCfView" in js and "syncCounterfactual" in js
+    assert "syncCf3D" in (ROOT / "apps/web/three-view.js").read_text()

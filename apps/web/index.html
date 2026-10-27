@@ -352,7 +352,12 @@
  <div class="studio">
   <div class="card stagecard">
    <h3 style="margin-top:0">Trajectory map — top-down</h3>
+   <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
+    <button id="cf-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
+    <button id="cf-view-3d" class="ghostbtn" aria-pressed="false">3D view (beta)</button>
+    <span class="dim">Synced with Create Lab &amp; Studio: same scene, same clock, same entities.</span></div>
    <canvas id="cf-map" width="880" height="520" role="img" aria-label="Counterfactual trajectory map, top-down"></canvas>
+   <div id="cf-3d" class="hidden" style="height:520px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the counterfactual comparison"></div>
    <div class="transport"><button id="cf-play">▶ Play comparison</button>
     <input id="cf-scrub" type="range" aria-label="Comparison time scrubber" min="0" max="6" step="0.05" value="0"><span id="cf-clock" class="mono">t = 0.00s</span></div>
    <p class="dim">Dashed slate = agent's original path · teal = counterfactual · thin lines = other actors ·

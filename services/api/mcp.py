@@ -16,7 +16,7 @@ from engine.pathsim import simulate_on_paths
 from integrations.meta.spark import validate_scene, ModelError
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "frontiersight-ai", "version": "0.25.0"}
+SERVER = {"name": "frontiersight-ai", "version": "0.26.0"}
 
 def _schema(props: dict, required: list | None = None) -> dict:
     return {"type": "object", "properties": props, "required": required or []}
