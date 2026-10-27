@@ -9,7 +9,15 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "${{ matrix.python-version }}" }
       - run: pip install -e ".[dev]"
-      - run: python -m pytest -q
+      - run: python -m pytest -q --cov=engine --cov=agents --cov=integrations --cov=services --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
+      - name: Export LCOV
+        run: coverage lcov -o coverage.lcov
+      - name: Upload coverage artifacts (Cobertura + LCOV)
+        uses: actions/upload-artifact@v4
+        with: { name: coverage-${{ matrix.python-version }}, path: "coverage.xml\ncoverage.lcov" }
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with: { files: coverage.xml, fail_ci_if_error: false }
       - run: PYTHONPATH=. python -m services.api.server --smoke --port 8796
       - name: secret scan
         run: "! grep -R -E 'LLM_[0-9]{6,}|ghp_[A-Za-z0-9_]{20,}|-----BEGIN .*PRIVATE KEY-----' --exclude-dir=.git --exclude-dir=.github . || (echo 'secret pattern found' && exit 1)"

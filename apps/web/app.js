@@ -109,7 +109,7 @@ function renderMyScenes(){const host=$("scenario-list");if(!host)return;
  host.appendChild(div);
  div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
  div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem(sceneStoreKey(),JSON.stringify(mine));div.remove();renderMyScenes();});}
-function resetRunState(){state.run=null;state.cfData=null;state.highlight=null;state.cfAgentId=null;
+function resetRunState(){state.run=null;state.cfData=null;state.cfDataKey=null;state.cfT=0;state.highlight=null;state.cfAgentId=null;
  state.approvals={};const ev=$("events");if(ev)ev.innerHTML='<li class="dim">Run analysis to detect events.</li>';
  const tr=$("trace");if(tr)tr.innerHTML='<li class="dim">Run analysis to populate the trace.</li>';
  if(typeof syncApprovalUI==="function")syncApprovalUI();}
@@ -223,7 +223,9 @@ $("analyze").onclick=async()=>{
   const seek=()=>{state.t=+el.dataset.t;draw();};el.onclick=seek;
   el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();seek();}};});
  $("analyze-status").textContent=`Run ${r.run.run_id} · ${r.run.mode} · ${r.run.stages.filter(s=>s.status==="completed").length}/${r.run.stages.length} stages completed`;
- recordRun({scenario:state.scenario,mode:r.run.mode,run:r.run.run_id,events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length}); obDone("demo");
+ recordRun({scenario:state.scenario,mode:r.run.mode,run:r.run.run_id,events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length});
+ syncApprovalUI();
+ if(state.scenario==="warehouse-near-miss")obDone("demo");
  renderTrace(r.run);renderInspector(r);drawCfFromRun(r.run);};
 function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s.status}"><b>${s.name}</b> · ${s.status} · <span class="dim">${s.attribution}${s.artifact?" · artifact "+s.artifact:""}${s.retries?" · retries "+s.retries:""}</span><br><span class="dim mono">${JSON.stringify(s.detail).slice(0,320)}</span></li>`).join("");}
 function renderInspector(r){const sc=r.scenario;const mpp=sc.calibration.metres_per_pixel;
@@ -259,7 +261,8 @@ $("cf-scene").onchange=async()=>{const v=$("cf-scene").value;if(!v||v==="__curre
  const ss=$("scenario-select");if(ss)ss.value=v;
  renderObjects();draw();populateCfAgents();runCf();};
 document.querySelectorAll(".cf-preset").forEach(b=>b.onclick=()=>{$("sr").value=b.dataset.sr;$("it").value=b.dataset.it;$("cf-decel").value=b.dataset.dec;
- $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";runCf();});
+ $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";
+ ["sr","it","cf-decel"].forEach(id=>paintRange($(id)));runCf();});
 function normalizeCf(r){if(r.results)return r;
  const out={agent_id:r.agent_id||$("cf-agent").value,focus_other:null,results:{},monte_carlo:r.monte_carlo,manifest_hash:r.manifest_hash};
  const radii={};(state.data?state.data.tracks:[]).forEach(t=>radii[t.object_id]=t.radius);
@@ -273,7 +276,7 @@ function normalizeCf(r){if(r.results)return r;
  return out;}
 function currentSceneKey(){if(!state.data)return "none";
  return (state.scenario||state.data.id||"")+"|"+state.data.tracks.map(t=>t.object_id+":"+t.points.length).join(",");}
-function cfParamKey(){return currentSceneKey()+"|sr="+$("sr").value+"|it="+$("it").value+"|dec="+$("cf-decel").value
+function cfParamKey(){return currentSceneKey()+"|rev="+(state.labRevision||0)+"|sr="+$("sr").value+"|it="+$("it").value+"|dec="+$("cf-decel").value
  +"|agent="+($("cf-agent").value||"")+"|target="+($("cf-target").value||"");}
 let _cfSyncTimer=null;
 function syncCounterfactual(){populateCfScene();populateCfAgents();
@@ -292,7 +295,9 @@ async function syncLabToCfIfNewer(){
  state.scenario="lab-current";state.dataUpdatedAt=Date.now();
  renderObjects();draw();
  return true;}
+let _cfSeq=0;
 async function runCf(){if(!state.data){$("cf-results").textContent="Load or create a scene first.";return;}
+ const _seq=++_cfSeq;
  const _keyAtStart=cfParamKey();
  const custom=state.data.kind==="USER_UPLOADED";
  const body=custom?{tracks:state.data.tracks,agent_id:$("cf-agent").value||state.data.tracks[0].object_id,
@@ -304,6 +309,7 @@ async function runCf(){if(!state.data){$("cf-results").textContent="Load or crea
   {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();}
  catch(e){$("cf-results").textContent="Simulation failed: API unreachable.";return;}
  if(r.error){$("cf-results").textContent="Simulation failed: "+r.error;return;}
+ if(_seq!==_cfSeq)return; // a newer run superseded this response
  r=normalizeCf(r);state.cfData=r;state.cfDataKey=_keyAtStart;state.cfT=0;
  const focus=r.focus_other,fr=r.results[focus];
  $("cf-results").innerHTML=`agent <b>${r.agent_id}</b> · focus pair vs <b>${focus}</b><br>`+
@@ -451,7 +457,7 @@ function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
 const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
-function touchLab(){state.labUpdatedAt=Date.now();}
+function touchLab(){state.labUpdatedAt=Date.now();state.labRevision=(state.labRevision||0)+1;}
 function labAdd(cat,waypoints,speed,radius,delay,mode,curve){touchLab();
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
   speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",curve:curve||"straight",waypoints:waypoints||[]};
@@ -609,13 +615,13 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    <button class="ghostbtn" data-act="del">Delete</button></div></div>`).join("")
   :'<p class="dim">No components yet. Add one, select it, then click the stage to lay its path.</p>';
  el.querySelectorAll(".labobj").forEach(card=>{const o=labObj(card.dataset.id);
-  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=(inp.dataset.f==="mode"||inp.dataset.f==="curve")?inp.value:Math.max(0,+inp.value||0);delete o._res;labRenderList();labDraw();});
+  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=(inp.dataset.f==="mode"||inp.dataset.f==="curve")?inp.value:Math.max(0,+inp.value||0);delete o._res;delete o._prof;touchLab();labRenderList();labDraw();});
   card.querySelectorAll("button").forEach(b=>b.onclick=()=>{const a=b.dataset.act;
    if(a==="select"){state.lab.selected=o.id;}
-   if(a==="undo"){o.waypoints.pop();}
-   if(a==="clear"){o.waypoints=[];}
+   if(a==="undo"){o.waypoints.pop();touchLab();}
+   if(a==="clear"){o.waypoints=[];touchLab();}
    if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode,o.curve);labStatus(c.id+" duplicated — drag its waypoints apart.");}
-   if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;}
+   if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;touchLab();}
    labRenderList();labDraw();});});}
 // canvas editing: click a path to select & edit it; click near its line to
 // insert a point there; drag points to reshape; shift-drag moves the whole
@@ -756,7 +762,7 @@ async function analyzeCustom(tracks,label){
  try{
   const res=await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,
    body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
-    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})});
+    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:runApproved()})});
   const text=await res.text();
   try{ r=JSON.parse(text); }catch(e){ throw new Error(`server returned HTTP ${res.status} (non-JSON). The analysis likely timed out — press Run analysis again.`); }
   if(!res.ok||r.error) throw new Error(r.error||r.detail||("HTTP "+res.status));
@@ -767,12 +773,19 @@ async function analyzeCustom(tracks,label){
   throw e;
  }finally{ clearTimeout(killer); }
  state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;state.dataUpdatedAt=Date.now(); syncCounterfactual();
- try{const mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem("fs-my-scenes",JSON.stringify(mine.slice(-10)));}catch(e){}
+ syncApprovalUI();
+ try{const k=sceneStoreKey();const mine=JSON.parse(localStorage.getItem(k)||"[]");
+  mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem(k,JSON.stringify(mine.slice(-10)));}catch(e){}
+ recordRun({scenario:r.scenario.id,mode:r.run.mode,run:r.run.run_id,
+  events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length});
+ obDone("created"); if(typeof loadWorkspaces==="function")loadWorkspaces();
  renderObjects();draw();renderTrace(r.run);renderInspector(r);goto("studio");
  $("analyze-status").textContent=`Custom run ${r.run.run_id} · ${r.run.mode} · ${r.scenario.tracks.length} objects · ${r.run.findings.pairs.length} pairs analysed`;
  const evs=[];(r.run.findings.pairs||[]).forEach(p=>{if(p.event)evs.push({...p.event,pair:p.pair});});
  $("events").innerHTML=evs.length?evs.map(e=>`<li class="ev" data-t="${e.at_time_s||e.t_star_s||0}">⚠ <b>${e.type}</b> ${e.pair.join(" ↔ ")}<br><span class="dim">${e.ttc_s!=null?"TTC "+e.ttc_s+"s":e.d_min!=null?"d_min "+e.d_min+" "+(e.units||""):""}</span></li>`).join(""):'<li class="dim">No proximity events above threshold.</li>';
- document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});
+ document.querySelectorAll(".ev").forEach(el=>{el.tabIndex=0;el.setAttribute("role","button");
+  const seek=()=>{state.t=+el.dataset.t;draw();};el.onclick=seek;
+  el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();seek();}};});
  window.scrollTo({top:0,behavior:"smooth"});
  return r;}
 $("lab-run").onclick=async()=>{let localTracks;
@@ -794,7 +807,8 @@ $("lab-run").onclick=async()=>{let localTracks;
  }catch(e){/* analyzeCustom already surfaced the error */}
  finally{clearInterval(timer);btn.disabled=false;btn.textContent=old;}};
 $("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersight-created-scene",stage_metres:[LAB.w,LAB.h],objects:state.lab.objects},null,2)],{type:"application/json"}),"frontiersight-scene.json");};
-$("lab-import").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{try{
+$("lab-import-btn").onclick=()=>$("lab-import").click();
+$("lab-import").onchange=e=>{const f=e.target.files[0];e.target.value="";if(!f)return;f.text().then(txt=>{try{
  const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
  state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
  labStatus(`Imported ${state.lab.objects.length} component(s).`);labDraw();}catch(err){labStatus("Import failed: "+err.message);}});};
@@ -824,7 +838,9 @@ $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
   $("lab-gen-status").textContent=(r.status===400||/characters|required/.test(r.error||""))
    ? "Check your description: "+(r.error||r.detail)
    : "Muse could not produce a valid scene: "+(r.error||r.detail)+" — try a clearer description.";return;}
- labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`); obDone("muse");
+ if(!r.scene||!Array.isArray(r.scene.objects)){$("lab-gen-status").textContent="Generation returned an unexpected shape — nothing was changed. Try again.";return;}
+ labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`);
+ if(r.source==="MODEL_DERIVED")obDone("muse");
  $("lab-ws-name").value=r.scene.name||"";
  const sv=$("lab-save-ws");sv.classList.add("pulse");sv.textContent="Save this scene →";
  const q=r.scene.quality;
@@ -843,7 +859,8 @@ const _mq=matchMedia("(prefers-color-scheme: light)");
 function applyTheme(){const mode=localStorage.getItem("fs-theme")||"system";
  const resolved=mode==="system"?(_mq.matches?"light":"dark"):mode;
  document.documentElement.dataset.theme=resolved;
- document.querySelectorAll("[data-theme-mode]").forEach(b=>b.classList.toggle("on",b.dataset.themeMode===mode));
+ document.querySelectorAll("[data-theme-mode]").forEach(b=>{b.classList.toggle("on",b.dataset.themeMode===mode);
+  b.setAttribute("aria-pressed",String(b.dataset.themeMode===mode));});
  if(state&&state.data)draw(); if(state&&state.lab&&state.lab.objects.length&&$("lab-canvas"))labDraw();
  if(window.__lab3dMod&&window.__lab3dMod.refreshAll3DThemes)window.__lab3dMod.refreshAll3DThemes();
  else if(localStorage.getItem("fs-view-lab")==="3d"){import("/three-view.js").then(m=>{window.__lab3dMod=m;}).catch(()=>{});}}
@@ -891,11 +908,16 @@ async function refreshMe(){const {body}=await api("/api/me");state.me=body;
  return body;}
 function refreshAuthUI(){refreshMe();}
 $("auth-btn").onclick=()=>goto("auth");
-$("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form-signin").classList.add("hidden");};
-$("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");};
-async function afterAuth(out, msg){localStorage.setItem("fs-session",out.body.token);
+$("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form-signin").classList.add("hidden");
+ $("tab-signup").setAttribute("aria-selected","true");$("tab-signin").setAttribute("aria-selected","false");};
+$("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");
+ $("tab-signin").setAttribute("aria-selected","true");$("tab-signup").setAttribute("aria-selected","false");};
+async function afterAuth(out, msg){state.openWorkspace=null;state.samCaptures=[];
+ localStorage.setItem("fs-session",out.body.token);
  localStorage.setItem("fs-user",JSON.stringify(out.body.user));
  await refreshMe();renderMyScenes();toast(msg);goto("workspace");}
+$("form-signup").addEventListener("submit",e=>{e.preventDefault();$("auth-signup").click();});
+$("form-signin").addEventListener("submit",e=>{e.preventDefault();$("auth-signin").click();});
 $("auth-signup").onclick=async()=>{const out=await api("/api/auth/signup",{method:"POST",
  body:JSON.stringify({name:$("su-name").value.trim(),email:$("su-email").value.trim(),password:$("su-password").value})});
  if(out.status!==201){$("auth-status").textContent=out.body.error||"Sign-up failed.";return;}
@@ -928,7 +950,9 @@ $("byok-delete").onclick=async()=>{const out=await api("/api/keys/meta",{method:
 // ---- run history ----
 function recordRun(rec){try{const k=runsKey();const arr=JSON.parse(localStorage.getItem(k)||"[]");
  arr.unshift({when:Date.now(),...rec});localStorage.setItem(k,JSON.stringify(arr.slice(0,20)));}catch(e){} renderRuns();}
-function renderRuns(){const host=$("scenario-list");if(!host||$("runs-card"))return;let runs=[];
+function renderRuns(){const host=$("scenario-list");if(!host)return;
+ const old=$("runs-card");if(old)old.remove();
+ let runs=[];
  try{runs=JSON.parse(localStorage.getItem(runsKey())||"[]");}catch(e){}
  if(!runs.length)return;const div=document.createElement("div");div.className="card wide";div.id="runs-card";
  div.innerHTML=`<h3>Recent runs</h3>`+runs.slice(0,8).map(r=>`<p><b>${r.scenario}</b> <span class="dim">${new Date(r.when).toLocaleString()} · ${r.mode} · ${r.pairs} pairs · ${r.events} event(s) · run ${r.run}</span></p>`).join("");
@@ -937,6 +961,11 @@ function renderRuns(){const host=$("scenario-list");if(!host||$("runs-card"))ret
 // ---- onboarding checklist ----
 function obDone(k){try{const o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");o[k]=true;localStorage.setItem("fs-onboard",JSON.stringify(o));}catch(e){}renderOnboard();}
 function renderOnboard(){let o={};try{o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");}catch(e){}
+ try{const runs=JSON.parse(localStorage.getItem(runsKey())||"[]");
+  if(runs.some(r=>r.scenario==="warehouse-near-miss"))o.demo=true;
+  if(runs.some(r=>/^(created-|ws-|lab-current|sam-)/.test(r.scenario||"")))o.created=true;
+  if((state.workspaces||[]).length)o.created=o.created||false;
+ }catch(e){}
  document.querySelectorAll(".ob-row").forEach(r=>{const done=!!o[r.dataset.ob];r.classList.toggle("done",done);
   const mark=r.querySelector(".ob-mark");if(mark)mark.textContent=done?"✓":"○";});
  const card=$("onboarding");if(card&&o.demo&&o.created&&o.muse)$("ob-note").innerHTML="All three done — you have used the full loop. <a href='#' id='ob-hide'>Dismiss</a>";
@@ -1000,7 +1029,8 @@ document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.
 // ---- SAM Vision panel (Studio) ----
 state.samCaptures=[];
 function samStatus(m){const e=$("sam-status");if(e)e.textContent=m;}
-$("sam-file").onchange=e=>{const f=e.target.files[0];if(!f)return;state.samSource="upload";state.samCaptures=[];$("sam-count").textContent="0";
+$("sam-file").onchange=e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+ if(f.size<=60*1024*1024&&(f.type.startsWith("video/")||f.type.startsWith("image/"))){state.samSource="upload";state.samCaptures=[];$("sam-count").textContent="0";}
  if(f.size>60*1024*1024){samStatus("File exceeds the 60 MB browser-preview bound.");e.target.value="";return;}
  const url=URL.createObjectURL(f),v=$("sam-video"),im=$("sam-img");
  if(f.type.startsWith("video/")){im.style.display="none";v.style.display="block";v.src=url;samStatus("Video loaded locally — pause on a moment, then Segment. Loading it uploads nothing.");}
@@ -1063,7 +1093,8 @@ $("sam-build").onclick=async()=>{if(state.samCaptures.length<2){samStatus("Segme
 state.playSpeed=1; state._playLast=null;
 document.querySelectorAll(".speedseg button").forEach(b=>b.onclick=()=>{
  state.playSpeed=+b.dataset.speed;
- document.querySelectorAll(".speedseg button").forEach(x=>x.classList.toggle("on",x===b));});
+ document.querySelectorAll(".speedseg button").forEach(x=>{x.classList.toggle("on",x===b);
+  x.setAttribute("aria-pressed",String(x===b));});});
 $("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.playing?"⏸ Pause":"▶ Play";
  state._playLast=null;
  if(state.playing){const step=(ts)=>{if(!state.playing)return;
@@ -1098,7 +1129,7 @@ $("clear-data").onclick=()=>{const keys=Object.keys(localStorage).filter(k=>k.st
  $("clear-status").textContent=`Removed ${keys.length} local item(s). Reloading…`;
  toast("Local data cleared — profiles, scenes, runs and preferences on this device are gone.","warn");
  setTimeout(()=>location.reload(),900);};
-$("lab-clear-all").onclick=()=>{state.lab.objects=[];state.lab.selected=null;labRenderList();labDraw();
+$("lab-clear-all").onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.openWorkspace=null;touchLab();labRenderList();labDraw();
  labStatus("All components cleared. Add components or load a template to start again.");};
 
 // ---- global error surface (throttled; errors become visible, never silent) ----
@@ -1109,9 +1140,8 @@ window.addEventListener("error",e=>{const now=Date.now();if(now-_lastErr<5000)re
  toast("Something went wrong in the interface: "+(e.message||"unknown error")+" — the deterministic API is unaffected; reload if it persists.","err");});
 
 const _skipEl=$("skip-link");
-if(_skipEl)_skipEl.onclick=()=>{showView("home");
- const el=document.querySelector("#view-home h1");
- if(el){el.setAttribute("tabindex","-1");el.focus();el.scrollIntoView({behavior:"smooth",block:"start"});}};
+if(_skipEl)_skipEl.addEventListener("click",()=>{const m=$("main");
+ if(m)requestAnimationFrame(()=>m.focus({preventScroll:false}));});
 
 // ---- support + organisation (Settings) ----
 $("sup-send").onclick=async()=>{const out=await api("/api/support",{method:"POST",
@@ -1197,14 +1227,18 @@ function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
  </article>`).join("");
  host.querySelectorAll(".ws-card").forEach(card=>{const w=state.workspaces.find(x=>x.key===card.dataset.key);
   const menu=card.querySelector(".ws-menu");
-  card.querySelector("[data-kebab]").onclick=e=>{e.stopPropagation();
+  const kebab=card.querySelector("[data-kebab]");
+  kebab.setAttribute("aria-haspopup","true");kebab.setAttribute("aria-expanded","false");
+  kebab.onclick=e=>{e.stopPropagation();
    document.querySelectorAll(".ws-menu").forEach(m=>{if(m!==menu)m.classList.add("hidden");});
-   menu.classList.toggle("hidden");};
+   const open=menu.classList.toggle("hidden")===false;
+   kebab.setAttribute("aria-expanded",String(open));
+   if(open)window._lastKebab=kebab;};
   card.querySelectorAll("button[data-ws]").forEach(b=>b.onclick=async()=>{const a=b.dataset.ws;
    menu.classList.add("hidden");
    if(a==="open")openWorkspace(w);
    if(a==="studio")loadWorkspaceIntoStudio(w);
-   if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(()=>{});}
+   if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(e=>toast("Analysis failed: "+e.message,"err"));}
    if(a==="update"){w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
     await persistWorkspace(w);labSetTitle(w.name,true);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
    if(a==="rename"){wsRenameInline(card,w);}
@@ -1221,8 +1255,10 @@ function wsRenameInline(card,w){const h4=card.querySelector("h4");if(!h4||card.q
  input.addEventListener("blur",commit);}
 document.addEventListener("click",e=>{if(!e.target.closest(".ws-card"))
  document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));});
-document.addEventListener("keydown",e=>{if(e.key==="Escape")
- document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){
+ document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));
+ document.querySelectorAll("[data-kebab]").forEach(k=>k.setAttribute("aria-expanded","false"));
+ if(window._lastKebab)window._lastKebab.focus();}});
 async function persistWorkspace(w){
  if(sessionToken()&&!w.legacy){
   const payload={workspace:{kind:w.kind,objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
@@ -1337,7 +1373,8 @@ async function initClerk() {
     if (ClerkApp.user) await syncClerkSession();
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
       if (user) syncClerkSession();
-      else { localStorage.removeItem("fs-session"); localStorage.removeItem("fs-user"); refreshMe(); }
+      else { localStorage.removeItem("fs-session"); localStorage.removeItem("fs-user");
+   state.openWorkspace=null;state.samCaptures=[]; loadCustomObjects(); refreshMe(); }
     });
     // Clerk Billing pricing table (plans live in Clerk Dashboard)
     const tableHost = $("clerk-pricing");

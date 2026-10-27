@@ -105,7 +105,7 @@ def test_homepage_structure():
     home = html[html.index('<section id="view-home"'):html.index('<section id="view-workspace"')]
     assert home.index('id="demo-video"') < home.index('id="onboarding"')  # video above the fold flow
     assert 'class="hero-grid"' in home and 'class="proofstrip"' in home and 'class="bento"' in home
-    assert home.count('class="card tile"') == 6 and 'quick-scn' in home and 'class="ctaband"' in home
+    assert home.count('class="card tile"') == 9 and 'quick-scn' in home and 'class="ctaband"' in home
 
 def test_indie_track_not_startup():
     for f in ["apps/web/index.html", "README.md", "docs/HACKATHON_SUBMISSION.md"]:
