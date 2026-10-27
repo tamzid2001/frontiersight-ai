@@ -8,6 +8,10 @@ const REALC = { forklift: 0xe9a13b, pedestrian: 0xff7847, robot: 0xaebfd2,
   vehicle: 0x4d8dff, cyclist: 0xb07fe8, shelf: 0x8a6f4d, object: 0x9aa7b8 };
 const BASER = { forklift: 0.9, pedestrian: 0.45, robot: 0.55, vehicle: 1.1, cyclist: 0.5, shelf: 1.1, object: 0.6 };
 let C = null;
+const INSTANCES = new Set();
+function disposeObject(root){root.traverse(m=>{
+ if(m.geometry)m.geometry.dispose();
+ if(m.material){(Array.isArray(m.material)?m.material:[m.material]).forEach(mm=>mm.dispose());}});}
 
 let EXTENT = [16, 14];
 const toThree = (x, y) => [x - EXTENT[0] / 2, EXTENT[1] / 2 - y]; // stage (y up) -> three (x, z)
@@ -100,10 +104,15 @@ function create(container, hooks) {
   border.rotation.x = -Math.PI / 2; border.position.y = 0.02; scene.add(border);
 
   const world = new THREE.Group(); scene.add(world);
-  const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, raf: 0 };
+  const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, raf: 0, ground };
+  INSTANCES.add(state);
+  renderer.domElement.addEventListener("webglcontextlost", e=>{e.preventDefault(); state.stop();
+   if(hooks.onContextLost)hooks.onContextLost();});
+  controls.listenToKeyEvents(window);  // arrow keys pan the stage
 
   function rebuild(items) {
-    world.clear(); state.entities.clear();
+    world.children.slice().forEach(ch=>{disposeObject(ch); world.remove(ch);});
+    state.entities.clear();
     for (const o of items) {
       if (o.lines) for (const ln of o.lines) {
         const pts = ln.pts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
@@ -218,10 +227,14 @@ export function syncStudio3D(tracks, t, force = false) {
   if (force || sig !== S.sig) { S.rebuild(items); S.sig = sig; }
   S.setTime(items, t);
 }
-export function refreshLab3DTheme() {
-  if (!C) return;
+export function refreshAll3DThemes() {
   const cs = getComputedStyle(document.documentElement);
-  C.scene.background = new THREE.Color(cs.getPropertyValue("--canvas").trim() || "#0a0e1a");
+  const bg = cs.getPropertyValue("--canvas").trim() || "#0a0e1a";
+  const panel = cs.getPropertyValue("--panel2").trim() || "#10141c";
+  for (const s of INSTANCES) {
+    if (s.scene) s.scene.background = new THREE.Color(bg);
+    if (s.ground) s.ground.material.color = new THREE.Color(panel);
+  }
 }
 
 

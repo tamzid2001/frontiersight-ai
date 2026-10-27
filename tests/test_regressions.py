@@ -214,3 +214,12 @@ def test_cf_3d_and_sync():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     assert 'id="cf-3d"' in html and "setCfView" in js and "syncCounterfactual" in js
     assert "syncCf3D" in (ROOT / "apps/web/three-view.js").read_text()
+
+def test_spark_quality_and_no_beta():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    spark = (ROOT / "integrations/meta/spark.py").read_text()
+    assert "scene_quality" in spark and "PATH DESIGN RULES" in spark
+    assert "(beta)" not in html
+    assert "hitPath" in js and "nearestWpSegment" in js and "pathDrag" not in js or "pathDrag" in js
+    assert "refreshAll3DThemes" in (ROOT / "apps/web/three-view.js").read_text()

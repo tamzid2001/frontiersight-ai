@@ -70,7 +70,10 @@ function showView(v){
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
   if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
- if(v==="create"&&typeof labDraw==="function")labDraw();
+ if(v==="create"){if(typeof labDraw==="function")labDraw();
+   if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
+ if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
+ if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
  if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
    if(!changed&&state.cfData){drawCfMap();drawCfChart();}});}}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
@@ -146,7 +149,7 @@ async function loadWorkspaceIntoStudio(w){
  renderObjects();draw();populateCfScene();goto("studio");
  toast(`Workspace "${w.name}" loaded in the Studio — press Run analysis.`);}
 state.studioView="2d";
-async function setStudioView(v){state.studioView=v;
+async function setStudioView(v){state.studioView=v;localStorage.setItem("fs-view-studio",v);
  $("studio-view-2d").setAttribute("aria-pressed",String(v==="2d"));
  $("studio-view-3d").setAttribute("aria-pressed",String(v==="3d"));
  $("stage").classList.toggle("hidden",v==="3d");
@@ -159,6 +162,7 @@ async function setStudioView(v){state.studioView=v;
      let mx=16,my=14;state.data.tracks.forEach(tr=>tr.points.forEach(p=>{mx=Math.max(mx,p[1]);my=Math.max(my,p[2]);}));
      return [Math.ceil(mx*1.08),Math.ceil(my*1.08)];},
     pos:(item,t)=>{const p=posAt(item._tr,t);return p?[p[1],p[2]]:null;}};
+   hooks.onContextLost=()=>{toast("3D context was lost (GPU) — returned to 2D playback; nothing was lost.","warn");setStudioView("2d");};
    mod.showStudio3D($("studio-3d"),hooks);
    window.__studio3dSync=(tracks,t)=>mod.syncStudio3D(tracks,t);
    mod.syncStudio3D(state.data?state.data.tracks:[],state.t,true);
@@ -360,7 +364,7 @@ $("cf-run").onclick=()=>runCf();
 [["sr","sr-val",v=>v+"%"],["it","it-val",v=>(+v).toFixed(2)+"s"],["cf-decel","dec-val",v=>v+" m/s\u00b2"]].forEach(([id,lbl,f])=>{
  const el=$(id);if(!el)return;el.addEventListener("input",()=>{$(lbl).textContent=f(el.value);clearTimeout(window._cfDeb);window._cfDeb=setTimeout(runCf,300);});});
 state.cfView="2d";
-async function setCfView(v){state.cfView=v;
+async function setCfView(v){state.cfView=v;localStorage.setItem("fs-view-cf",v);
  $("cf-view-2d").setAttribute("aria-pressed",String(v==="2d"));
  $("cf-view-3d").setAttribute("aria-pressed",String(v==="3d"));
  $("cf-map").classList.toggle("hidden",v==="3d");
@@ -374,6 +378,7 @@ async function setCfView(v){state.cfView=v;
      let mx=1,my=1;Object.values(state.cfData.results).forEach(r=>{
       r.trajectories.counterfactual.forEach(p=>{mx=Math.max(mx,p[1],p[3]);my=Math.max(my,p[2],p[4]);});});
      return [Math.max(8,Math.ceil(mx*1.15)),Math.max(8,Math.ceil(my*1.15))];}};
+   hooks.onContextLost=()=>{toast("3D context was lost (GPU) — returned to the 2D map; the simulation is unchanged.","warn");setCfView("2d");};
    mod.showCf3D($("cf-3d"),hooks);
    window.__cf3dSync=(cf,t)=>{const m2={};(state.data?state.data.tracks:[]).forEach(tr=>m2[tr.object_id]={category:tr.category,radius:tr.radius});
     mod.syncCf3D(cf,m2,t);};
@@ -554,7 +559,8 @@ function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,st
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
  const _labLabels=[];
  for(const o of state.lab.objects){const col=COL[o.category]||"#fff",sel=o.id===state.lab.selected;
-  if(o.waypoints.length>1){x.strokeStyle=col+(sel?"":"88");x.lineWidth=sel?2.5:1.5;x.beginPath();
+  if(o.waypoints.length>1){const hov=o.id===state.labHover;
+   x.strokeStyle=col+(sel||hov?"":"88");x.lineWidth=sel?2.5:hov?2.2:1.5;x.beginPath();
    resolvePath(o).pts.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);i?x.lineTo(a,b):x.moveTo(a,b);});x.stroke();x.lineWidth=1;}
   o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);x.fillStyle=sel?col:"#41506e";
    x.beginPath();x.arc(a,b,sel?6:4.5,0,7);x.fill();x.fillStyle="#dfe7f5";x.font="10px system-ui";x.fillText(String(i+1),a-3,b+3);});
@@ -610,27 +616,76 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode,o.curve);labStatus(c.id+" duplicated — drag its waypoints apart.");}
    if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;}
    labRenderList();labDraw();});});}
-// canvas editing: click adds a waypoint to the selected component; drag moves one
-(()=>{const c=$("lab-canvas");if(!c)return;let drag=null,moved=false;
+// canvas editing: click a path to select & edit it; click near its line to
+// insert a point there; drag points to reshape; shift-drag moves the whole
+// path; right-click a point deletes it. Clicking empty stage appends.
+(()=>{const c=$("lab-canvas");if(!c)return;c.style.cursor="crosshair";
+ let drag=null,moved=false,pathDrag=null;
  const evPos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];};
- c.addEventListener("pointerdown",e=>{try{c.setPointerCapture(e.pointerId);}catch(_){} const[px,py]=evPos(e);moved=false;c._suppressAdd=false;
-  // click any component's live marker to select it (drawn footprint, min 14px)
-  for(const o of state.lab.objects){const pos=posOnPath(o,state.lab.t);if(!pos)continue;
-   const[a,b]=labXY(pos[0],pos[1],c.width,c.height);const r=Math.max(14,o.radius/LAB.w*c.width);
-   if(Math.hypot(a-px,b-py)<r){if(state.lab.selected!==o.id){state.lab.selected=o.id;labRenderList();labDraw();}c._suppressAdd=true;break;}}
-  const o=labObj(state.lab.selected);if(!o)return;
-  o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);if(Math.hypot(a-px,b-py)<12)drag={o,i};});});
- c.addEventListener("dblclick",e=>{const[px,py]=evPos(e);const o=labObj(state.lab.selected);if(!o)return;
-  let best=-1,bd=14;o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);const d=Math.hypot(a-px,b-py);if(d<bd){bd=d;best=i;}});
-  if(best>=0){o.waypoints.splice(best,1);labRenderList();labDraw();labStatus(`Waypoint ${best+1} removed from ${o.id}.`);}});
- c.addEventListener("pointermove",e=>{if(!drag)return;moved=true;const[px,py]=evPos(e);
-  drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);labDraw();});
- c.addEventListener("pointercancel",()=>{drag=null;});
- c.addEventListener("pointerup",e=>{const wasDrag=!!drag;if(drag&&moved){drag=null;touchLab();labRenderList();labDraw();return;}drag=null;
-  if(wasDrag){labRenderList();labDraw();return;}
-  if(c._suppressAdd){c._suppressAdd=false;return;}
+ const stagePos=e=>{const[px,py]=evPos(e);return labInv(px,py,c.width,c.height);};
+ function hitWaypoint(px,py){let best=null;
+  for(const o of state.lab.objects)o.waypoints.forEach((w,i)=>{
+   const[a,b]=labXY(w[0],w[1],c.width,c.height);const d=Math.hypot(a-px,b-py);
+   if(d<13&&(!best||d<best.d))best={o,i,d};});
+  return best;}
+ function hitPath(sx,sy){let best=null;
+  for(const o of state.lab.objects){if(o.waypoints.length<2)continue;
+   const pts=resolvePath(o).pts;
+   for(let i=1;i<pts.length;i++){const[a,b]=[pts[i-1],pts[i]];
+    const vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-9;
+    const k=Math.min(1,Math.max(0,((sx-a[0])*vx+(sy-a[1])*vy)/L2));
+    const d=Math.hypot(sx-(a[0]+vx*k),sy-(a[1]+vy*k));
+    if(!best||d<best.d)best={o,d};}}
+  return best;}
+ function nearestWpSegment(o,sx,sy){let best={i:0,d:Infinity};
+  for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];
+   const vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-9;
+   const k=Math.min(1,Math.max(0,((sx-a[0])*vx+(sy-a[1])*vy)/L2));
+   const d=Math.hypot(sx-(a[0]+vx*k),sy-(a[1]+vy*k));
+   if(d<best.d)best={i:i-1,d};}
+  return best;}
+ function select(o){if(state.lab.selected!==o.id){state.lab.selected=o.id;labRenderList();labDraw();}}
+ c.addEventListener("pointerdown",e=>{if(e.button!==0)return;
+  try{c.setPointerCapture(e.pointerId);}catch(_){}
+  moved=false;c._suppressAdd=false;const[px,py]=evPos(e),[sx,sy]=stagePos(e);
+  const wh=hitWaypoint(px,py);
+  if(wh){select(wh.o);drag=wh;return;}
+  const ph=hitPath(sx,sy);
+  if(ph&&ph.d<0.45){select(ph.o);c._suppressAdd=true;
+   if(e.shiftKey){pathDrag={o:ph.o,sx,sy,orig:ph.o.waypoints.map(w=>[...w])};}
+   else labStatus(`${ph.o.id} selected — click near its path to insert a point, click empty stage to append, drag points to reshape, Shift-drag to move the whole path.`);
+   return;}});
+ c.addEventListener("pointermove",e=>{const[px,py]=evPos(e),[sx,sy]=stagePos(e);
+  if(drag){moved=true;drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);delete drag.o._res;labDraw();return;}
+  if(pathDrag){moved=true;const dx=sx-pathDrag.sx,dy=sy-pathDrag.sy;
+   pathDrag.o.waypoints=pathDrag.orig.map(w=>[Math.round((w[0]+dx)*10)/10,Math.round((w[1]+dy)*10)/10]);
+   delete pathDrag.o._res;labDraw();return;}
+  const hov=hitPath(sx,sy);const hovId=hov&&hov.d<0.45?hov.o.id:null;
+  c.style.cursor=hovId?"pointer":"crosshair";
+  if(hovId!==state.labHover){state.labHover=hovId;labDraw();}});
+ c.addEventListener("pointercancel",()=>{drag=null;pathDrag=null;});
+ c.addEventListener("pointerup",e=>{if(e.button!==0)return;const wasDrag=!!drag||!!pathDrag;
+  if(drag&&moved){drag=null;touchLab();labRenderList();labDraw();return;}
+  if(pathDrag){pathDrag=null;touchLab();labRenderList();labDraw();return;}
+  drag=null;
+  if(c._suppressAdd){c._suppressAdd=false;labRenderList();labDraw();return;}
   const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
-  const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));touchLab();labRenderList();labDraw();});})();
+  const[sx,sy]=stagePos(e);
+  const seg=o.waypoints.length>1?nearestWpSegment(o,sx,sy):{i:0,d:Infinity};
+  const pt=[sx,sy];
+  if(o.waypoints.length>1&&seg.d<0.4){o.waypoints.splice(seg.i+1,0,pt);
+   labStatus(`Point inserted into ${o.id}'s path (position ${seg.i+2} of ${o.waypoints.length}). Drag it to shape the curve.`);}
+  else o.waypoints.push(pt);
+  delete o._res;touchLab();labRenderList();labDraw();});
+ c.addEventListener("dblclick",e=>{const[px,py]=evPos(e);const wh=hitWaypoint(px,py);
+  if(wh){wh.o.waypoints.splice(wh.i,1);delete wh.o._res;touchLab();labRenderList();labDraw();
+   labStatus(`Waypoint removed from ${wh.o.id}.`);}});
+ c.addEventListener("contextmenu",e=>{e.preventDefault();const[px,py]=evPos(e);
+  const wh=hitWaypoint(px,py);
+  if(wh){select(wh.o);wh.o.waypoints.splice(wh.i,1);delete wh.o._res;touchLab();labRenderList();labDraw();
+   labStatus(`Waypoint removed from ${wh.o.id}.`);}
+  else{const[sx,sy]=stagePos(e);const ph=hitPath(sx,sy);if(ph)select(ph.o);}});
+})();
 $("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
  labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
 document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
@@ -642,7 +697,7 @@ document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.obje
  labStatus(`Template "${b.dataset.tpl}" loaded — edit any path, then Run analysis.`);labDraw();});
 function labTitleSafe(){return (state.labTitle||"").replace(/ template$/,"")||"";}
 state.labView="2d";
-async function setLabView(v){state.labView=v;
+async function setLabView(v){state.labView=v;localStorage.setItem("fs-view-lab",v);
  $("lab-view-2d").setAttribute("aria-pressed",String(v==="2d"));
  $("lab-view-3d").setAttribute("aria-pressed",String(v==="3d"));
  $("lab-canvas").classList.toggle("hidden",v==="3d");
@@ -652,6 +707,7 @@ async function setLabView(v){state.labView=v;
    if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
    const mod=window.__lab3dMod;
    mod.showLab3D($("lab-3d"),{resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
+    onContextLost:()=>{toast("3D context was lost (GPU) — returned to the 2D editor; your scene is untouched.","warn");setLabView("2d");},
     onGroundClick:(x,y)=>{const o=labObj(state.lab.selected);
      if(!o){labStatus("Select a component first, then click the ground to add waypoints.");return;}
      o.waypoints.push([Math.round(x*10)/10,Math.round(y*10)/10]);delete o._res;
@@ -755,7 +811,12 @@ $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
  labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`); obDone("muse");
  $("lab-ws-name").value=r.scene.name||"";
  const sv=$("lab-save-ws");sv.classList.add("pulse");sv.textContent="Save this scene →";
- $("lab-gen-status").innerHTML+=`<br><b>Auto-labelled:</b> “${r.scene.name}” — it is prefilled below the stage. Press <b>Save workspace</b> to keep it (it will also appear in the Video Studio dropdown under <i>My workspaces</i>).`;
+ const q=r.scene.quality;
+ $("lab-gen-status").innerHTML+=`<br><b>Auto-labelled:</b> “${r.scene.name}” — it is prefilled below the stage. Press <b>Save workspace</b> to keep it (it will also appear in the Video Studio dropdown under <i>My workspaces</i>).`+
+  (q?`<br><b>Path quality (engine-scored):</b> closest surface separation ${q.min_separation_m} m`+
+   (q.has_close_interaction?" — a real interaction to analyse.":" — no close interaction; edit paths closer together.")+
+   (q.issues&&q.issues.length?` Issues: ${q.issues.join("; ")}`:"")+
+   (q.warnings&&q.warnings.length?` Warnings: ${q.warnings.join("; ")}`:""):"");
  toast("Scene generated — name prefilled under the stage. Save it to keep it in your workspaces.");
  $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
 // starter template so the Lab is never an empty, unexplained canvas
@@ -767,7 +828,9 @@ function applyTheme(){const mode=localStorage.getItem("fs-theme")||"system";
  const resolved=mode==="system"?(_mq.matches?"light":"dark"):mode;
  document.documentElement.dataset.theme=resolved;
  document.querySelectorAll("[data-theme-mode]").forEach(b=>b.classList.toggle("on",b.dataset.themeMode===mode));
- if(state&&state.data)draw(); if(state&&state.lab&&state.lab.objects.length&&$("lab-canvas"))labDraw();}
+ if(state&&state.data)draw(); if(state&&state.lab&&state.lab.objects.length&&$("lab-canvas"))labDraw();
+ if(window.__lab3dMod&&window.__lab3dMod.refreshAll3DThemes)window.__lab3dMod.refreshAll3DThemes();
+ else if(localStorage.getItem("fs-view-lab")==="3d"){import("/three-view.js").then(m=>{window.__lab3dMod=m;}).catch(()=>{});}}
 document.querySelectorAll("[data-theme-mode]").forEach(b=>b.onclick=()=>{localStorage.setItem("fs-theme",b.dataset.themeMode);applyTheme();});
 if(_mq.addEventListener)_mq.addEventListener("change",()=>{if((localStorage.getItem("fs-theme")||"system")==="system")applyTheme();});
 applyTheme();

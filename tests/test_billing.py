@@ -245,3 +245,15 @@ def test_clerk_config_and_sync(api, monkeypatch):
     assert me["authenticated"] and me["user"]["email"] == "ada@example.com"
     u = store.one("SELECT clerk_id FROM users WHERE email='ada@example.com'")
     assert u["clerk_id"] == "user_clerk123"
+
+def test_spark_scene_quality_gate():
+    from integrations.meta.spark import scene_quality
+    boring = [{"category": "forklift", "waypoints": [[1, 7], [6, 7]], "speed": 1.5, "radius": 0.9, "curve": "straight", "mode": "stop"},
+              {"category": "pedestrian", "waypoints": [[13, 13], [13, 11]], "speed": 1.2, "radius": 0.45, "curve": "straight", "mode": "stop"}]
+    q = scene_quality(boring)
+    assert q["has_close_interaction"] is False and any("no close interaction" in i for i in q["issues"])
+    collision = [{"category": "shelf", "waypoints": [[8, 7]], "speed": 0, "radius": 1.4, "curve": "straight", "mode": "stop"},
+                 {"category": "forklift", "waypoints": [[2, 7], [14, 7]], "speed": 1.5, "radius": 0.9, "curve": "straight", "mode": "stop"},
+                 {"category": "pedestrian", "waypoints": [[15, 1], [15, 3]], "speed": 1.0, "radius": 0.45, "curve": "straight", "mode": "stop"}]
+    q2 = scene_quality(collision)
+    assert any("footprint" in i for i in q2["issues"])

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "frontiersight-ai"
-version = "0.26.0"
+version = "0.29.0"
 description = "FrontierSight AI — from video to verifiable physical-world intelligence (Meta Global AI Hackathon 2026)"
 readme = "README.md"
 license = { text = "MIT" }
