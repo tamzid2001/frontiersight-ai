@@ -793,3 +793,24 @@ async function loadOrg(){const card=$("org-card");if(!card)return;
   out.body.members.map(m=>`${m.email} (${m.role})`).join("<br>")+
   (out.body.shared_scenes.length?`<br>Shared org scenes: ${out.body.shared_scenes.map(s=>s.name).join(", ")}`:"")+
   (out.body.audit_log&&out.body.audit_log.length?`<br>Audit log (latest): ${out.body.audit_log.slice(0,5).map(a=>a.action).join(", ")}`:"");}
+
+// ---- form system behaviours: password toggles, range fill, invalid states ----
+document.querySelectorAll('input[type="password"]').forEach(inp=>{
+ const wrap=document.createElement("span");wrap.className="passwrap";
+ inp.parentNode.insertBefore(wrap,inp);wrap.appendChild(inp);
+ const b=document.createElement("button");b.type="button";b.className="pass-toggle";
+ b.textContent="Show";b.setAttribute("aria-label","Show password");
+ b.onclick=()=>{const show=inp.type==="password";inp.type=show?"text":"password";
+  b.textContent=show?"Hide":"Show";b.setAttribute("aria-label",show?"Hide password":"Show password");};
+ wrap.appendChild(b);});
+function paintRange(r){const min=+r.min||0,max=+r.max||100,v=+r.value||0;
+ r.style.setProperty("--fill",((v-min)/(max-min)*100)+"%");}
+document.querySelectorAll('input[type="range"]').forEach(r=>{paintRange(r);
+ r.addEventListener("input",()=>paintRange(r));});
+function markInvalid(ids,invalid){ids.forEach(id=>{const el=$(id);if(el)el.classList.toggle("invalid",invalid);});}
+["su-name","su-email","su-password","si-email","si-password","byok-key"].forEach(id=>{
+ const el=$(id);if(el)el.addEventListener("input",()=>el.classList.remove("invalid"));});
+const _suBtn=$("auth-signup");if(_suBtn){const _su=_suBtn.onclick;
+ _suBtn.onclick=async()=>{await _su();if($("auth-status").textContent)markInvalid(["su-name","su-email","su-password"],true);};}
+const _siBtn=$("auth-signin");if(_siBtn){const _si=_siBtn.onclick;
+ _siBtn.onclick=async()=>{await _si();if($("auth-status").textContent)markInvalid(["si-email","si-password"],true);};}

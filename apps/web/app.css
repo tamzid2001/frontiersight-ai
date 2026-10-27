@@ -180,3 +180,70 @@ header{justify-content:flex-end}
 }
 
 .socialrow{align-items:center}.socialrow a{display:inline-flex;gap:6px;align-items:center}
+
+/* ================= world-class form system =================
+   One language for every field: sign-in, search, text boxes, selects,
+   textareas, numbers, passwords, ranges, checkboxes. */
+:root{--field-h:44px;--field-r:12px}
+label{font-size:13px;font-weight:600;color:var(--dim);letter-spacing:.01em}
+label:focus-within{color:var(--cyan)}
+input[type="text"],input[type="email"],input[type="password"],input[type="number"],
+input[type="search"],input:not([type]),textarea,select{
+  width:100%;min-height:var(--field-h);padding:10px 14px;margin-top:5px;
+  background:var(--field);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--field-r);
+  font:inherit;font-size:15px;line-height:1.45;
+  transition:border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+  caret-color:var(--cyan);
+}
+textarea{min-height:84px;resize:vertical}
+input::placeholder,textarea::placeholder{color:var(--dim);opacity:.62}
+input:hover,textarea:hover,select:hover{border-color:color-mix(in srgb,var(--cyan) 45%,var(--line))}
+input:focus,textarea:focus,select:focus{
+  outline:none;border-color:var(--cyan);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--cyan) 18%,transparent);
+  background:color-mix(in srgb,var(--field) 92%,var(--cyan) 8%);
+}
+input:disabled,textarea:disabled,select:disabled{opacity:.55;cursor:not-allowed}
+input.invalid,textarea.invalid,select.invalid{
+  border-color:var(--red);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--red) 16%,transparent);
+}
+input:-webkit-autofill{-webkit-box-shadow:0 0 0 80px var(--field) inset;-webkit-text-fill-color:var(--ink);caret-color:var(--ink)}
+::selection{background:color-mix(in srgb,var(--cyan) 38%,transparent)}
+/* select: custom chevron, no native arrow */
+select{appearance:none;-webkit-appearance:none;padding-right:38px;cursor:pointer;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237d8aa5' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='m5 9 7 7 7-7'/%3E%3C/svg%3E");
+ background-repeat:no-repeat;background-position:right 13px center}
+/* search: magnifier affordance */
+input[type="text"]#ws-search,input#ws-search{
+ padding-left:40px;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='17' height='17' viewBox='0 0 24 24' fill='none' stroke='%237d8aa5' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.8-3.8'/%3E%3C/svg%3E");
+ background-repeat:no-repeat;background-position:13px center}
+/* password visibility toggle */
+.passwrap{position:relative;display:block}
+.passwrap input{padding-right:74px}
+.pass-toggle{position:absolute;right:6px;top:50%;transform:translateY(-38%);height:32px;
+ padding:0 12px;border-radius:8px;background:transparent;border:1px solid transparent;
+ color:var(--cyan);font-size:12.5px;font-weight:650;cursor:pointer}
+.pass-toggle:hover{background:color-mix(in srgb,var(--cyan) 12%,transparent)}
+/* checkbox / radio */
+input[type="checkbox"],input[type="radio"]{width:17px;height:17px;min-height:0;padding:0;
+ accent-color:var(--cyan);cursor:pointer;vertical-align:-3px}
+/* range: custom track + thumb (webkit + moz) */
+input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:26px;min-height:0;
+ padding:0;border:0;background:transparent;box-shadow:none;cursor:pointer}
+input[type="range"]:focus{box-shadow:none}
+input[type="range"]::-webkit-slider-runnable-track{height:6px;border-radius:99px;
+ background:linear-gradient(to right,var(--cyan) var(--fill,50%),color-mix(in srgb,var(--line) 75%,transparent) var(--fill,50%))}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;margin-top:-6.5px;
+ border-radius:50%;background:var(--cyan);border:2.5px solid var(--panel);
+ box-shadow:0 1px 6px rgba(0,0,0,.35);transition:transform .12s}
+input[type="range"]:hover::-webkit-slider-thumb,input[type="range"]:focus-visible::-webkit-slider-thumb{transform:scale(1.18)}
+input[type="range"]::-moz-range-track{height:6px;border-radius:99px;background:color-mix(in srgb,var(--line) 75%,transparent)}
+input[type="range"]::-moz-range-progress{height:6px;border-radius:99px;background:var(--cyan)}
+input[type="range"]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--cyan);
+ border:2.5px solid var(--panel);box-shadow:0 1px 6px rgba(0,0,0,.35)}
+/* small fields inside component cards keep the same language, tighter */
+.labctl input,.labctl select{min-height:36px;padding:6px 9px;font-size:13.5px;border-radius:9px}
+.approvalbox input[type="text"]{min-height:var(--field-h)}

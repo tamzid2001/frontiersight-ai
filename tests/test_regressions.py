@@ -163,3 +163,13 @@ def test_sitemap_robots_and_meta():
         assert marker in html, marker
     src = (ROOT / "services/api/server.py").read_text()
     assert "/sitemap.xml" in src and "/robots.txt" in src and "Sitemap:" in src
+
+def test_world_class_form_system():
+    css = (ROOT / "apps" / "web" / "app.css").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    for marker in ["world-class form system", "input.invalid", ".pass-toggle", "::-webkit-slider-thumb",
+                   "::-moz-range-thumb", "-webkit-autofill", "#ws-search"]:
+        assert marker in css, marker
+    assert "passwrap" in js and "paintRange" in js
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'src="/logo-mark.svg"' in html and 'type="image/svg+xml" href="/logo-mark.svg"' in html
