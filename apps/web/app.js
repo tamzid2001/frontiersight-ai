@@ -497,7 +497,7 @@ function renderRuns(){const host=$("scenario-list");if(!host||$("runs-card"))ret
 function obDone(k){try{const o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");o[k]=true;localStorage.setItem("fs-onboard",JSON.stringify(o));}catch(e){}renderOnboard();}
 function renderOnboard(){let o={};try{o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");}catch(e){}
  document.querySelectorAll(".ob-row").forEach(r=>{const done=!!o[r.dataset.ob];r.classList.toggle("done",done);
-  r.firstChild.textContent=(done?"✓ ":"○ ");});
+  const mark=r.querySelector(".ob-mark");if(mark)mark.textContent=done?"✓":"○";});
  const card=$("onboarding");if(card&&o.demo&&o.created&&o.muse)$("ob-note").innerHTML="All three done — you have used the full loop. <a href='#' id='ob-hide'>Dismiss</a>";
  const hide=$("ob-hide");if(hide)hide.onclick=e=>{e.preventDefault();card.style.display="none";localStorage.setItem("fs-onboard-hide","1");};
  if(card&&localStorage.getItem("fs-onboard-hide")==="1")card.style.display="none";}
