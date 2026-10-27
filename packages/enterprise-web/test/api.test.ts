@@ -57,6 +57,15 @@ test("HTTP rejects tenant selection, stale organization, elevated member deletes
   assert.equal((await api(request("/unknown"))).status, 405);
 });
 
+test("export pages cap full payloads at ten records and preserve a usable next cursor", { skip: !emulator }, async () => {
+  for (let index = 0; index < 11; index++) {
+    assert.equal((await api(request("", "POST", { title: "Export " + index, payload: { text: "x".repeat(32_000) } }))).status, 201);
+  }
+  const page = await (await api(request("/export?limit=100"))).json();
+  assert.equal(page.items.length, 10); assert.equal(typeof page.next, "string");
+  assert.equal((await (await api(request("/export?after=" + page.next))).json()).items.length, 1);
+});
+
 test("durable rate budget and signed audit detect alteration against the actual emulator", { skip: !emulator }, async () => {
   const principal = await deps.authenticate(request());
   const store = new FirestoreWorkspace(db!, site.siteId + "-audit", principal, storagePolicy(principal, 3), deps.auditSecret);

@@ -35,7 +35,7 @@ export function workspaceOpenApi(config: WorkspaceConfiguration, origin: string)
           responses: { 200: response({ type: "object", properties: { id: recordFields.id, deleted: { const: true }, version: recordFields.version } }), ...errors } },
       },
       "/api/v1/workflows/context": { get: { operationId: "workspaceContext", responses: { 200: response({ type: "object" }), ...errors } } },
-      "/api/v1/workflows/export": { get: { operationId: "exportWorkflows", description: "Requires export feature. Paginated full records; maximum 20 per page. Follow next cursor.", parameters: paging,
+      "/api/v1/workflows/export": { get: { operationId: "exportWorkflows", description: "Requires export feature. Paginated full records; maximum 10 per page. Follow next cursor.", parameters: paging,
         responses: { 200: response({ type: "object", properties: { items: { type: "array", items: ref("Record") }, next: { type: ["string", "null"] } } }), ...errors } } },
       "/api/v1/workflows/audit": { get: { operationId: "verifyAudit", description: "Requires audit_logs. Verifies event signatures and links in the most recent bounded window; not a privileged rollback proof.", parameters: [paging[0]],
         responses: { 200: response({ type: "object" }), ...errors } } },

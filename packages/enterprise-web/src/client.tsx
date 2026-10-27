@@ -100,11 +100,11 @@ function WorkspaceSession({ name, stages }: { name: string; stages: readonly str
     </form>
     <div className="workspace-toolbar">
       {can("export") ? <button className="btn" disabled={busy} onClick={() => action(async () => {
-        const page = await api("/export?limit=20");
+        const page = await api("/export?limit=10");
         const url = URL.createObjectURL(new Blob([JSON.stringify(page, null, 2)], { type: "application/json" }));
         const link = document.createElement("a"); link.href = url; link.download = "workspace-export-page.json";
         document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-        if (page.next) setDetail("Export contains the first 20 records. Use the documented export cursor to retrieve subsequent pages.");
+        if (page.next) setDetail("Export contains the first 10 records. Use the documented export cursor to retrieve subsequent pages.");
       })}>Export first page</button> : <a href="/pricing">Plans with export</a>}
       {can("audit_logs") && <button className="btn" disabled={busy} onClick={() => action(async () => setAudit(JSON.stringify(await api("/audit?limit=50"), null, 2)))}>Verify recent audit</button>}
     </div>

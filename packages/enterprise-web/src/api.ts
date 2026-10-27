@@ -51,7 +51,9 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
       }
       if (method === "GET" && suffix === "/export") {
         requireFeature(principal, "export");
-        const size = Math.min(limit(), 20);
+        // Ten 256-KiB payloads plus metadata stay below Vercel's 4.5-MB
+        // response limit; a 20-record page can exceed it.
+        const size = Math.min(limit(), 10);
         const rows = await store.list(size, url.searchParams.get("after") ?? undefined);
         const items = await Promise.all(rows.map(row => store.get(row.id)));
         return jsonResponse({ product: config.siteId, exportedAt: new Date().toISOString(), items,

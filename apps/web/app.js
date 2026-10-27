@@ -1219,18 +1219,24 @@ function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
   captures:w.captures||null, image:w.image||null};}
 async function loadWorkspaces(){
  await initClerk();
+ const tenantAtStart=sceneTenantKey();state.workspaceNext=null;
  let list=wsLocalList().map(wsNormalizeLocal);
  // legacy analysed scenes become workspaces (read-compat, deduped by id)
  try{const legacy=JSON.parse(localStorage.getItem((typeof sceneStoreKey==="function"?sceneStoreKey():"fs-my-scenes"))||"[]");
   for(const m of legacy) if(!list.some(w=>w.id===m.id))
    list.push({key:"legacy:"+m.id, server:false, legacy:true, id:m.id, name:m.id, kind:"lab", updated:m.when, tracks:m.tracks, objects:null});}catch(e){}
  if(hasSceneSession()){try{const out=await api("/api/scenes");
-   if(out.status===200){const srv=out.body.scenes.map(wsNormalizeServer);
+   if(out.status===200){state.workspaceNext=out.body.next||null;const srv=out.body.scenes.map(wsNormalizeServer);
     const note=$("ws-storage-note");if(note)note.textContent="Synced with your account on the server (plus anything kept only in this browser).";
     list=srv.concat(list.filter(w=>!srv.some(s=>s.name===w.name)));}}catch(e){}}
+ if(tenantAtStart!==sceneTenantKey())return;
  state.workspaces=list.sort((a,b)=>(b.updated||0)-(a.updated||0));
  renderWorkspaces(); populateStudioWorkspaces();}
-function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
+async function loadMoreWorkspaces(){const after=state.workspaceNext;if(!after)return;
+ try{const out=await api("/api/scenes?after="+encodeURIComponent(after));if(out.status!==200)throw new Error(out.body.error||"Could not load next page");
+ const seen=new Set(state.workspaces.map(w=>w.key));state.workspaces.push(...out.body.scenes.map(wsNormalizeServer).filter(w=>!seen.has(w.key)));state.workspaceNext=out.body.next||null;renderWorkspaces();populateStudioWorkspaces();}
+ catch(error){toast(error.message||"Workspace page unavailable","err");}}
+function renderWorkspaces(){const more=$("workspace-more");if(more)more.hidden=!state.workspaceNext;const host=$("workspace-list");if(!host)return;
  if(!state.workspaces.length){host.innerHTML='<p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p>';return;}
  host.innerHTML=state.workspaces.map(w=>`<article class="card ws-card" data-key="${htmlText(w.key)}" data-kind="${htmlText(w.kind)}"
    data-search="${htmlText((w.name+" "+w.kind+" "+(w.objects?w.objects.map(o=>o.category).join(" "):"")).toLowerCase())}">
@@ -1244,7 +1250,7 @@ function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
    <div class="sep"></div>
    <button data-ws="del" class="danger">Delete</button>
   </div>
-  <div class="ws-head"><h4>${w.kind==="frames"?"\u25a3":"\u2726"} ${w.name}</h4></div>
+  <div class="ws-head"><h4>${w.kind==="frames"?"\u25a3":"\u2726"} ${htmlText(w.name)}</h4></div>
   <div>
    <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
    <span class="pill ghost">${w.server?"server":"this browser"}</span>
@@ -1410,7 +1416,8 @@ async function loadClerk() {
     if(ClerkApp.mountOrganizationSwitcher)ClerkApp.mountOrganizationSwitcher(orgSlot,{hidePersonal:false});
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
       const currentTenant=sceneTenantKey();
-      if(currentTenant!==previousTenant){previousTenant=currentTenant;state.workspaces=[];state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();renderWorkspaces();loadWorkspaces();}
+      if(currentTenant!==previousTenant){previousTenant=currentTenant;state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();
+        if(state.lab){state.lab.objects=[];state.lab.running=false;labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
       if (user) syncClerkSession();
       else if (localStorage.getItem("fs-auth-provider") === "clerk") {
    // Only a session that Clerk created may be ended by Clerk signing out.
@@ -1635,3 +1642,5 @@ $("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
  }catch(e){$("obj-status").textContent="Could not create that object: "+e.message;}
  finally{btn.disabled=false;btn.textContent="Generate object";}};
 loadCustomObjects();
+
+$("workspace-more")?.addEventListener("click",loadMoreWorkspaces);
