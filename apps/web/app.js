@@ -84,7 +84,10 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
  catch(e){$("scenario-list").innerHTML='<div class="card wide"><h3>Could not load scenarios</h3><p class="dim">The API is unreachable. Check <code>/api/health</code>, then reload. Nothing has been simulated or hidden.</p><button onclick="location.reload()">Reload</button></div>';return;}
  state.scenarioList=d.scenarios; populateCfScene();
  $("scenario-select").innerHTML=d.scenarios.map(s=>`<option value="${s.id}">${s.id}</option>`).join("");
- $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card"><h3>${s.id}</h3><p class="dim">${s.description}</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
+ $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card scenario-card" data-search="${(s.id+" "+s.description).toLowerCase()}" data-card="${s.id}"><h3>${s.id}</h3><p class="dim">${s.description}</p><p class="dim counts" data-counts="${s.id}">loading counts…</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
+ d.scenarios.forEach(async s=>{try{const f=await(await fetch("/api/scenarios?name="+s.id)).json();
+  const el=document.querySelector(`[data-counts="${s.id}"]`);const n=f.tracks.length;
+  if(el)el.textContent=`${n} objects · ${n*(n-1)/2} analysed pairs · ${f.calibration.metres_per_pixel?"calibrated (m)":"pixel space"}`;}catch(e){}});
  const v=await(await fetch("/api/validate")).json();
  $("validation-list").innerHTML=v.cases.map(c=>`<li>${c.passed?"✓":"✗"} <b>${c.case}</b> — <span class="dim">${c.detail}</span></li>`).join("");
  renderMyScenes();
@@ -134,8 +137,7 @@ function draw(){const c=$("stage");if(!c||!state.data)return;computeWorld();cons
  _labels.forEach(L=>{x.globalAlpha=L[4]?1:0.4;labelPill(x,L[0],L[1],L[2],L[3]);});x.globalAlpha=1;
  $("clock").textContent="t = "+state.t.toFixed(2)+"s";$("scrub").value=state.t;}
 $("scrub").oninput=e=>{state.t=+e.target.value;draw();};
-$("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.playing?"⏸ Pause":"▶ Play";
- if(state.playing){const step=()=>{if(!state.playing)return;state.t+=0.05;if(state.t>8)state.t=0;draw();requestAnimationFrame(step);};step();}};
+// (play handler replaced by the speed-aware version below)
 
 $("analyze").onclick=async()=>{$("analyze-status").textContent="Running bounded agent workflow…";
  let r;try{r=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -535,3 +537,78 @@ refreshAuthUI();
 
 document.querySelectorAll("[data-foot]").forEach(a=>a.onclick=()=>{showView(a.dataset.foot);window.scrollTo({top:0});});
 document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.id));
+
+// ---- SAM Vision panel (Studio) ----
+state.samCaptures=[];
+function samStatus(m){const e=$("sam-status");if(e)e.textContent=m;}
+$("sam-file").onchange=e=>{const f=e.target.files[0];if(!f)return;
+ if(f.size>60*1024*1024){samStatus("File exceeds the 60 MB browser-preview bound.");e.target.value="";return;}
+ const url=URL.createObjectURL(f),v=$("sam-video"),im=$("sam-img");
+ if(f.type.startsWith("video/")){im.style.display="none";v.style.display="block";v.src=url;samStatus("Video loaded locally — pause on a moment, then Segment. Loading it uploads nothing.");}
+ else if(f.type.startsWith("image/")){v.style.display="none";im.style.display="block";im.src=url;samStatus("Image loaded locally. Segment it with SAM 3.1.");}
+ else samStatus("Unsupported type — use a video or image, or build the scene in Create Lab.");};
+function samFrame(){const v=$("sam-video"),im=$("sam-img");
+ const src=v.style.display!=="none"?(v.videoWidth&&v):(im.naturalWidth&&im);
+ if(!src){samStatus("Load an image or video frame first.");return null;}
+ const c=document.createElement("canvas");c.width=src.videoWidth||src.naturalWidth;c.height=src.videoHeight||src.naturalHeight;
+ c.getContext("2d").drawImage(src,0,0);return c;}
+$("sam-run").onclick=async()=>{const c=samFrame();if(!c)return;
+ const dataUrl=c.toDataURL("image/jpeg",0.85);
+ if(dataUrl.length>11*1024*1024){samStatus("Encoded frame exceeds the ingest bound — use a lower-resolution source.");return;}
+ const t=$("sam-video").style.display!=="none"?+$("sam-video").currentTime.toFixed(2):0;
+ const concepts=[$("sam-concept").value.trim(),$("sam-concept2").value.trim()].filter(Boolean);
+ const x=$("sam-canvas").getContext("2d");x.drawImage(c,0,0,$("sam-canvas").width,$("sam-canvas").height);
+ samStatus("Calling SAM 3.1…");
+ for(const concept of concepts){
+  let r;try{r=await(await fetch("/api/meta/segment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image_data_url:dataUrl,concept})})).json();}
+  catch(e){samStatus("Segmentation failed: API unreachable.");return;}
+  if(r.status==="BLOCKED_CREDENTIALS"){samStatus("Meta API is not configured on this server (BLOCKED_CREDENTIALS). Nothing was segmented or claimed.");return;}
+  if(r.error||r.status==="MODEL_ERROR"){samStatus("SAM error: "+(r.error||r.detail));return;}
+  const recs=(r.frames&&r.frames[0])?r.frames[0].records:[];
+  state.samCaptures.push({t,concept,records:recs});
+  const sx=$("sam-canvas").width/c.width,sy=$("sam-canvas").height/c.height;
+  x.strokeStyle=COL[concept]||"#38c6d9";x.lineWidth=2;
+  recs.forEach(rec=>{const b=rec.box;x.strokeRect(b.x1*sx,b.y1*sy,(b.x2-b.x1)*sx,(b.y2-b.y1)*sy);});
+  recs.forEach(rec=>{labelPill(x,`${concept} #${rec.object_id}${rec.confidence!=null?" "+rec.confidence.toFixed(2):""}`,rec.box.x1*sx+4,Math.max(14,rec.box.y1*sy-8),COL[concept]);});
+  $("sam-records").innerHTML=recs.length?recs.map(rec=>`<li><b>${concept} #${rec.object_id}</b> · box [${rec.box.x1},${rec.box.y1}]–[${rec.box.x2},${rec.box.y2}] · confidence ${rec.confidence!=null?rec.confidence.toFixed(3):"n/a"} · source <code>MODEL_DERIVED</code></li>`).join(""):'<li class="dim">SAM returned zero matches for this concept on this frame — a valid result, recorded as-is.</li>';
+  samStatus(`SAM 3.1 (${r.model||"sam-3.1"}): ${recs.length} "${concept}" object(s) at t=${t}s · ${r.latency_ms||"?"} ms · captures so far: ${state.samCaptures.length}.`);
+  obDone("muse");}
+ $("sam-count").textContent=state.samCaptures.length;};
+$("sam-build").onclick=async()=>{if(state.samCaptures.length<2){samStatus("Segment at least two moments of a video first — one frame cannot produce motion.");return;}
+ const byConcept={};state.samCaptures.forEach(f=>{(byConcept[f.concept]=byConcept[f.concept]||[]).push({t:f.t,records:f.records});});
+ let all=[];for(const [concept,frames] of Object.entries(byConcept)){
+  const r=await(await fetch("/api/tracks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({frames,category:concept})})).json();
+  if(r.error){samStatus("Track build failed: "+r.error);return;}
+  all=all.concat(r.tracks.map(t=>({...t,object_id:concept+"-"+t.object_id.split("-").pop(),category:concept})));}
+ if(all.filter(t=>t.points.length>1).length<2){samStatus("Built tracks are too short to analyse (need 2+ moving tracks with 2+ points). Capture more moments with visible motion.");return;}
+ samStatus(`Built ${all.length} track(s) — running full analysis…`);
+ try{await analyzeCustom(all,"sam-"+Date.now());}catch(e){samStatus("Analysis failed: "+e.message);}};
+
+// ---- playback speed ----
+$("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.playing?"⏸ Pause":"▶ Play";
+ if(state.playing){const step=()=>{if(!state.playing)return;state.t+=0.05*(+$("play-speed").value||1);if(state.t>8)state.t=0;draw();requestAnimationFrame(step);};step();}};
+
+// ---- counterfactual export ----
+$("cf-export").onclick=()=>{if(!state.cfData){$("cf-results").textContent="Run a simulation first, then export.";return;}
+ download(new Blob([JSON.stringify(state.cfData,null,2)],{type:"application/json"}),"frontiersight-counterfactual.json");
+ toast("Counterfactual result exported (JSON).");};
+
+// ---- workspace search + live counts ----
+$("ws-search").oninput=e=>{const q=e.target.value.toLowerCase();
+ document.querySelectorAll(".scenario-card").forEach(c=>{c.style.display=c.dataset.search.includes(q)?"":"none";});};
+
+// ---- settings: version + clear local data ----
+(async()=>{try{const h=await(await fetch("/api/health")).json();
+ const fv=$("foot-version");if(fv)fv.textContent="v"+h.version;const sv=$("set-version");if(sv)sv.textContent=h.version;}catch(e){}})();
+$("clear-data").onclick=()=>{const keys=Object.keys(localStorage).filter(k=>k.startsWith("fs-"));
+ keys.forEach(k=>localStorage.removeItem(k));
+ $("clear-status").textContent=`Removed ${keys.length} local item(s). Reloading…`;
+ toast("Local data cleared — profiles, scenes, runs and preferences on this device are gone.","warn");
+ setTimeout(()=>location.reload(),900);};
+$("lab-clear-all").onclick=()=>{state.lab.objects=[];state.lab.selected=null;labRenderList();labDraw();
+ labStatus("All components cleared. Add components or load a template to start again.");};
+
+// ---- global error surface (throttled; errors become visible, never silent) ----
+let _lastErr=0;
+window.addEventListener("error",e=>{const now=Date.now();if(now-_lastErr<5000)return;_lastErr=now;
+ toast("Something went wrong in the interface: "+(e.message||"unknown error")+" — the deterministic API is unaffected; reload if it persists.","err");});

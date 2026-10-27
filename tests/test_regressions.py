@@ -110,3 +110,12 @@ def test_indie_track_not_startup():
         t = (ROOT / f).read_text()
         assert "Indie Track" in t or "Track:** Indie" in t
     assert "Startup Track · Push" not in (ROOT / "apps/web/index.html").read_text()
+
+def test_sam_vision_and_site_upgrades():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    for marker in ['id="sam-panel"', 'id="sam-canvas"', 'id="play-speed"', 'id="cf-export"',
+                   'id="ws-search"', 'id="clear-data"', 'id="lab-clear-all"', 'id="foot-version"',
+                   "application/ld+json", 'class="skip"']:
+        assert marker in html, marker
+    assert js.count('$("play").onclick') == 1 and "samCaptures" in js
