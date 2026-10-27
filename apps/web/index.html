@@ -1,0 +1,100 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FrontierSight AI — From video to verifiable physical-world intelligence</title>
+<link rel="stylesheet" href="app.css"></head><body>
+<header>
+ <div class="brand">◉ Frontier<b>Sight</b> <span class="tag">AI</span></div>
+ <nav id="tabs">
+  <button data-view="home" class="on">Home</button><button data-view="workspace">Workspace</button>
+  <button data-view="studio">Video Studio</button><button data-view="inspector">Motion Inspector</button>
+  <button data-view="counterfactual">Counterfactual</button><button data-view="agents">Agent Trace</button>
+  <button data-view="evidence">Evidence</button><button data-view="settings">Settings</button>
+ </nav>
+ <span id="mode" class="pill warn">checking…</span>
+</header>
+
+<section id="view-home" class="view on">
+ <div class="hero">
+  <h1>Understand what happened.<br>Verify what could happen next.</h1>
+  <p class="sub">FrontierSight connects Meta AI — Muse Spark reasoning and SAM 3.1 segmentation — to an
+  <b>independent deterministic physics engine</b>. Models propose and explain. Geometry decides.
+  Every number carries its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
+  <div class="cta"><button id="cta-demo">Run the warehouse near-miss demo →</button>
+  <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai">GitHub repository</a></div>
+  <p class="dim" id="hero-diag">Loading diagnostics…</p>
+ </div>
+ <div class="grid3">
+  <div class="card"><h3>1 · Observe</h3><p>SAM 3.1 segments and tracks people, forklifts, robots in video. Muse Spark proposes what to look for — it never invents a detection.</p></div>
+  <div class="card"><h3>2 · Verify</h3><p>Closest-approach, time-to-collision, continuity and constraint checks run in a seeded, reproducible engine. Uncalibrated video stays in pixel space — no fake metres.</p></div>
+  <div class="card"><h3>3 · Counterfact</h3><p>“What if the forklift had slowed 1s earlier?” A deterministic braking simulation reruns the world, Monte-Carlo intervals included, and an independent verifier checks the result.</p></div>
+ </div>
+ <div class="card wide"><h3>Architecture</h3>
+  <pre class="arch">Video / fixture ─► SAM 3.1 segmentation ─► Scene extraction ─► Muse Spark hypothesis
+                                                              │
+        Evidence packet ◄─ Human review ◄─ Independent verification ◄─ Deterministic counterfactual simulation
+        (hash-bound)          (approval gate)      (engine/geometry)        (engine/counterfactual)</pre>
+  <p class="dim">Limitations, stated plainly: synthetic fixtures validate the pipeline on synthetic data only; no safety certification is claimed; metric claims require declared calibration. See <code>docs/</code> in the repo.</p>
+ </div>
+</section>
+
+<section id="view-workspace" class="view">
+ <h2>Experiment workspace</h2><div id="scenario-list" class="grid3"></div>
+ <div class="card wide"><h3>Analytical validation cases</h3><ul id="validation-list"><li class="dim">loading…</li></ul></div>
+</section>
+
+<section id="view-studio" class="view">
+ <div class="row"><h2>Video intelligence studio</h2>
+  <select id="scenario-select"></select>
+  <span class="pill ghost">SYNTHETIC FIXTURE REPLAY — canvas-rendered from stored fixture tracks, ground truth held separately</span></div>
+ <div class="studio">
+  <div class="card stagecard">
+   <canvas id="stage" width="880" height="560"></canvas>
+   <div class="transport"><button id="play">▶ Play</button>
+    <input id="scrub" type="range" min="0" max="8" step="0.05" value="0"><span id="clock" class="mono">t = 0.00s</span></div>
+   <p class="dim">Overlays: bounding circles = tracked entities (SAM-style track ids), trails = observed paths, dashed = declared occlusion window. Click an event to seek.</p>
+  </div>
+  <aside class="card"><h3>Analysis events</h3><ul id="events"><li class="dim">Run analysis to detect events.</li></ul>
+   <button id="analyze">Run analysis</button><p id="analyze-status" role="status"></p>
+   <h3>Objects</h3><ul id="objects"></ul></aside>
+ </div>
+</section>
+
+<section id="view-inspector" class="view"><h2>Motion &amp; geometry inspector</h2>
+ <div class="card wide"><div id="inspector-body" class="dim">Run analysis in the Studio, then inspect measured tracks, coordinate frames, and uncertainty here.</div></div>
+</section>
+
+<section id="view-counterfactual" class="view"><h2>Counterfactual simulator</h2>
+ <div class="studio">
+  <div class="card stagecard"><canvas id="cf-chart" width="880" height="420"></canvas>
+   <p class="dim">Distance between forklift and pedestrian over time: original (slate) vs counterfactual (teal). Sliders rerun the deterministic simulation on the server — nothing here is pre-baked text.</p></div>
+  <aside class="card"><h3>Intervention</h3>
+   <label>Speed reduction <b id="sr-val">40%</b><input id="sr" type="range" min="0" max="80" value="40"></label>
+   <label>Intervention time <b id="it-val">1.0s</b><input id="it" type="range" min="0" max="4" step="0.25" value="1"></label>
+   <button id="cf-run">Rerun simulation</button>
+   <div id="cf-results" class="mono dim">No run yet.</div>
+   <label class="chk"><input type="checkbox" id="approve"> Human review: approve evidence export</label>
+  </aside>
+ </div>
+</section>
+
+<section id="view-agents" class="view"><h2>Agent reasoning &amp; verification</h2>
+ <p class="dim">Structured stage evidence — status, attribution, artifact hashes, retries. No private chain-of-thought is exposed; decision summaries and tool evidence only.</p>
+ <ol id="trace" class="trace"><li class="dim">Run analysis to populate the trace.</li></ol>
+</section>
+
+<section id="view-evidence" class="view"><h2>Evidence report</h2>
+ <div class="card wide"><p>Hash-bound report: experiment id, source digest, calibration, ground truth, run stages, validation cases, and honest labels
+ (<code>real_video_evaluation_completed: false</code>, <code>hardware_validation: unavailable</code>, no safety certification claimed).</p>
+ <button id="export-json">Download evidence JSON</button> <button id="export-html" class="ghostbtn">Download report HTML</button>
+ <pre id="evidence-preview" class="mono">Run analysis first for a run-bound report.</pre></div>
+</section>
+
+<section id="view-settings" class="view"><h2>System settings</h2>
+ <div class="card wide"><h3>Meta Model API connection</h3><div id="diag" class="mono dim">loading…</div>
+ <p class="dim">The API key lives server-side only (<code>MODEL_API_KEY</code>) and is never sent to the browser. Model ids are configurable via <code>META_MODEL</code> / <code>META_SAM_MODEL</code> / <code>META_IMAGE_MODEL</code>. Retention: uploaded media is processed in-memory in this demo deployment; fixtures are synthetic and openly redistributable.</p>
+ <button id="live-test" class="ghostbtn">Test Muse Spark hypothesis (live call)</button><pre id="live-out" class="mono"></pre></div>
+</section>
+
+<footer>FrontierSight AI · Quantura Studio · Meta Global AI Developer Hackathon 2026 · Startup Track · Push the Frontier ·
+ <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span></footer>
+<script src="app.js"></script></body></html>

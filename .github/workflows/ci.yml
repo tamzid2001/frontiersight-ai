@@ -1,0 +1,15 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { python-version: ["3.10", "3.12"] } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python-version }}" }
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - run: PYTHONPATH=. python -m services.api.server --smoke --port 8796
+      - name: secret scan
+        run: "! grep -R -E 'LLM_[0-9]{6,}|ghp_[A-Za-z0-9_]{20,}|-----BEGIN .*PRIVATE KEY-----' --exclude-dir=.git . || (echo 'secret pattern found' && exit 1)"
