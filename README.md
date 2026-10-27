@@ -1,3 +1,5 @@
+<p><img src="assets/logo/logo-mark.svg" alt="FrontierSight AI logo" width="84"></p>
+
 # FrontierSight AI
 
 **From video to verifiable physical-world intelligence.**

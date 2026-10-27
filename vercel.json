@@ -136,6 +136,14 @@
     {
       "source": "/sitemap.xml",
       "destination": "/api/index?ep=sitemap"
+    },
+    {
+      "source": "/logo-mark.svg",
+      "destination": "/api/index?ep=logo"
+    },
+    {
+      "source": "/favicon-32.png",
+      "destination": "/api/index?ep=favicon"
     }
   ],
   "functions": {

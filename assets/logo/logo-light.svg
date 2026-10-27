@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 356 64" role="img" aria-label="FrontierSight AI — Quantura Studio">
+  <defs>
+    <linearGradient id="fs-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38C6D9"/>
+      <stop offset="1" stop-color="#2DD4A8"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#fs-g)"/>
+  <circle cx="29" cy="29" r="13.5" fill="none" stroke="#06303E" stroke-width="4.5"/>
+  <path d="M29 8.5 v7 M29 42.5 v7 M8.5 29 h7 M42.5 29 h7" stroke="#06303E" stroke-width="4.5" stroke-linecap="round"/>
+  <circle cx="13.5" cy="47" r="2" fill="#06303E" opacity="0.55"/>
+  <circle cx="18.5" cy="42" r="2.5" fill="#06303E" opacity="0.75"/>
+  <circle cx="23.5" cy="36.5" r="3" fill="#06303E" opacity="0.9"/>
+  <circle cx="29" cy="29" r="4.6" fill="#06303E"/>
+  <circle cx="29" cy="29" r="1.8" fill="#7FE7D2"/>
+  <circle cx="47.5" cy="47.5" r="10" fill="#06303E"/>
+  <path d="M43 47.7 l3.2 3.2 l5.8 -6.4" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="76" y="35" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="25" font-weight="700" letter-spacing="-0.5" fill="#FFFFFF">Frontier<tspan fill="#0A7E96">Sight</tspan><tspan font-size="12" font-weight="700" fill="#0A7E96" dx="5" dy="-9">AI</tspan></text>
+  <text x="77" y="53" font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="10.5" font-weight="600" letter-spacing="2.6" fill="#9DB1CC">QUANTURA STUDIO</text>
+</svg>

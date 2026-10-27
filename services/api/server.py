@@ -17,7 +17,7 @@ from integrations.meta import spark, sam
 from integrations.meta.spark import BlockedCredentials, ModelError
 
 WEB = Path(__file__).resolve().parents[2] / "apps" / "web"
-TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript"}
+TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png"}
 _cache: dict = {}
 MAX_BODY = 12 * 1024 * 1024          # 12 MB hard ingest bound
 RATE_LIMIT, RATE_WINDOW = 120, 60.0  # POST requests per IP per minute (best-effort, per-instance)
@@ -112,7 +112,7 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         ep = parse_qs(u.query).get("ep", [None])[0]
         return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
-                "robots": "/robots.txt", "sitemap": "/sitemap.xml",
+                "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
                 "tracks": "/api/tracks", "from-paths": "/api/tracks/from-paths", "me": "/api/me", "signup": "/api/auth/signup",
@@ -155,7 +155,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.16.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.17.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
