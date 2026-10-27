@@ -7,7 +7,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](pyproject.toml)
 [![Live demo](https://img.shields.io/badge/live-frontiersight--ai.vercel.app-cyan)](https://frontiersight-ai.vercel.app)
 
-Built for the **Meta Global AI Developer Hackathon 2026** — Startup Track, Theme 2: *Push the Frontier*.
+Built for the **Meta Global AI Developer Hackathon 2026** — Indie Track, Theme 2: *Push the Frontier*.
 Owner: **Quantura Studio**. Submissions close **Nov 4, 2026, 9:00 PM ET**.
 
 > Video models can tell you a forklift "nearly hit" a pedestrian. FrontierSight makes them prove it:

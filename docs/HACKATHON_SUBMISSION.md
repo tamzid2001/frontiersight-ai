@@ -1,7 +1,7 @@
 # FrontierSight AI — hackathon submission
 
 - **Project:** FrontierSight AI — *From video to verifiable physical-world intelligence.*
-- **Owner:** Quantura Studio · **Track:** Startup · **Theme:** Push the Frontier
+- **Owner:** Quantura Studio (solo builder) · **Track:** Indie · **Theme:** Push the Frontier
 - **Repo:** https://github.com/tamzid2001/frontiersight-ai
 - **Live app:** https://frontiersight-ai.vercel.app
 - **Demo video:** https://youtu.be/mYTkPqigoz8

@@ -104,3 +104,9 @@ def test_homepage_structure():
     assert home.index('id="demo-video"') < home.index('id="onboarding"')  # video above the fold flow
     assert 'class="hero-grid"' in home and 'class="proofstrip"' in home and 'class="bento"' in home
     assert home.count('class="card tile"') == 6 and 'quick-scn' in home and 'class="ctaband"' in home
+
+def test_indie_track_not_startup():
+    for f in ["apps/web/index.html", "README.md", "docs/HACKATHON_SUBMISSION.md"]:
+        t = (ROOT / f).read_text()
+        assert "Indie Track" in t or "Track:** Indie" in t
+    assert "Startup Track · Push" not in (ROOT / "apps/web/index.html").read_text()

@@ -6,7 +6,7 @@ this document says so rather than assuming it.
 ## Verified requirements (with sources)
 - Event: virtual, 10 days, $1M prize pool; **Track 1 Indie** (creativity, technical
   ambition, functionality) and **Track 2 Startup** (technical execution, production
-  readiness). FrontierSight is entered as **Startup Track**. Two themes; we use
+  readiness). FrontierSight is entered in the **Indie Track** (owner-confirmed 2026-10-27; an earlier draft of this document and the README incorrectly said Startup). Two themes; we use
   **Theme 2 — Push the Frontier**. Source: https://dev.meta.ai/events/global-hackathon
 - Key dates (ET): applications closed Oct 25, 2026 11:59 PM; hackathon Oct 26;
   **project submissions due Nov 4, 2026, 9:00 PM ET**; judging Nov 4–8; winners
