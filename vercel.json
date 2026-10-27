@@ -64,6 +64,58 @@
     {
       "source": "/api/meta/scene",
       "destination": "/api/index?ep=scene"
+    },
+    {
+      "source": "/api/me",
+      "destination": "/api/index?ep=me"
+    },
+    {
+      "source": "/api/auth/signup",
+      "destination": "/api/index?ep=signup"
+    },
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/index?ep=login"
+    },
+    {
+      "source": "/api/auth/logout",
+      "destination": "/api/index?ep=logout"
+    },
+    {
+      "source": "/api/billing/checkout",
+      "destination": "/api/index?ep=checkout"
+    },
+    {
+      "source": "/api/billing/portal",
+      "destination": "/api/index?ep=portal"
+    },
+    {
+      "source": "/api/billing/webhook",
+      "destination": "/api/index?ep=webhook"
+    },
+    {
+      "source": "/api/keys/meta",
+      "destination": "/api/index?ep=metakey"
+    },
+    {
+      "source": "/api/scenes",
+      "destination": "/api/index?ep=scenes"
+    },
+    {
+      "source": "/api/scenes/delete",
+      "destination": "/api/index?ep=scenedel"
+    },
+    {
+      "source": "/api/waitlist",
+      "destination": "/api/index?ep=waitlist"
+    },
+    {
+      "source": "/api/sales/quote",
+      "destination": "/api/index?ep=quote"
+    },
+    {
+      "source": "/api/meta/segment-video",
+      "destination": "/api/index?ep=segment-video"
     }
   ],
   "functions": {

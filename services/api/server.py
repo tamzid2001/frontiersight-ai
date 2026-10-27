@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
+import os
 from engine import scenarios as scen
 from engine.kinematics import Calibration, analyse_pair
 from engine.validation import run_all as validation_cases
@@ -28,6 +29,27 @@ def _rate_ok(ip: str, limit: int = RATE_LIMIT) -> bool:
     bucket = [t for t in _hits.get(ip, []) if now - t < RATE_WINDOW]
     bucket.append(now); _hits[ip] = bucket[-limit * 2:]
     return len(bucket) <= limit
+
+# --- accounts, billing, entitlements -------------------------------------
+from services.api import store as _store
+from integrations import billing as _billing
+
+def _auth_user(handler):
+    auth = handler.headers.get("Authorization", "")
+    token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else None
+    return _store.user_for_token(token)
+
+def _plan_of(user) -> str:
+    return _store.plan_for(user["id"]) if user else "explorer"
+
+def _fernet():
+    import base64, hashlib as _hl
+    raw = os.environ.get("BYOK_ENCRYPTION_KEY", "").strip()
+    if not raw: return None
+    from cryptography.fernet import Fernet
+    try: return Fernet(raw.encode())
+    except Exception:
+        return Fernet(base64.urlsafe_b64encode(_hl.sha256(raw.encode()).digest()))
 
 def parse_tracks(payload: list):
     """Validate user-supplied tracks. Hard bounds; invalid input raises ValueError
@@ -92,7 +114,13 @@ class H(BaseHTTPRequestHandler):
         return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
-                "tracks": "/api/tracks",
+                "tracks": "/api/tracks", "me": "/api/me", "signup": "/api/auth/signup",
+                "login": "/api/auth/login", "logout": "/api/auth/logout",
+                "checkout": "/api/billing/checkout", "portal": "/api/billing/portal",
+                "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
+                "scenes": "/api/scenes", "scenedel": "/api/scenes/delete",
+                "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
+                "segment-video": "/api/meta/segment-video",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -111,7 +139,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.12.1"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.13.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -120,6 +148,26 @@ class H(BaseHTTPRequestHandler):
                 name = parse_qs(urlparse(self.path).query).get("name", [None])[0]
                 if name: return self._send(200, scen.scenario_to_dict(get_scenario(name)))
                 return self._send(200, {"scenarios": [{"id": n, "description": get_scenario(n)["description"]} for n in scen.SCENARIOS]})
+            if route.startswith("/api/me"):
+                user = _auth_user(self)
+                if not user: return self._send(200, {"authenticated": False, "plan": "explorer",
+                                                     "entitlements": _billing.entitlements("explorer"),
+                                                     "billing_configured": _billing.configured()})
+                plan = _plan_of(user)
+                sub = _store.one("SELECT status, current_period_end, cancel_at_period_end FROM subscriptions WHERE user_id=?", (user["id"],))
+                key = _store.one("SELECT last4 FROM user_keys WHERE user_id=?", (user["id"],))
+                return self._send(200, {"authenticated": True, "user": {"id": user["id"], "name": user["name"], "email": user["email"]},
+                                        "plan": plan, "entitlements": _billing.entitlements(plan),
+                                        "subscription": dict(sub) if sub else None,
+                                        "meta_key": {"configured": bool(key), "last4": key["last4"] if key else None},
+                                        "billing_configured": _billing.configured()})
+            if route.startswith("/api/scenes") and not route.startswith("/api/scenes/delete"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required for server-saved scenes", "upgrade_url": "/#view-auth"})
+                rows = _store.q("SELECT id, name, payload, created_at FROM scenes WHERE user_id=? ORDER BY created_at DESC", (user["id"],))
+                return self._send(200, {"scenes": [{"id": r["id"], "name": r["name"], "created_at": r["created_at"],
+                                                    "payload": json.loads(r["payload"])} for r in rows],
+                                        "plan": _plan_of(user)})
             if route.startswith("/api/validate"): return self._send(200, {"cases": validation_cases()})
             if route.startswith("/api/report"):
                 name = parse_qs(urlparse(self.path).query).get("name", ["warehouse-near-miss"])[0]
@@ -134,6 +182,39 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         route = self._route()
         try:
+            if route.startswith("/api/billing/webhook"):
+                raw = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+                try:
+                    event = _billing.verify_webhook(raw, self.headers.get("Stripe-Signature", ""))
+                except _billing.BillingNotConfigured as e:
+                    return self._send(503, {"error": str(e), "code": e.code})
+                except ValueError as e:
+                    return self._send(400, {"error": f"webhook rejected: {e}"})
+                ev_id = event.get("id", "")
+                if _store.one("SELECT id FROM stripe_events WHERE id=?", (ev_id,)):
+                    return self._send(200, {"received": True, "duplicate": True})
+                _store.q("INSERT INTO stripe_events(id, processed_at) VALUES(?,?)", (ev_id, __import__("time").time()))
+                obj = (event.get("data") or {}).get("object") or {}
+                etype = event.get("type", "")
+                import time as _time
+                if etype == "checkout.session.completed":
+                    uid = int(obj.get("client_reference_id") or (obj.get("metadata") or {}).get("user_id") or 0)
+                    if uid:
+                        _store.q("INSERT OR REPLACE INTO subscriptions(user_id, stripe_customer_id, stripe_sub_id, status, updated_at) VALUES(?,?,?,?,?)",
+                                 (uid, obj.get("customer"), obj.get("subscription"), "active", _time.time()))
+                        _store.audit(uid, "subscribed", str(obj.get("subscription")))
+                elif etype.startswith("customer.subscription."):
+                    uid = int((obj.get("metadata") or {}).get("user_id") or 0)
+                    items = ((obj.get("items") or {}).get("data") or [{}])
+                    price_id = ((items[0].get("price") or {}).get("id")) if items else None
+                    if uid:
+                        _store.q("INSERT OR REPLACE INTO subscriptions(user_id, stripe_customer_id, stripe_sub_id, price_id, status, current_period_end, cancel_at_period_end, updated_at) VALUES(?,?,?,?,?,?,?,?)",
+                                 (uid, obj.get("customer"), obj.get("id"), price_id, obj.get("status"),
+                                  obj.get("current_period_end"), 1 if obj.get("cancel_at_period_end") else 0, _time.time()))
+                elif etype == "invoice.payment_failed":
+                    _store.q("UPDATE subscriptions SET status='past_due', updated_at=? WHERE stripe_customer_id=?",
+                             (_time.time(), obj.get("customer")))
+                return self._send(200, {"received": True, "type": etype})
             if int(self.headers.get("Content-Length", 0) or 0) > MAX_BODY:
                 return self._send(413, {"error": f"payload exceeds {MAX_BODY // (1024*1024)} MB ingest bound"})
             if not _rate_ok(self.client_address[0]):
@@ -207,9 +288,13 @@ class H(BaseHTTPRequestHandler):
                                             "radius_sum": agent.radius + o.radius, "manifest_hash": r["manifest_hash"]}
                     if worst is None or r["original"]["d_min"] < results[worst]["original"]["d_min"]: worst = o.object_id
                 fo = by_id[worst]; ot = max(t0, fo.points[0][0])
+                _mc_req = int(body.get("mc_runs", 200))
+                _mc_limit = _billing.entitlements(_plan_of(_auth_user(self)))["mc_runs"]
+                if _mc_limit is not None and _mc_req > _mc_limit:
+                    raise _billing.PaymentRequired(f"mc_runs (limit {_mc_limit})", _plan_of(_auth_user(self)))
                 mc = simulate(agent.position_at(t0), agent.velocity_at(1), fo.position_at(ot), fo.velocity_at(1),
                               float(body.get("intervention_t", 1.0)), float(body.get("speed_reduction_pct", 40)),
-                              params, agent.radius, fo.radius, position_sigma=0.15, mc_runs=200, seed=42)
+                              params, agent.radius, fo.radius, position_sigma=0.15, mc_runs=_mc_req, seed=42)
                 return self._send(200, {"agent_id": agent.object_id, "focus_other": worst, "results": results,
                                         "monte_carlo": mc.get("monte_carlo"), "manifest_hash": mc["manifest_hash"],
                                         "params": mc["params"], "assumptions": mc["assumptions"]})
@@ -230,16 +315,133 @@ class H(BaseHTTPRequestHandler):
                     if scene: return self._send(200, {"scene": scene, "source": "OFFLINE_HEURISTIC", "model_call": None})
                     return self._send(202, {"status": "BLOCKED_CREDENTIALS",
                                             "detail": "Meta API not configured and no offline template matched. Try mentioning a warehouse near-miss, a road crossing, or a robot cell — or add MODEL_API_KEY."})
+            if route.startswith("/api/auth/signup"):
+                email = str(body.get("email", "")).strip().lower()
+                name = str(body.get("name", "")).strip()
+                password = str(body.get("password", ""))
+                if len(name) < 2 or "@" not in email or len(password) < 8:
+                    return self._send(400, {"error": "name (2+ chars), a valid email, and a password of 8+ characters are required"})
+                if _store.one("SELECT id FROM users WHERE email=?", (email,)):
+                    return self._send(409, {"error": "an account with this email already exists — sign in"})
+                pw_hash, pw_salt = _store.hash_password(password)
+                _store.q("INSERT INTO users(email, name, pw_hash, pw_salt, created_at) VALUES(?,?,?,?,?)",
+                         (email, name, pw_hash, pw_salt, __import__("time").time()))
+                user = dict(_store.one("SELECT * FROM users WHERE email=?", (email,)))
+                _store.audit(user["id"], "signup")
+                return self._send(201, {"token": _store.new_session(user["id"]),
+                                        "user": {"id": user["id"], "name": name, "email": email}, "plan": "explorer"})
+            if route.startswith("/api/auth/login"):
+                email = str(body.get("email", "")).strip().lower()
+                row = _store.one("SELECT * FROM users WHERE email=?", (email,))
+                if not row or not _store.verify_password(str(body.get("password", "")), row["pw_hash"], row["pw_salt"]):
+                    return self._send(401, {"error": "invalid email or password"})
+                user = dict(row)
+                return self._send(200, {"token": _store.new_session(user["id"]),
+                                        "user": {"id": user["id"], "name": user["name"], "email": email},
+                                        "plan": _plan_of(user)})
+            if route.startswith("/api/auth/logout"):
+                user = _auth_user(self)
+                if user:
+                    import hashlib as _hl
+                    tok = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+                    _store.q("DELETE FROM sessions WHERE token_hash=?", (_hl.sha256(tok.encode()).hexdigest(),))
+                return self._send(200, {"ok": True})
+            if route.startswith("/api/waitlist"):
+                _store.q("INSERT INTO waitlist(email, plan, created_at) VALUES(?,?,?)",
+                         (str(body.get("email", ""))[:200], str(body.get("plan", ""))[:40], __import__("time").time()))
+                return self._send(201, {"ok": True, "note": "waitlist recorded on this deployment"})
+            if route.startswith("/api/sales/quote"):
+                if not str(body.get("email", "")).strip() or not str(body.get("company", "")).strip():
+                    return self._send(400, {"error": "company and work email are required"})
+                _store.q("INSERT INTO quotes(company, email, seats, needs, created_at) VALUES(?,?,?,?,?)",
+                         (str(body["company"])[:200], str(body["email"])[:200], str(body.get("seats", ""))[:40],
+                          str(body.get("needs", ""))[:2000], __import__("time").time()))
+                return self._send(201, {"ok": True, "note": "quote request recorded; in production this also emails the sales contact"})
+            if route.startswith("/api/billing/checkout"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in before subscribing", "upgrade_url": "/#view-auth"})
+                price_env = "PRICE_RESEARCHER_ANNUAL" if body.get("period") == "annual" else "PRICE_RESEARCHER_MONTHLY"
+                base = os.environ.get("APP_BASE_URL", "https://frontiersight-ai.vercel.app")
+                out = _billing.create_checkout(user, os.environ.get(price_env, ""),
+                                               base + "/?billing=success", base + "/?billing=cancelled")
+                return self._send(200, {"url": out.get("url"), "session_id": out.get("id")})
+            if route.startswith("/api/billing/portal"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                sub = _store.one("SELECT stripe_customer_id FROM subscriptions WHERE user_id=?", (user["id"],))
+                if not sub or not sub["stripe_customer_id"]:
+                    return self._send(400, {"error": "no billing account yet — subscribe first"})
+                base = os.environ.get("APP_BASE_URL", "https://frontiersight-ai.vercel.app")
+                out = _billing.create_portal(sub["stripe_customer_id"], base + "/?billing=manage")
+                return self._send(200, {"url": out.get("url")})
+            if route.startswith("/api/keys/meta"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                plan = _plan_of(user)
+                if not _billing.entitlements(plan)["byok"]:
+                    raise _billing.PaymentRequired("byok", plan)
+                f = _fernet()
+                key = str(body.get("key", "")).strip()
+                if body.get("delete"):
+                    _store.q("DELETE FROM user_keys WHERE user_id=?", (user["id"],))
+                    return self._send(200, {"ok": True, "configured": False})
+                if not key: return self._send(400, {"error": "key is required (or {delete:true})"})
+                if f is None:
+                    return self._send(503, {"error": "BYOK_NOT_CONFIGURED: this deployment has no BYOK_ENCRYPTION_KEY set"})
+                _store.q("INSERT OR REPLACE INTO user_keys(user_id, kind, ciphertext, last4, updated_at) VALUES(?,?,?,?,?)",
+                         (user["id"], "meta", f.encrypt(key.encode()).decode(), key[-4:], __import__("time").time()))
+                _store.audit(user["id"], "byok_saved")
+                return self._send(200, {"ok": True, "configured": True, "last4": key[-4:]})
+            if route.startswith("/api/scenes/delete"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                _store.q("DELETE FROM scenes WHERE id=? AND user_id=?", (str(body.get("id", "")), user["id"]))
+                return self._send(200, {"ok": True})
+            if route.startswith("/api/scenes"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required for server-saved scenes", "upgrade_url": "/#view-auth"})
+                plan = _plan_of(user); limit = _billing.entitlements(plan)["server_scenes"]
+                payload = body.get("payload")
+                if not isinstance(payload, dict) or "objects" not in payload and "tracks" not in payload:
+                    return self._send(400, {"error": "payload must be a scene object ({objects:[...]} or {tracks:[...]})"})
+                if limit is not None:
+                    count = _store.one("SELECT COUNT(*) AS c FROM scenes WHERE user_id=?", (user["id"],))["c"]
+                    if count >= limit:
+                        raise _billing.PaymentRequired(f"server_scenes (limit {limit})", plan)
+                import uuid as _uuid
+                sid = _uuid.uuid4().hex[:16]
+                _store.q("INSERT INTO scenes(id, user_id, name, payload, created_at) VALUES(?,?,?,?,?)",
+                         (sid, user["id"], str(body.get("name", "scene"))[:120], json.dumps(payload)[:2_000_000],
+                          __import__("time").time()))
+                _store.audit(user["id"], "scene_saved", sid)
+                return self._send(201, {"id": sid, "plan": plan, "limit": limit})
+            if route.startswith("/api/meta/segment-video"):
+                user = _auth_user(self)
+                plan = _plan_of(user)
+                if not _billing.entitlements(plan)["sam_video"]:
+                    raise _billing.PaymentRequired("sam_video", plan)
+                ref = body.get("file_id") or body.get("video_url", "")
+                if not ref: return self._send(400, {"error": "video_url or file_id is required"})
+                out = sam.segment_video(ref, body.get("concept", "person"), is_file_id=bool(body.get("file_id")))
+                return self._send(200, out)
             if route.startswith("/api/meta/segment"):
                 out = sam.segment_image(body["image_data_url"], body.get("concept", "person"))
                 return self._send(200, out)
             return self._send(404, {"error": "not found"})
+        except _billing.PaymentRequired as e:
+            return self._send(402, {"error": str(e), "capability": e.capability, "plan": e.plan,
+                                    "upgrade_url": "/#view-pricing"})
+        except _billing.BillingNotConfigured as e:
+            return self._send(503, {"error": str(e), "code": e.code})
         except BlockedCredentials as e:
             return self._send(202, {"status": "BLOCKED_CREDENTIALS", "detail": str(e)})
         except (ModelError, RuntimeError) as e:
             return self._send(502, {"status": "MODEL_ERROR", "detail": str(e)[:300]})
         except Exception as e:
             return self._send(400, {"error": str(e)[:300]})
+
+H.do_PUT = H.do_POST
+H.do_DELETE = H.do_POST
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(); p.add_argument("--port", type=int, default=8000)

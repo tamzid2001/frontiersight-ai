@@ -65,8 +65,8 @@ def test_inspector_inside_studio_and_entities():
 def test_pricing_and_auth_are_honest():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     assert 'id="view-pricing"' in html and 'id="view-auth"' in html
-    assert "Billing is not enabled" in html and "device-local" in html
-    assert "stripe" not in html.lower() and "checkout" not in html.lower()
+    assert "billing is not configured" in html.lower()  # honest demo-deployment state
+    assert 'id="auth-signup"' in html and 'id="sub-btn"' in html  # real server accounts + subscribe flow
     assert 'data-theme-mode="system"' in html
 
 def test_demo_video_integrated():

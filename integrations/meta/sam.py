@@ -58,6 +58,38 @@ def parse_output_text(text: str) -> list:
     return {"frames": frames, "diagnostics": diagnostics,
             "objects": sorted({r["object_id"] for f in frames for r in f["records"]})}
 
+def segment_video(video_ref: str, concept: str, is_file_id: bool = False, timeout: int = 300) -> dict:
+    """SAM 3.1 video segmentation/tracking (documented input_video part).
+    Researcher-gated at the API layer; this function performs the call and
+    parses frames with the same documented-grammar parser as images."""
+    key = os.environ.get("MODEL_API_KEY", "").strip()
+    if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
+    if not concept or any(ch in concept for ch in ",;+\n"): raise ValueError("concept must be one short noun phrase")
+    media = {"type": "input_video", "file_id": video_ref} if is_file_id else {"type": "input_video", "video_url": video_ref}
+    payload = {"model": MODEL, "stream": True,
+               "metadata": {"include_confidence": "true", "mask_encoding": "one_bit"},
+               "input": [{"type": "message", "role": "user", "content": [
+                   {"type": "input_text", "text": concept}, media]}]}
+    req = urllib.request.Request(BASE + "/responses", data=json.dumps(payload).encode(), method="POST",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "X-Request-Id": str(uuid.uuid4())})
+    started, text_parts = time.time(), []
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            status = r.status
+            for raw in r:
+                line = raw.decode(errors="ignore").strip()
+                if line.startswith("data:"):
+                    try: ev = json.loads(line[5:])
+                    except Exception: continue
+                    if ev.get("type") == "response.output_text.delta": text_parts.append(ev.get("delta", ""))
+    except urllib.error.HTTPError as e:
+        raise ModelError(f"SAM video HTTP {e.code}: {e.read().decode()[:300]}") from e
+    text = "".join(text_parts)
+    parsed = parse_output_text(text)
+    parsed.update({"model": MODEL, "concept": concept, "http_status": status,
+                   "latency_ms": round((time.time() - started) * 1000), "raw_output_chars": len(text)})
+    return parsed
+
 def segment_image(image_data_url: str, concept: str, timeout: int = 90) -> dict:
     """One concept per request (documented constraint). Image as data URL."""
     key = os.environ.get("MODEL_API_KEY", "").strip()

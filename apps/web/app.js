@@ -519,23 +519,71 @@ function toast(msg, kind="ok"){const host=$("toasts");if(!host)return;const d=do
  d.className="toast "+(kind==="ok"?"":kind);d.textContent=msg;host.appendChild(d);
  setTimeout(()=>{d.style.opacity="0";d.style.transition="opacity .4s";setTimeout(()=>d.remove(),420);},4200);}
 
-// ---- device-local profiles (demo auth; production path in docs/AUTH_AND_BILLING.md) ----
-function profile(){try{return JSON.parse(localStorage.getItem("fs-profile")||"null");}catch(e){return null;}}
-function sceneStoreKey(){const p=profile();return "fs-my-scenes:"+(p?p.id:"guest");}
-function runsKey(){const p=profile();return "fs-runs:"+(p?p.id:"guest");}
-function refreshAuthUI(){const p=profile(),btn=$("auth-btn");if(!btn)return;
- btn.textContent=p?("● "+p.name.split(" ")[0]+" · profile"):"Sign in";
+// ---- server accounts (first-party auth; Clerk/OIDC can replace the provider) ----
+function sessionToken(){return localStorage.getItem("fs-session")||"";}
+function serverUser(){try{return JSON.parse(localStorage.getItem("fs-user")||"null");}catch(e){return null;}}
+function profile(){return serverUser();}
+function sceneStoreKey(){const p=serverUser();return "fs-my-scenes:"+(p?("u"+p.id):"guest");}
+function runsKey(){const p=serverUser();return "fs-runs:"+(p?("u"+p.id):"guest");}
+async function api(path, opts={}){const tok=sessionToken();
+ const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json",...(tok?{"Authorization":"Bearer "+tok}:{}),...(opts.headers||{})}});
+ let body={};try{body=await r.json();}catch(e){}
+ return {status:r.status, body};}
+state.me=null;
+async function refreshMe(){const {body}=await api("/api/me");state.me=body;
+ const btn=$("auth-btn"),badge=$("plan-badge");
  const so=$("auth-signedout"),si=$("auth-signedin");
- if(so&&si){so.classList.toggle("hidden",!!p);si.classList.toggle("hidden",!p);
-  if(p){$("auth-who").textContent=p.name;$("auth-meta").textContent=`· ${p.email} · local profile created ${new Date(p.created).toLocaleDateString()}`;}}}
+ if(body.authenticated){const u=body.user;
+  if(btn)btn.textContent="● "+u.name.split(" ")[0];
+  if(badge){badge.textContent=body.plan==="explorer"?"Explorer":body.plan==="researcher"?"Researcher":"Team";badge.classList.remove("hidden");}
+  if(so)so.classList.add("hidden");if(si)si.classList.remove("hidden");
+  const who=$("auth-who");if(who)who.textContent=u.name;
+  const meta=$("auth-meta");if(meta)meta.textContent=`· ${u.email} · plan: ${body.plan}${body.subscription?` · subscription ${body.subscription.status}`:""}`;
+ }else{
+  if(btn)btn.textContent="Sign in";
+  if(badge)badge.classList.add("hidden");
+  if(so)so.classList.remove("hidden");if(si)si.classList.add("hidden");
+ }
+ const card=$("me-card");
+ if(card)card.innerHTML=body.authenticated
+  ? `Signed in as <b>${body.user.email}</b> · plan <b>${body.plan}</b>${body.subscription?` · subscription: ${body.subscription.status}${body.subscription.cancel_at_period_end?" (cancels at period end)":""}`:" · no subscription"}<br>Entitlements: SAM video ${body.entitlements.sam_video?"✓":"—"} · server scenes ${body.entitlements.server_scenes===null?"unlimited":body.entitlements.server_scenes} · Monte-Carlo ≤ ${body.entitlements.mc_runs===null?"unlimited":body.entitlements.mc_runs} · your Meta key ${body.meta_key.configured?("saved (…"+body.meta_key.last4+")"):"not saved"}<br>Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment"}`
+  : `Not signed in (guest / Explorer). Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment — subscriptions are disabled, waitlist is open."}`;
+ return body;}
+function refreshAuthUI(){refreshMe();}
 $("auth-btn").onclick=()=>goto("auth");
-$("auth-create").onclick=()=>{const name=$("auth-name").value.trim(),email=$("auth-email").value.trim();
- if(name.length<2||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$("auth-status").textContent="Enter your name and a valid-looking email to create the local profile.";return;}
- localStorage.setItem("fs-profile",JSON.stringify({id:email.toLowerCase(),name,email,created:Date.now()}));
- refreshAuthUI();renderMyScenes();toast(`Welcome, ${name.split(" ")[0]} — local profile created on this device.`);goto("workspace");};
-$("auth-guest").onclick=()=>{localStorage.removeItem("fs-profile");refreshAuthUI();toast("Continuing as guest. Your scenes stay in this browser.","warn");goto("home");};
-$("auth-signout").onclick=()=>{localStorage.removeItem("fs-profile");refreshAuthUI();renderMyScenes();toast("Signed out. Profile data remains on this device until browser data is cleared.","warn");goto("home");};
+$("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form-signin").classList.add("hidden");};
+$("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");};
+async function afterAuth(out, msg){localStorage.setItem("fs-session",out.body.token);
+ localStorage.setItem("fs-user",JSON.stringify(out.body.user));
+ await refreshMe();renderMyScenes();toast(msg);goto("workspace");}
+$("auth-signup").onclick=async()=>{const out=await api("/api/auth/signup",{method:"POST",
+ body:JSON.stringify({name:$("su-name").value.trim(),email:$("su-email").value.trim(),password:$("su-password").value})});
+ if(out.status!==201){$("auth-status").textContent=out.body.error||"Sign-up failed.";return;}
+ afterAuth(out,`Welcome, ${out.body.user.name.split(" ")[0]} — free Explorer account created.`);};
+$("auth-signin").onclick=async()=>{const out=await api("/api/auth/login",{method:"POST",
+ body:JSON.stringify({email:$("si-email").value.trim(),password:$("si-password").value})});
+ if(out.status!==200){$("auth-status").textContent=out.body.error||"Sign-in failed.";return;}
+ afterAuth(out,`Welcome back, ${out.body.user.name.split(" ")[0]}.`);};
+$("auth-guest").onclick=()=>{toast("Continuing as guest — device-local scenes only, Explorer limits.","warn");goto("home");};
+$("auth-signout").onclick=async()=>{await api("/api/auth/logout",{method:"POST"});
+ localStorage.removeItem("fs-session");localStorage.removeItem("fs-user");
+ await refreshMe();renderMyScenes();toast("Signed out.","warn");goto("home");};
 $("auth-goto-app").onclick=()=>goto("workspace");
+async function manageBilling(){const out=await api("/api/billing/portal",{method:"POST"});
+ if(out.status===200&&out.body.url){location.href=out.body.url;return;}
+ const el=$("auth-billing-status")||$("byok-status");
+ if(el)el.textContent=out.body.error||"Billing portal unavailable.";
+ toast(out.body.error||"Billing portal unavailable.","warn");}
+$("auth-billing").onclick=manageBilling;
+$("manage-billing").onclick=manageBilling;
+$("byok-save").onclick=async()=>{const key=$("byok-key").value.trim();
+ if(!key){$("byok-status").textContent="Paste your Meta API key first.";return;}
+ const out=await api("/api/keys/meta",{method:"PUT",body:JSON.stringify({key})});
+ $("byok-status").textContent=out.status===200?`Saved (…${out.body.last4}). It will never be shown again.`
+  :out.status===402?out.body.error+" — see Pricing.":(out.body.error||"Could not save the key.");
+ if(out.status===200)$("byok-key").value="";refreshMe();};
+$("byok-delete").onclick=async()=>{const out=await api("/api/keys/meta",{method:"PUT",body:JSON.stringify({delete:true})});
+ $("byok-status").textContent=out.status===200?"Your key was removed.":(out.body.error||"Could not remove the key.");refreshMe();};
 
 // ---- run history ----
 function recordRun(rec){try{const k=runsKey();const arr=JSON.parse(localStorage.getItem(k)||"[]");
@@ -562,11 +610,31 @@ $("bill-toggle").onclick=()=>{const annual=$("bill-toggle").getAttribute("aria-p
  document.querySelectorAll(".amt").forEach(a=>{a.textContent=annual?a.dataset.m:a.dataset.a;});
  document.querySelectorAll(".per").forEach(a=>{a.textContent=annual?"/mo":"/yr";});
  $("bill-toggle").firstChild.textContent=annual?"Switch to annual ":"Switch to monthly ";};
-document.querySelectorAll(".waitlist-btn").forEach(b=>b.onclick=()=>{
- const p=profile();const email=p?p.email:"";
- try{const w=JSON.parse(localStorage.getItem("fs-waitlist")||"[]");w.push({plan:b.dataset.plan,email,when:Date.now()});localStorage.setItem("fs-waitlist",JSON.stringify(w));}catch(e){}
- toast(email?`Waitlist joined for ${b.dataset.plan} as ${email}. No payment taken — billing is not enabled.`
-            :`Waitlist joined for ${b.dataset.plan} (guest). No payment taken — billing is not enabled. Sign in to attach an email.`,"warn");});
+$("sub-btn").onclick=async()=>{const me=state.me||await refreshMe();
+ if(!me.authenticated){toast("Create a free account first, then subscribe.","warn");goto("auth");return;}
+ const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
+ const out=await api("/api/billing/checkout",{method:"POST",body:JSON.stringify({period:annual?"annual":"monthly"})});
+ if(out.status===200&&out.body.url){location.href=out.body.url;return;}
+ if(out.body.code==="BILLING_NOT_CONFIGURED"){
+  toast("Billing isn't enabled on this deployment yet — joining the waitlist instead (no payment).","warn");
+  await api("/api/waitlist",{method:"POST",body:JSON.stringify({email:me.user.email,plan:"Researcher"})});
+  return;}
+ toast(out.body.error||"Checkout could not be started.","err");};
+document.querySelectorAll(".waitlist-btn").forEach(b=>b.onclick=async()=>{
+ const me=state.me||await refreshMe();
+ const email=me.authenticated?me.user.email:"";
+ if(!email){toast("Sign in (or create a free account) so the waitlist has an email to reach.","warn");goto("auth");return;}
+ const out=await api("/api/waitlist",{method:"POST",body:JSON.stringify({email,plan:b.dataset.plan})});
+ toast(out.status===201?`Waitlist joined for ${b.dataset.plan} as ${email}. No payment taken — billing is not enabled on this deployment.`
+   :"Waitlist failed: "+(out.body.error||"unknown"),"warn");});
+$("quote-open").onclick=()=>{$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});};
+$("quote-send").onclick=async()=>{const out=await api("/api/sales/quote",{method:"POST",
+ body:JSON.stringify({company:$("q-company").value.trim(),email:$("q-email").value.trim(),
+  seats:$("q-seats").value.trim(),needs:$("q-needs").value.trim()})});
+ $("quote-status").textContent=out.status===201?"Recorded — in production this also emails the sales contact. Custom pricing is manual."
+  :(out.body.error||"Could not send.");};
+$("bill-toggle").addEventListener("click",()=>{const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
+ const sa=$("sub-amt");if(sa)sa.textContent=annual?"$19/mo":"$190/yr";});
 document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>goto(b.dataset.goto));
 
 // ---- shareable Create Lab links ----
@@ -584,7 +652,7 @@ function loadShared(){if(!location.hash.includes("s="))return;
 loadShared();
 window.addEventListener("hashchange", loadShared);
 
-refreshAuthUI();
+refreshMe();
 
 document.querySelectorAll("[data-foot]").forEach(a=>a.onclick=()=>{showView(a.dataset.foot);window.scrollTo({top:0});});
 document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.id));
