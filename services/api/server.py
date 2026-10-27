@@ -72,7 +72,7 @@ class H(BaseHTTPRequestHandler):
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
                 "tracks": "/api/tracks",
-                "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment",
+                "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
         b = body if isinstance(body, bytes) else json.dumps(body).encode()
@@ -83,7 +83,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.3.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.4.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -169,6 +169,17 @@ class H(BaseHTTPRequestHandler):
                 pairs = [analyse_pair(a, b, cal) for i, a in enumerate(sc["tracks"]) for b in sc["tracks"][i + 1:]]
                 obj, meta = spark.propose_hypothesis({"pairs": pairs})
                 return self._send(200, {"hypothesis": obj, "model_call": meta, "source": "MODEL_DERIVED"})
+            if route.startswith("/api/meta/scene"):
+                from agents.scene_heuristic import match as _match
+                desc = str(body.get("prompt", ""))
+                try:
+                    scene, meta = spark.generate_scene(desc)
+                    return self._send(200, {"scene": scene, "source": "MODEL_DERIVED", "model_call": meta})
+                except BlockedCredentials:
+                    scene = _match(desc)
+                    if scene: return self._send(200, {"scene": scene, "source": "OFFLINE_HEURISTIC", "model_call": None})
+                    return self._send(202, {"status": "BLOCKED_CREDENTIALS",
+                                            "detail": "Meta API not configured and no offline template matched. Try mentioning a warehouse near-miss, a road crossing, or a robot cell — or add MODEL_API_KEY."})
             if route.startswith("/api/meta/segment"):
                 out = sam.segment_image(body["image_data_url"], body.get("concept", "person"))
                 return self._send(200, out)

@@ -74,7 +74,7 @@
    <canvas id="lab-canvas" width="880" height="620"></canvas>
    <div class="transport"><button id="lab-play">▶ Preview motion</button>
     <input id="lab-scrub" type="range" min="0" max="20" step="0.05" value="0"><span id="lab-clock" class="mono">t = 0.00s</span></div>
-   <p class="dim">Select a component, then <b>click the stage to add waypoints</b>. Drag any waypoint to move it.
+   <p id="lab-live" class="mono dim">Closest pair: —</p><p class="dim">Select a component, then <b>click the stage to add waypoints</b>. Drag any waypoint to move it.
    The marker shows where each component will be at the preview time.</p>
    <div class="row">
     <button id="lab-run">Run analysis →</button>
@@ -83,7 +83,13 @@
     <span id="lab-status" role="status" class="dim"></span>
    </div>
   </div>
-  <aside class="card"><h3>Components</h3>
+  <aside class="card"><h3>✦ Generate with Muse Spark</h3>
+   <textarea id="lab-prompt" rows="3" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
+   <div class="row"><button id="lab-generate">Generate scene</button>
+    <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
+    <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>
+   <p id="lab-gen-status" role="status" class="dim">Muse proposes the scene; you edit every waypoint before anything is analysed. Offline, a labelled keyword template is used instead — never passed off as a model call.</p>
+   <h3>Components</h3>
    <div class="row"><select id="lab-new-cat">
      <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
      <option value="robot">Robot</option><option value="vehicle">Vehicle</option>

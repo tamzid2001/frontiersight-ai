@@ -64,3 +64,36 @@ def test_custom_endpoints_via_http():
         {"t": 1, "records": [{"box": {"x1": 25, "y1": 0, "x2": 65, "y2": 40}}]}]})
     assert len(tr["tracks"]) == 1 and len(tr["tracks"][0]["points"]) == 2
     srv.shutdown()
+
+def test_validate_scene_schema():
+    from integrations.meta.spark import validate_scene, ModelError
+    good = {"name": "x", "objects": [
+        {"category": "forklift", "waypoints": [[1, 7], [13, 7]], "speed": 1.6, "radius": 0.9},
+        {"category": "pedestrian", "waypoints": [[8, 13], [8, 1]], "speed": 1.4, "radius": 0.45}]}
+    out = validate_scene(good)
+    assert len(out["objects"]) == 2 and out["objects"][0]["mode"] == "stop"
+    for bad in ({"objects": [{"category": "dragon", "waypoints": [[1, 1]]}] * 2},
+                {"objects": [{"category": "robot", "waypoints": [[99, 1], [1, 1]], "speed": 1}] * 2},
+                {"objects": [{"category": "robot", "waypoints": [[1, 1], [2, 2]], "speed": 0}] * 2},
+                {"objects": [{"category": "robot", "waypoints": [[1, 1]]}]}):
+        with pytest.raises(ModelError): validate_scene(bad)
+
+def test_offline_heuristic_labelled():
+    from agents.scene_heuristic import match
+    s = match("a forklift nearly hits a pedestrian in a warehouse aisle")
+    assert s and "no model call" in s["explanation"]
+    assert match("quantum bananas on the moon") is None
+
+def test_scene_endpoint_offline(monkeypatch):
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    import json as _json, threading, urllib.request
+    from http.server import ThreadingHTTPServer
+    from services.api.server import H
+    srv = ThreadingHTTPServer(("127.0.0.1", 8801), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    req = urllib.request.Request("http://127.0.0.1:8801/api/meta/scene", method="POST",
+                                 data=_json.dumps({"prompt": "warehouse forklift pedestrian near miss"}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    out = _json.loads(urllib.request.urlopen(req, timeout=10).read())
+    assert out["source"] == "OFFLINE_HEURISTIC" and len(out["scene"]["objects"]) >= 2
+    srv.shutdown()

@@ -60,6 +60,10 @@
     {
       "source": "/api/tracks",
       "destination": "/api/index?ep=tracks"
+    },
+    {
+      "source": "/api/meta/scene",
+      "destination": "/api/index?ep=scene"
     }
   ],
   "functions": {

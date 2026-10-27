@@ -111,9 +111,9 @@ const LAB={w:16,h:14};
 function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
-function labAdd(cat,waypoints,speed,radius,delay){
+function labAdd(cat,waypoints,speed,radius,delay,mode){
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
-  speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,waypoints:waypoints||[]};
+  speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",waypoints:waypoints||[]};
  state.lab.objects.push(o);state.lab.selected=o.id;labRenderList();labDraw();return o;}
 function labClear(){$("lab-canvas").getContext("2d").clearRect(0,0,880,620);}
 function labXY(x,y,W,H){return [x/LAB.w*W, H-(y/LAB.h*H)];}
@@ -122,7 +122,8 @@ function pathLen(o){let L=0;for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.
 function pathDur(o){return o.speed>0?pathLen(o)/o.speed:0;}
 function labDuration(){return Math.min(20,Math.max(4,...state.lab.objects.map(o=>o.delay+pathDur(o))));}
 function posOnPath(o,t){if(!o.waypoints.length)return null;
- const lt=Math.max(0,t-o.delay);if(o.waypoints.length===1||o.speed<=0||lt===0)return o.waypoints[0];
+ let lt=Math.max(0,t-o.delay);if(o.waypoints.length===1||o.speed<=0||lt===0)return o.waypoints[0];
+ const D=pathDur(o);if(D>0&&lt>D){if(o.mode==="loop")lt=lt%D;else if(o.mode==="pingpong"){const m=lt%(2*D);lt=m>D?2*D-m:m;}else lt=D;}
  let d=o.speed*lt;for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];
   const seg=Math.hypot(b[0]-a[0],b[1]-a[1]);if(d<=seg){const k=seg?d/seg:0;return [a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k];}d-=seg;}
  return o.waypoints[o.waypoints.length-1];}
@@ -138,6 +139,13 @@ function labDraw(){const c=$("lab-canvas");if(!c)return;computeLabDuration();con
    x.strokeStyle=col;x.lineWidth=2.5;x.beginPath();x.arc(a,b,r,0,7);x.stroke();
    x.fillStyle=col+"2e";x.beginPath();x.arc(a,b,r,0,7);x.fill();
    x.fillStyle="#e8edf6";x.font="12.5px system-ui";x.fillText(`${o.id}${o.speed?` · ${o.speed} m/s`:" · static"}`,a+r+5,b-5);}}
+ const live=$("lab-live");if(live){let best=null;
+  const placed=state.lab.objects.map(o=>({o,p:posOnPath(o,state.lab.t)})).filter(q=>q.p);
+  for(let i=0;i<placed.length;i++)for(let k=i+1;k<placed.length;k++){
+   const d=Math.hypot(placed[i].p[0]-placed[k].p[0],placed[i].p[1]-placed[k].p[1])-placed[i].o.radius-placed[k].o.radius;
+   if(!best||d<best.d)best={d,a:placed[i].o.id,b:placed[k].o.id};}
+  live.textContent=best?`Closest pair at preview: ${best.a} ↔ ${best.b} — surface gap ${best.d.toFixed(2)} m ${best.d<0.5?"⚠ proximity":best.d<0?"⚠ OVERLAP":""}`:"Closest pair: —";
+  live.style.color=best&&best.d<0.5?"var(--amber)":"";}
  const clk=$("lab-clock");if(clk)clk.textContent="t = "+state.lab.t.toFixed(2)+"s";const sc=$("lab-scrub");if(sc)sc.value=state.lab.t;}
 function computeLabDuration(){const sc=$("lab-scrub");if(sc)sc.max=labDuration();}
 function labRenderList(){const el=$("lab-list");if(!el)return;
@@ -147,18 +155,21 @@ function labRenderList(){const el=$("lab-list");if(!el)return;
    <label>Speed m/s<input type="number" step="0.1" min="0" max="8" value="${o.speed}" data-f="speed"></label>
    <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
    <label>Delay s<input type="number" step="0.25" min="0" max="10" value="${o.delay}" data-f="delay"></label>
+   <label>Path mode<select data-f="mode"><option ${o.mode==="stop"?"selected":""}>stop</option><option ${o.mode==="loop"?"selected":""}>loop</option><option ${o.mode==="pingpong"?"selected":""}>pingpong</option></select></label>
   </div>
   <div class="row"><button data-act="select">${o.id===state.lab.selected?"Selected ✓":"Select & edit path"}</button>
    <button class="ghostbtn" data-act="undo">Undo point</button>
    <button class="ghostbtn" data-act="clear">Clear path</button>
+   <button class="ghostbtn" data-act="dup">Duplicate</button>
    <button class="ghostbtn" data-act="del">Delete</button></div></div>`).join("")
   :'<p class="dim">No components yet. Add one, select it, then click the stage to lay its path.</p>';
  el.querySelectorAll(".labobj").forEach(card=>{const o=labObj(card.dataset.id);
-  card.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=Math.max(0,+inp.value||0);labRenderList();labDraw();});
+  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=inp.dataset.f==="mode"?inp.value:Math.max(0,+inp.value||0);labRenderList();labDraw();});
   card.querySelectorAll("button").forEach(b=>b.onclick=()=>{const a=b.dataset.act;
    if(a==="select"){state.lab.selected=o.id;}
    if(a==="undo"){o.waypoints.pop();}
    if(a==="clear"){o.waypoints=[];}
+   if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode);labStatus(c.id+" duplicated — drag its waypoints apart.");}
    if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;}
    labRenderList();labDraw();});});}
 // canvas editing: click adds a waypoint to the selected component; drag moves one
@@ -205,7 +216,20 @@ $("lab-run").onclick=()=>{try{analyzeCustom(labSampleTracks(),"created-"+Date.no
 $("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersight-created-scene",stage_metres:[LAB.w,LAB.h],objects:state.lab.objects},null,2)],{type:"application/json"}),"frontiersight-scene.json");};
 $("lab-import").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{try{
  const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
- state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0));
+ state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop"));
  labStatus(`Imported ${state.lab.objects.length} component(s).`);labDraw();}catch(err){labStatus("Import failed: "+err.message);}});};
+function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;
+ (scene.objects||[]).forEach(o=>labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop"));
+ labStatus(label);labDraw();}
+document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
+$("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
+ if(desc.length<8){$("lab-gen-status").textContent="Describe the scene in a sentence or two first.";return;}
+ $("lab-gen-status").textContent="Asking Muse Spark to design the scene…";
+ let r;try{r=await(await fetch("/api/meta/scene",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:desc})})).json();}
+ catch(e){$("lab-gen-status").textContent="Generation failed: API unreachable.";return;}
+ if(r.status==="BLOCKED_CREDENTIALS"){$("lab-gen-status").textContent=r.detail;return;}
+ if(r.error||r.status==="MODEL_ERROR"){$("lab-gen-status").textContent="Muse could not produce a valid scene: "+(r.error||r.detail)+" — try a clearer description.";return;}
+ labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`);
+ $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
 // starter template so the Lab is never an empty, unexplained canvas
 if(!state.lab.objects.length){$("lab-add")&&document.querySelector('[data-tpl="near-miss"]').click();}

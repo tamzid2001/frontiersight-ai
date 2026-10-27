@@ -47,6 +47,20 @@ them with `python3 scripts/generate_fixtures.py`.
 
 ## Create your own scenes (Create Lab)
 
+**Prompt-to-scene:** describe a scene in words — *"Two forklifts working an
+aisle while a pedestrian crosses, and a robot patrolling the back wall"* — and
+Muse Spark designs it (components, waypoint paths, speeds, radii, path modes)
+as strict JSON that is schema-validated before it touches the editor
+(`validate_scene`: category whitelist, stage bounds, physical ranges; invalid
+output is rejected, never repaired). You edit every waypoint afterwards.
+Without an API key, a clearly-labelled `OFFLINE_HEURISTIC` keyword template is
+used instead — never passed off as a model call. Verified live 2026-10-27:
+`muse-spark-1.3` produced a valid 6-object scene in 20.4 s.
+Components also support **stop / loop / ping-pong** path modes, duplication,
+and a live closest-pair surface-gap readout during preview.
+
+## Create Lab (manual authoring)
+
 Build a scene instead of uploading one: add components (forklift, pedestrian,
 robot, vehicle, cyclist, static shelf), click the 16 × 14 m stage to lay each
 component's waypoint path, drag waypoints to edit, set speed / radius / start
