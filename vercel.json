@@ -68,7 +68,8 @@
   ],
   "functions": {
     "api/index.py": {
-      "includeFiles": "{engine,agents,integrations,services,apps}/**"
+      "includeFiles": "{engine,agents,integrations,services,apps}/**",
+      "maxDuration": 60
     }
   }
 }

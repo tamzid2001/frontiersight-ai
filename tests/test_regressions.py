@@ -46,3 +46,10 @@ def test_create_lab_spawn_visibility_and_sections():
     assert "LAB_SLOTS" in js and "o.spawned=true" in js
     assert 'id="lab-ready"' in html and 'id="cf-agent"' in html and 'id="cta-create"' in html
     assert "populateCfAgents" in js and "renderMyScenes" in js and "pairtable" in js
+
+def test_theme_and_grouped_nav():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    css = (ROOT / "apps" / "web" / "app.css").read_text()
+    assert html.count('data-view=') <= 8                       # grouped nav, not 9 flat tabs
+    assert 'data-theme-mode="system"' in html and "prefers-color-scheme" in html
+    assert '[data-theme="light"]' in css and 'id="cf-map"' in html and 'id="cf-target"' in html and 'id="cf-decel"' in html

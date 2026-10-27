@@ -60,7 +60,7 @@ def propose_hypothesis(findings: dict) -> tuple[dict, dict]:
               '{"hypothesis": str, "intervention": {"speed_reduction_pct": number 0-80, '
               '"intervention_time_s": number >= 0}, "rationale": str}. '
               "Findings:\n" + json.dumps(findings)[:5000])
-    text, meta = _call(prompt)
+    text, meta = _call(prompt, timeout=30, retries=1)
     try:
         obj = json.loads(text[text.index("{"): text.rindex("}") + 1])
     except Exception as e:

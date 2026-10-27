@@ -109,9 +109,13 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
     def _hyp():
         nonlocal hypothesis
         if live:
-            obj, meta = spark.propose_hypothesis({"pairs": analysis["pairs"], "agent": agent.object_id})
-            hypothesis = obj
-            return ({"hypothesis": obj, "model_call": meta}, obj)
+            try:
+                obj, meta = spark.propose_hypothesis({"pairs": analysis["pairs"], "agent": agent.object_id})
+                hypothesis = obj
+                return ({"hypothesis": obj, "model_call": meta}, obj)
+            except Exception as e:
+                return ({"hypothesis": hypothesis, "model_call": None,
+                         "note": f"model call failed ({str(e)[:160]}); deterministic default intervention used instead"}, hypothesis)
         return ({"hypothesis": hypothesis, "model_call": None,
                  "note": "FIXTURE_REPLAY: deterministic default intervention; no model call was made"}, hypothesis)
     stage("hypothesis", f"Meta:{spark.MODEL}" if live else "FIXTURE_REPLAY", _hyp)

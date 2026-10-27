@@ -97,3 +97,32 @@ def test_scene_endpoint_offline(monkeypatch):
     out = _json.loads(urllib.request.urlopen(req, timeout=10).read())
     assert out["source"] == "OFFLINE_HEURISTIC" and len(out["scene"]["objects"]) >= 2
     srv.shutdown()
+
+def test_counterfactual_agent_target_decel_via_http():
+    import json as _json, threading, urllib.request
+    from http.server import ThreadingHTTPServer
+    from services.api.server import H
+    srv = ThreadingHTTPServer(("127.0.0.1", 8803), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    def post(path, payload):
+        req = urllib.request.Request(f"http://127.0.0.1:8803{path}", method="POST",
+                                     data=_json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        return _json.loads(urllib.request.urlopen(req, timeout=30).read())
+    base = {"scenario": "warehouse-multi", "speed_reduction_pct": 40, "intervention_t": 1.0}
+    allr = post("/api/counterfactual", base)
+    assert set(allr["results"]) == {"pedestrian-1", "robot-1", "forklift-2", "shelf-row"}  # agent forklift-1 vs all
+    one = post("/api/counterfactual", {**base, "target_id": "pedestrian-1"})
+    assert list(one["results"]) == ["pedestrian-1"] and one["focus_other"] == "pedestrian-1"
+    hard = post("/api/counterfactual", {**base, "target_id": "pedestrian-1", "braking_decel": 5.5})
+    assert hard["params"]["decel"] == 5.5 and hard["results"]["pedestrian-1"]["trajectories"]["original"]
+    other_agent = post("/api/counterfactual", {**base, "agent_id": "robot-1", "target_id": "forklift-1"})
+    assert other_agent["agent_id"] == "robot-1"
+    srv.shutdown()
+
+def test_multi_trajectories_by_actor():
+    from engine import scenarios as _scen
+    from engine.multi import simulate_agent
+    sc = _scen.build("warehouse-multi"); a = sc["tracks"][0]; t0 = a.points[0][0]
+    r = simulate_agent((a.position_at(t0), a.velocity_at(1), a.radius),
+                       [(t.object_id, t.position_at(t0), t.velocity_at(1), t.radius) for t in sc["tracks"][1:]], 1.0, 40)
+    assert set(r["trajectories_by_actor"]) == set(r["per_actor"])

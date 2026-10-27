@@ -31,6 +31,7 @@ def simulate_agent(agent_state, others: list, intervention_t: float,
     pa, va, ra = agent_state
     per_actor, worst_o, worst_c = {}, math.inf, math.inf
     traj_o = traj_c = None
+    by_actor = {}
     for oid, pb, vb, rb in others:
         from .counterfactual import simulate
         r = simulate(pa, va, pb, vb, intervention_t, speed_reduction_pct, params, ra, rb)
@@ -38,10 +39,12 @@ def simulate_agent(agent_state, others: list, intervention_t: float,
                           "counterfactual_d_min": r["counterfactual"]["d_min"],
                           "contact_original": r["original"]["contact"],
                           "contact_counterfactual": r["counterfactual"]["contact"]}
+        by_actor[oid] = r["trajectories"]
         worst_o = min(worst_o, r["original"]["d_min"]); worst_c = min(worst_c, r["counterfactual"]["d_min"])
         if traj_o is None: traj_o, traj_c = r["trajectories"]["original"], r["trajectories"]["counterfactual"]
     return {"worst_original_d_min": round(worst_o, 4), "worst_counterfactual_d_min": round(worst_c, 4),
             "delta_worst_d_min": round(worst_c - worst_o, 4), "per_actor": per_actor,
+            "trajectories_by_actor": by_actor,
             "trajectories": {"original": traj_o, "counterfactual": traj_c},
             "assumptions": ["single braking agent", "all other actors constant velocity",
                             "conditional prediction under declared assumptions — not a real-world guarantee"]}

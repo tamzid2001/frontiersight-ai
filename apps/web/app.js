@@ -17,12 +17,15 @@ async function diag(){try{const d=await(await fetch("/api/diagnostics")).json();
 
 async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).json();}
  catch(e){$("scenario-list").innerHTML='<div class="card wide"><h3>Could not load scenarios</h3><p class="dim">The API is unreachable. Check <code>/api/health</code>, then reload. Nothing has been simulated or hidden.</p><button onclick="location.reload()">Reload</button></div>';return;}
+ state.scenarioList=d.scenarios; populateCfScene();
  $("scenario-select").innerHTML=d.scenarios.map(s=>`<option value="${s.id}">${s.id}</option>`).join("");
  $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card"><h3>${s.id}</h3><p class="dim">${s.description}</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
  const v=await(await fetch("/api/validate")).json();
  $("validation-list").innerHTML=v.cases.map(c=>`<li>${c.passed?"✓":"✗"} <b>${c.case}</b> — <span class="dim">${c.detail}</span></li>`).join("");
  renderMyScenes();
- await pick(d.scenarios[0].id);}
+ state.data=await(await fetch("/api/scenarios?name="+d.scenarios[0].id)).json();state.scenario=d.scenarios[0].id;
+ renderObjects();draw();populateCfScene();   // silent preload: user stays on Overview
+}
 function renderMyScenes(){const host=$("scenario-list");if(!host)return;let mine=[];
  try{mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");}catch(e){}
  if(!mine.length)return;const div=document.createElement("div");div.className="card wide";
@@ -32,7 +35,7 @@ function renderMyScenes(){const host=$("scenario-list");if(!host)return;let mine
  div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
  div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem("fs-my-scenes",JSON.stringify(mine));div.remove();renderMyScenes();});}
 window.pick=async id=>{state.data=await(await fetch("/api/scenarios?name="+id)).json();state.scenario=id;state.t=0;
- $("scenario-select").value=id;renderObjects();draw();goto("studio");};
+ $("scenario-select").value=id;renderObjects();draw();populateCfScene();goto("studio");};
 $("scenario-select").onchange=e=>pick(e.target.value);
 
 function renderObjects(){if(!state.data)return;
@@ -48,7 +51,7 @@ function px(x,y,W,H){return [x/WORLD.x*W, H-(y/WORLD.y*H)];}
 function posAt(track,t){const p=track.points;if(t<=p[0][0])return p[0];if(t>=p[p.length-1][0])return p[p.length-1];
  for(let i=1;i<p.length;i++){if(p[i][0]>=t){const[t0,a]=[p[i-1][0],p[i-1]],[t1,b]=[p[i][0],p[i]];const k=(t-t0)/(t1-t0||1);return[0,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];}}return p[p.length-1];}
 function draw(){const c=$("stage");if(!c||!state.data)return;computeWorld();const x=c.getContext("2d"),W=c.width,H=c.height;
- x.clearRect(0,0,W,H);x.strokeStyle="#1b2434";for(let gx=0;gx<=WORLD.x;gx+=2){const[a]=px(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
+ x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=WORLD.x;gx+=2){const[a]=px(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(const tr of state.data.tracks){const col=COL[tr.category]||"#fff";const hl=!state.highlight||state.highlight===tr.object_id;
   x.strokeStyle=col+(hl?"aa":"2a");x.lineWidth=hl?2:1;x.beginPath();tr.points.forEach(p=>{const[a,b]=px(p[1],p[2],W,H);p===tr.points[0]?x.moveTo(a,b):x.lineTo(a,b);});x.stroke();
   const occ=tr.occluded.some(o=>state.t>=o[0]&&state.t<=o[1]);
@@ -80,31 +83,101 @@ function renderInspector(r){const sc=r.scenario;$("inspector-body").innerHTML=
  `<p class="dim">Assumption register: constant-velocity extrapolation for CPA/TTC; finite-difference velocities; smoothing (if applied) biases peaks downward and never overwrites ground truth, which is held separately in the evidence packet.</p>`+
  (r.run&&r.run.findings.pairs?`<h3>All pairs (${r.run.findings.pairs.length})</h3><table class="pairtable"><tr><th>Pair</th><th>d_min</th><th>Units</th><th>TTC</th><th>Event</th><th>Metric claims</th></tr>${r.run.findings.pairs.map(p=>`<tr><td>${p.pair.join(" ↔ ")}</td><td>${p.d_min}</td><td>${p.units}</td><td>${p.ttc_s??"—"}</td><td>${p.event?p.event.type:"—"}</td><td>${p.metric_claims?"yes":"no (pixel space)"}</td></tr>`).join("")}</table>`:"");}
 
-function populateCfAgents(){const sel=$("cf-agent");if(!sel||!state.data)return;
+// ---- Counterfactual simulator ----
+state.cfT=0; state.cfPlaying=false; state.cfData=null;
+function populateCfScene(){const sel=$("cf-scene");if(!sel)return;const cur=sel.value;
+ const opts=(state.scenarioList||[]).map(s=>`<option value="${s.id}">${s.id}</option>`).join("");
+ sel.innerHTML=opts; if(state.data&&state.data.kind==="USER_UPLOADED")sel.innerHTML+=`<option value="__current">Current created/custom scene</option>`;
+ sel.value=(state.data&&state.data.kind==="USER_UPLOADED")?"__current":(cur||state.scenario||sel.value);}
+function populateCfAgents(){const sel=$("cf-agent"),tg=$("cf-target");if(!sel||!state.data)return;
+ const prevA=sel.value,prevT=tg?tg.value:"";
  sel.innerHTML=state.data.tracks.map(t=>`<option value="${t.object_id}">${t.object_id}</option>`).join("");
- if(state.cfAgentId)sel.value=state.cfAgentId;}
-async function runCf(){const custom=state.data&&state.data.kind==="USER_UPLOADED";
- const r=await(await fetch(custom?"/api/counterfactual-custom":"/api/counterfactual",{method:"POST",headers:{"Content-Type":"application/json"},
- body:JSON.stringify(custom?{tracks:state.data.tracks,agent_id:($("cf-agent")&&$("cf-agent").value)||state.data.tracks[0].object_id,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value}
-  :{scenario:state.scenario,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value})})).json();
+ if(prevA&&state.data.tracks.some(t=>t.object_id===prevA))sel.value=prevA;
+ if(state.cfAgentId)sel.value=state.cfAgentId;
+ if(tg){const agent=sel.value;tg.innerHTML=`<option value="">All actors (worst case)</option>`+
+  state.data.tracks.filter(t=>t.object_id!==agent).map(t=>`<option value="${t.object_id}">${t.object_id}</option>`).join("");
+  if(prevT)tg.value=prevT;}}
+$("cf-agent").onchange=()=>{state.cfAgentId=$("cf-agent").value;populateCfAgents();runCf();};
+$("cf-target").onchange=()=>runCf();
+$("cf-scene").onchange=async()=>{const v=$("cf-scene").value;if(!v||v==="__current"||v===state.scenario){runCf();return;}
+ state.data=await(await fetch("/api/scenarios?name="+v)).json();state.scenario=v;state.run=null;state.cfAgentId=null;
+ renderObjects();draw();populateCfAgents();runCf();};
+document.querySelectorAll(".cf-preset").forEach(b=>b.onclick=()=>{$("sr").value=b.dataset.sr;$("it").value=b.dataset.it;$("cf-decel").value=b.dataset.dec;
+ $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";runCf();});
+function normalizeCf(r){if(r.results)return r;
+ const out={agent_id:r.agent_id||$("cf-agent").value,focus_other:null,results:{},monte_carlo:r.monte_carlo,manifest_hash:r.manifest_hash};
+ const radii={};(state.data?state.data.tracks:[]).forEach(t=>radii[t.object_id]=t.radius);
+ for(const [oid,v] of Object.entries(r.per_actor||{})){
+  out.results[oid]={original:{d_min:v.original_d_min,contact:v.contact_original},
+   counterfactual:{d_min:v.counterfactual_d_min,contact:v.contact_counterfactual},
+   delta_d_min:+(v.counterfactual_d_min-v.original_d_min).toFixed(4),
+   trajectories:(r.trajectories_by_actor||{})[oid]||r.trajectories,
+   radius_sum:(radii[out.agent_id]||0)+(radii[oid]||0)};
+  if(!out.focus_other||v.original_d_min<out.results[out.focus_other].original.d_min)out.focus_other=oid;}
+ return out;}
+async function runCf(){if(!state.data){$("cf-results").textContent="Load or create a scene first.";return;}
+ const custom=state.data.kind==="USER_UPLOADED";
+ const body=custom?{tracks:state.data.tracks,agent_id:$("cf-agent").value||state.data.tracks[0].object_id,
+   speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,braking_decel:+$("cf-decel").value}
+  :{scenario:state.scenario,agent_id:$("cf-agent").value,target_id:$("cf-target").value||null,
+   speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,braking_decel:+$("cf-decel").value};
+ $("cf-results").textContent="Simulating on the server…";
+ let r;try{r=await(await fetch(custom?"/api/counterfactual-custom":"/api/counterfactual",
+  {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();}
+ catch(e){$("cf-results").textContent="Simulation failed: API unreachable.";return;}
  if(r.error){$("cf-results").textContent="Simulation failed: "+r.error;return;}
- if(custom){$("cf-results").innerHTML=`agent <b>${($("cf-agent")||{}).value||state.data.tracks[0].object_id}</b> vs ${Object.keys(r.per_actor).length} other actor(s)<br>worst original d_min <b>${r.worst_original_d_min}</b> → counterfactual <b>${r.worst_counterfactual_d_min}</b> (Δ ${r.delta_worst_d_min>=0?"+":""}${r.delta_worst_d_min})<br>`+
-  Object.entries(r.per_actor).map(([k,v])=>`${k}: ${v.original_d_min} → ${v.counterfactual_d_min}`).join("<br>");
-  state.cf={trajectories:r.trajectories,original:{d_min:r.worst_original_d_min},counterfactual:{d_min:r.worst_counterfactual_d_min},delta_d_min:r.delta_worst_d_min,monte_carlo:null,manifest_hash:"custom"};drawCf(state.cf);return;}
- state.cf=r;drawCf(r);
- $("cf-results").innerHTML=`original d_min <b>${r.original.d_min} m</b> (contact: ${r.original.contact})<br>counterfactual d_min <b>${r.counterfactual.d_min} m</b> (contact: ${r.counterfactual.contact})<br>Δ d_min <b>${r.delta_d_min>=0?"+":""}${r.delta_d_min} m</b><br>Monte Carlo d_min p05/p50/p95: ${r.monte_carlo?`${r.monte_carlo.d_min_p05} / ${r.monte_carlo.d_min_p50} / ${r.monte_carlo.d_min_p95} (${r.monte_carlo.runs} runs, seed ${r.monte_carlo.seed})`:"—"}<br>manifest ${r.manifest_hash.slice(0,16)}…`;
-}
-function drawCfFromRun(run){const s=run.findings.simulation_summary;if(s&&state.cf)drawCf(state.cf);}
-function drawCf(r){const c=$("cf-chart"),x=c.getContext("2d"),W=c.width,H=c.height;x.clearRect(0,0,W,H);
- const series=(traj,key)=>traj.map(p=>p[key]);const all=[...series(r.trajectories.original,5),...series(r.trajectories.counterfactual,5)];
- const mx=Math.max(...all)*1.15||1;x.strokeStyle="#232b3a";x.beginPath();x.moveTo(44,10);x.lineTo(44,H-30);x.lineTo(W-10,H-30);x.stroke();
- const plot=(traj,col)=>{x.strokeStyle=col;x.lineWidth=2;x.beginPath();traj.forEach((p,i)=>{const X=44+p[0]/6*(W-60),Y=H-30-p[5]/mx*(H-50);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();x.lineWidth=1;};
- plot(r.trajectories.original,"#8fa0b8");plot(r.trajectories.counterfactual,"#2dd4a8");
- x.fillStyle="#e8edf6";x.font="13px system-ui";x.fillText("— original",52,24);x.fillStyle="#2dd4a8";x.fillText("— counterfactual",150,24);
- x.fillStyle="#8fa0b8";x.fillText("time → 6s",W-90,H-8);x.fillText("distance (m)",6,20);}
-let deb;$("sr").oninput=e=>{$("sr-val").textContent=e.target.value+"%";clearTimeout(deb);deb=setTimeout(runCf,350);};
-$("it").oninput=e=>{$("it-val").textContent=(+e.target.value).toFixed(2)+"s";clearTimeout(deb);deb=setTimeout(runCf,350);};
-$("cf-run").onclick=runCf;
+ r=normalizeCf(r);state.cfData=r;state.cfT=0;
+ const focus=r.focus_other,fr=r.results[focus];
+ $("cf-results").innerHTML=`agent <b>${r.agent_id}</b> · focus pair vs <b>${focus}</b><br>`+
+  Object.entries(r.results).map(([oid,v])=>`${oid}: d_min ${v.original.d_min} m → <b>${v.counterfactual.d_min} m</b> (Δ ${v.delta_d_min>=0?"+":""}${v.delta_d_min}) ${v.counterfactual.contact?"· ⚠ still contact":"· contact avoided"}`).join("<br>")+
+  (r.monte_carlo?`<br>Monte Carlo (focus pair, ${r.monte_carlo.runs} runs, seed ${r.monte_carlo.seed}): p05/p50/p95 ${r.monte_carlo.d_min_p05} / ${r.monte_carlo.d_min_p50} / ${r.monte_carlo.d_min_p95} m`:"")+
+  `<br><span class="dim">manifest ${(r.manifest_hash||"").slice(0,16)}… · conditional prediction under declared assumptions, not a guarantee</span>`;
+ drawCfMap();drawCfChart();}
+function cfBounds(r){let xs=[],ys=[];for(const v of Object.values(r.results)){
+ for(const s of ["original","counterfactual"])v.trajectories[s].forEach(p=>{xs.push(p[1],p[3]);ys.push(p[2],p[4]);});}
+ return {x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys)};}
+function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy)*0.92;
+ return (x,y)=>[W/2-(b.x0+b.x1)/2*s+x*s, H/2+(b.y0+b.y1)/2*s-y*s];}
+function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t)<Math.abs(best[0]-t))best=p;}return best;}
+function drawCfMap(){const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
+ const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
+ x.clearRect(0,0,W,H);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+ const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other;
+ for(const [oid,v] of Object.entries(r.results)){
+  x.strokeStyle="#8fa0b8";x.lineWidth=1.2;x.beginPath();v.trajectories.original.forEach((p,i)=>{const[a,bb]=xy(p[3],p[4]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();
+  const o=trajAt(v.trajectories.counterfactual,state.cfT);const[ox,oy]=xy(o[3],o[4]);
+  x.fillStyle="#8fa0b8";x.beginPath();x.arc(ox,oy,5,0,7);x.fill();x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");
+  x.font="12px system-ui";x.fillText(oid,ox+8,oy-6);}
+ const fv=r.results[focus];
+ x.strokeStyle="#8fa0b8";x.setLineDash([6,5]);x.lineWidth=2;x.beginPath();fv.trajectories.original.forEach((p,i)=>{const[a,bb]=xy(p[1],p[2]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();x.setLineDash([]);
+ x.strokeStyle="#2dd4a8";x.lineWidth=3;x.beginPath();fv.trajectories.counterfactual.forEach((p,i)=>{const[a,bb]=xy(p[1],p[2]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();x.lineWidth=1;
+ let cpa=fv.trajectories.counterfactual[0];fv.trajectories.counterfactual.forEach(p=>{if(p[5]<cpa[5])cpa=p;});
+ const[cx,cy]=xy(cpa[1],cpa[2]);x.strokeStyle="#f2b04a";x.beginPath();x.moveTo(cx-8,cy);x.lineTo(cx,cy-8);x.lineTo(cx+8,cy);x.lineTo(cx,cy+8);x.closePath();x.stroke();
+ const go=trajAt(fv.trajectories.original,state.cfT),gc=trajAt(fv.trajectories.counterfactual,state.cfT);
+ let[a1,b1]=xy(go[1],go[2]);x.globalAlpha=.45;x.fillStyle="#8fa0b8";x.beginPath();x.arc(a1,b1,9,0,7);x.fill();x.globalAlpha=1;
+ let[a2,b2]=xy(gc[1],gc[2]);x.fillStyle="#2dd4a8";x.beginPath();x.arc(a2,b2,10,0,7);x.fill();
+ x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
+ x.fillText(r.agent_id+" (counterfactual)",a2+13,b2+4);x.fillText("◇ closest approach "+cpa[5].toFixed(2)+" m",cx+12,cy-10);
+ $("cf-clock").textContent="t = "+state.cfT.toFixed(2)+"s";$("cf-scrub").value=state.cfT;}
+function drawCfFromRun(run){ if(state.data&&$("cf-scene")){ populateCfScene(); runCf(); } }
+function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
+ const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
+ x.clearRect(0,0,W,H);const f=r.results[r.focus_other];if(!f)return;
+ const all=[...f.trajectories.original.map(p=>p[5]),...f.trajectories.counterfactual.map(p=>p[5])];
+ const mx=Math.max(...all,f.radius_sum)*1.15||1;
+ x.strokeStyle=line;x.beginPath();x.moveTo(44,10);x.lineTo(44,H-30);x.lineTo(W-10,H-30);x.stroke();
+ const y0=H-30-f.radius_sum/mx*(H-50);x.fillStyle="#f26d7d33";x.fillRect(44,y0,W-54,H-30-y0);
+ x.strokeStyle="#f26d7d";x.setLineDash([4,4]);x.beginPath();x.moveTo(44,y0);x.lineTo(W-10,y0);x.stroke();x.setLineDash([]);
+ const plot=(traj,col,width)=>{x.strokeStyle=col;x.lineWidth=width;x.beginPath();traj.forEach((p,i)=>{const X=44+p[0]/6*(W-60),Y=H-30-p[5]/mx*(H-50);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();x.lineWidth=1;};
+ plot(f.trajectories.original,"#8fa0b8",2);plot(f.trajectories.counterfactual,"#2dd4a8",2.5);
+ const tx=44+state.cfT/6*(W-60);x.strokeStyle=line;x.beginPath();x.moveTo(tx,10);x.lineTo(tx,H-30);x.stroke();
+ x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
+ x.fillText("— original",52,24);x.fillStyle="#2dd4a8";x.fillText("— counterfactual",150,24);
+ x.fillStyle="#f26d7d";x.fillText("contact ≤ "+f.radius_sum.toFixed(2)+" m",W-170,y0-6);
+ const ink=getComputedStyle(document.documentElement).getPropertyValue("--dim");x.fillStyle=ink;x.fillText("focus pair: "+r.agent_id+" ↔ "+r.focus_other,52,H-8);}
+$("cf-scrub").oninput=e=>{state.cfT=+e.target.value;drawCfMap();drawCfChart();};
+$("cf-play").onclick=()=>{state.cfPlaying=!state.cfPlaying;$("cf-play").textContent=state.cfPlaying?"⏸ Pause":"▶ Play comparison";
+ if(state.cfPlaying){const step=()=>{if(!state.cfPlaying)return;state.cfT+=0.05;if(state.cfT>6)state.cfT=0;drawCfMap();drawCfChart();requestAnimationFrame(step);};step();}};
 
 $("export-json").onclick=async()=>{const name=state.scenario||"warehouse-near-miss";
  const rep=await(await fetch("/api/report?name="+name)).json();if(state.run)rep.run=state.run;
@@ -147,7 +220,7 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
   const seg=Math.hypot(b[0]-a[0],b[1]-a[1]);if(d<=seg){const k=seg?d/seg:0;return [a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k];}d-=seg;}
  return o.waypoints[o.waypoints.length-1];}
 function labDraw(){const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
- x.clearRect(0,0,W,H);x.strokeStyle="#1b2434";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
+ x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
  for(const o of state.lab.objects){const col=COL[o.category]||"#fff",sel=o.id===state.lab.selected;
   if(o.waypoints.length>1){x.strokeStyle=col+(sel?"":"88");x.lineWidth=sel?2.5:1.5;x.beginPath();
@@ -236,19 +309,38 @@ function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
   tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
  if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");
  return tracks;}
-async function analyzeCustom(tracks,label){labStatus("Analysing "+label+"…");$("analyze-status").textContent="Running custom analysis…";
- const r=await(await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
-   speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})})).json();
- if(r.error){labStatus("Analysis failed: "+r.error);$("analyze-status").textContent="Custom analysis failed: "+r.error;return;}
+async function analyzeCustom(tracks,label){
+ const ctrl=new AbortController(); const killer=setTimeout(()=>ctrl.abort(),95000);
+ let r;
+ try{
+  const res=await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,
+   body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
+    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})});
+  const text=await res.text();
+  try{ r=JSON.parse(text); }catch(e){ throw new Error(`server returned HTTP ${res.status} (non-JSON). The analysis likely timed out — press Run analysis again.`); }
+  if(!res.ok||r.error) throw new Error(r.error||r.detail||("HTTP "+res.status));
+  if(!r.run||!r.scenario) throw new Error("server response is missing the analysis run — please retry.");
+ }catch(e){
+  if(e.name==="AbortError") e=new Error("analysis timed out after 95s in the browser — press Run analysis again.");
+  labStatus("Analysis failed: "+e.message); const as=$("analyze-status"); if(as)as.textContent="Custom analysis failed: "+e.message;
+  goto("create"); throw e;
+ }finally{ clearTimeout(killer); }
  state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;
  try{const mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem("fs-my-scenes",JSON.stringify(mine.slice(-10)));}catch(e){}
  renderObjects();draw();renderTrace(r.run);renderInspector(r);goto("studio");
  $("analyze-status").textContent=`Custom run ${r.run.run_id} · ${r.run.mode} · ${r.scenario.tracks.length} objects · ${r.run.findings.pairs.length} pairs analysed`;
  const evs=[];(r.run.findings.pairs||[]).forEach(p=>{if(p.event)evs.push({...p.event,pair:p.pair});});
  $("events").innerHTML=evs.length?evs.map(e=>`<li class="ev" data-t="${e.at_time_s||e.t_star_s||0}">⚠ <b>${e.type}</b> ${e.pair.join(" ↔ ")}<br><span class="dim">${e.ttc_s!=null?"TTC "+e.ttc_s+"s":e.d_min!=null?"d_min "+e.d_min+" "+(e.units||""):""}</span></li>`).join(""):'<li class="dim">No proximity events above threshold.</li>';
- document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});}
-$("lab-run").onclick=()=>{try{analyzeCustom(labSampleTracks(),"created-"+Date.now());}catch(e){labStatus(e.message);}};
+ document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});
+ window.scrollTo({top:0,behavior:"smooth"});
+ return r;}
+$("lab-run").onclick=async()=>{let tracks;try{tracks=labSampleTracks();}catch(e){labStatus(e.message);return;}
+ const btn=$("lab-run"),old=btn.textContent,t0=Date.now();btn.disabled=true;btn.textContent="Analysing… 0s";
+ labStatus("Running: deterministic engine + Muse Spark hypothesis (typically 5–25s). Do not press again.");
+ const timer=setInterval(()=>{btn.textContent=`Analysing… ${Math.round((Date.now()-t0)/1000)}s`;},500);
+ try{await analyzeCustom(tracks,"created-"+Date.now());labStatus("Analysis complete — showing Studio. Events are in the right-hand list; click one to seek.");}
+ catch(e){/* analyzeCustom already surfaced the error */}
+ finally{clearInterval(timer);btn.disabled=false;btn.textContent=old;}};
 $("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersight-created-scene",stage_metres:[LAB.w,LAB.h],objects:state.lab.objects},null,2)],{type:"application/json"}),"frontiersight-scene.json");};
 $("lab-import").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{try{
  const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
@@ -269,3 +361,14 @@ $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
  $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
 // starter template so the Lab is never an empty, unexplained canvas
 if(!state.lab.objects.length){$("lab-add")&&document.querySelector('[data-tpl="near-miss"]').click();}
+
+// ---- theme: light / dark / system (persisted, OS-aware, pre-paint handled in <head>) ----
+const _mq=matchMedia("(prefers-color-scheme: light)");
+function applyTheme(){const mode=localStorage.getItem("fs-theme")||"system";
+ const resolved=mode==="system"?(_mq.matches?"light":"dark"):mode;
+ document.documentElement.dataset.theme=resolved;
+ document.querySelectorAll("[data-theme-mode]").forEach(b=>b.classList.toggle("on",b.dataset.themeMode===mode));
+ if(state&&state.data)draw(); if(state&&state.lab&&state.lab.objects.length&&$("lab-canvas"))labDraw();}
+document.querySelectorAll("[data-theme-mode]").forEach(b=>b.onclick=()=>{localStorage.setItem("fs-theme",b.dataset.themeMode);applyTheme();});
+if(_mq.addEventListener)_mq.addEventListener("change",()=>{if((localStorage.getItem("fs-theme")||"system")==="system")applyTheme();});
+applyTheme();
