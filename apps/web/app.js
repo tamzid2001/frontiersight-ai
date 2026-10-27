@@ -106,7 +106,13 @@ function renderMyScenes(){const host=$("scenario-list");if(!host)return;
  host.appendChild(div);
  div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
  div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem(sceneStoreKey(),JSON.stringify(mine));div.remove();renderMyScenes();});}
-window.pick=async id=>{state.data=await(await fetch("/api/scenarios?name="+id)).json();state.scenario=id;state.t=0;
+function resetRunState(){state.run=null;state.cfData=null;state.highlight=null;state.cfAgentId=null;
+ state.approvals={};const ev=$("events");if(ev)ev.innerHTML='<li class="dim">Run analysis to detect events.</li>';
+ const tr=$("trace");if(tr)tr.innerHTML='<li class="dim">Run analysis to populate the trace.</li>';
+ if(typeof syncApprovalUI==="function")syncApprovalUI();}
+window.pick=async id=>{let d;try{d=await(await fetch("/api/scenarios?name="+id)).json();}
+ catch(e){toast("Could not load scenario "+id+" — check the API and try again.","err");return;}
+ resetRunState();state.data=d;state.scenario=id;state.t=0;
  $("scenario-select").value=id;renderObjects();draw();populateCfScene();goto("studio");};
 $("scenario-select").onchange=e=>pick(e.target.value);
 

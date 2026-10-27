@@ -111,7 +111,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.12.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.12.1"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",

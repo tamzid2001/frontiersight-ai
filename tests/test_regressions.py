@@ -129,3 +129,9 @@ def test_review_fixes_present():
     assert "runApproved" in js and "sceneStoreKey" in js
     assert 'class="skip"' in html and ".skip:focus" in css and "#tabs{top:59px" in css.replace(" ", "")
     assert "@media(max-width:900px)" in css
+
+def test_no_undefined_cross_references():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    assert "function resetRunState" in js and "resetRunState();" in js
+    for name in ["syncApprovalUI", "runApproved", "download"]:
+        assert f"function {name}" in js, name
