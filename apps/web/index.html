@@ -36,41 +36,79 @@
  <button data-view="settings">⚙&nbsp; Settings</button>
 </nav>
 <section id="view-home" class="view on">
- <div class="hero">
-  <h1>Understand what happened.<br>Verify what could happen next.</h1>
-  <p class="sub">FrontierSight connects Meta AI — Muse Spark reasoning and SAM 3.1 segmentation — to an
-  <b>independent deterministic physics engine</b>. Models propose and explain. Geometry decides.
-  Every number carries its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
-  <div class="cta"><button id="cta-demo">Run the warehouse near-miss demo →</button>
-  <button id="cta-create" class="ghostbtn">Open Create Lab — build your own scene</button>
-  <button id="cta-video" class="ghostbtn">▶ Watch the 3-minute demo</button>
-  <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai">GitHub repository</a></div>
-  <p class="dim" id="hero-diag">Loading diagnostics…</p>
+ <div class="hero-grid">
+  <div class="hero-copy">
+   <div class="eyebrow"><span class="pill ok">Meta Global AI Developer Hackathon 2026</span>
+    <span class="pill ghost">Startup Track · Push the Frontier</span></div>
+   <h1>Understand what happened.<br>Verify what could happen next.</h1>
+   <p class="sub">FrontierSight connects Meta AI — Muse Spark reasoning and SAM 3.1 segmentation — to an
+   <b>independent deterministic physics engine</b>. Models propose and explain. Geometry decides.
+   Every number carries its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
+   <div class="cta"><button id="cta-demo">Run the warehouse near-miss demo →</button>
+    <button id="cta-create" class="ghostbtn">Open Create Lab — build your own scene</button>
+    <button id="cta-video" class="ghostbtn">▶ Watch the 3-minute demo</button>
+    <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub repository ↗</a></div>
+   <p class="dim" id="hero-diag">Loading diagnostics…</p>
+   <div class="proofstrip" aria-label="Measured facts about this build">
+    <div><b>42</b><span>tests in CI</span></div>
+    <div><b>7</b><span>analytical validation cases</span></div>
+    <div><b>5</b><span>built-in scenarios</span></div>
+    <div><b>9</b><span>agent workflow stages</span></div>
+    <div><b>0</b><span>runtime dependencies</span></div>
+   </div>
+  </div>
+  <div class="card demo-card hero-video" id="demo-video">
+   <div class="demo-frame" id="demo-frame">
+    <img src="https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg"
+         alt="FrontierSight AI demo video thumbnail — forklift and pedestrian near-miss analysis with Muse Spark, SAM 3.1 and Muse Image"
+         loading="eager" width="1280" height="720">
+    <button id="demo-play" aria-label="Play the FrontierSight AI demo video">▶</button>
+   </div>
+   <p style="margin:10px 0 4px"><b>I Built an AI That Tests Near-Misses with Meta SAM 3.1 + Physics | FrontierSight AI</b></p>
+   <p class="dim" style="margin:0">Quantura AI: Market Forecasts · 3-minute demo ·
+    <a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Watch on YouTube ↗</a></p>
+  </div>
  </div>
+
+ <div class="modelstrip" aria-label="Powered by">
+  <span class="dim">Powered by</span><span class="pill">Muse Spark 1.3 — reasoning &amp; hypotheses</span>
+  <span class="pill">SAM 3.1 — segmentation &amp; tracking</span><span class="pill">Muse Image — illustrative visuals</span>
+  <span class="pill ghost">+ a deterministic engine that answers to physics, not prompts</span>
+ </div>
+
  <div class="card wide" id="onboarding"><h3>Get started in three moves</h3>
   <p class="ob-row" data-ob="demo"><span class="ob-mark">○</span> Run the warehouse near-miss demo (Studio → Run analysis)</p>
   <p class="ob-row" data-ob="created"><span class="ob-mark">○</span> Build or generate a scene in Create Lab and analyse it</p>
   <p class="ob-row" data-ob="muse"><span class="ob-mark">○</span> Ask Muse Spark to design a scene from a sentence</p>
   <p class="dim" id="ob-note">Progress is kept in this browser. <a href="#" id="ob-hide">Dismiss</a></p></div>
 
- <div class="card wide demo-card" id="demo-video">
-  <h3>Demo video</h3>
-  <div class="demo-frame" id="demo-frame">
-   <img src="https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg"
-        alt="FrontierSight AI demo video thumbnail — forklift and pedestrian near-miss analysis with Muse Spark, SAM 3.1 and Muse Image"
-        loading="lazy" width="1280" height="720">
-   <button id="demo-play" aria-label="Play the FrontierSight AI demo video">▶</button>
+ <h2 class="section-title">How it works</h2>
+ <div class="grid3 howit">
+  <div class="card"><div class="howico">⌖</div><h3>1 · Observe</h3><p>SAM 3.1 segments and tracks people, forklifts, robots in video. Muse Spark proposes what to look for — it never invents a detection.</p></div>
+  <div class="card"><div class="howico">✓</div><h3>2 · Verify</h3><p>Closest-approach, time-to-collision, continuity and constraint checks run in a seeded, reproducible engine. Uncalibrated video stays in pixel space — no fake metres.</p></div>
+  <div class="card"><div class="howico">⇄</div><h3>3 · Counterfact</h3><p>“What if the forklift had slowed 1s earlier?” A deterministic braking simulation reruns the world, Monte-Carlo intervals included, and an independent verifier checks the result.</p></div>
+ </div>
+
+ <div class="card wide tryit"><h3>Try it in ten seconds</h3>
+  <p class="dim">Load a ready-made world straight into the Studio — no setup, no keys.</p>
+  <div class="row">
+   <button class="quick-scn" data-id="warehouse-near-miss">Warehouse near-miss →</button>
+   <button class="quick-scn ghostbtn" data-id="warehouse-multi">Five-entity warehouse →</button>
+   <button class="quick-scn ghostbtn" data-id="intersection-crossing">Intersection crossing →</button>
+   <button class="quick-scn ghostbtn" data-id="occlusion-uncertainty">Occlusion &amp; uncertainty →</button>
   </div>
-  <p style="margin:10px 0 4px"><b>I Built an AI That Tests Near-Misses with Meta SAM 3.1 + Physics | FrontierSight AI</b></p>
-  <p class="dim" style="margin:0">Quantura AI: Market Forecasts · 3-minute demo ·
-   <a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Watch on YouTube ↗</a></p>
-  <p class="dim">The player loads only when you press play (privacy-enhanced embed); nothing is sent to YouTube before that.</p>
  </div>
- <div class="grid3">
-  <div class="card"><h3>1 · Observe</h3><p>SAM 3.1 segments and tracks people, forklifts, robots in video. Muse Spark proposes what to look for — it never invents a detection.</p></div>
-  <div class="card"><h3>2 · Verify</h3><p>Closest-approach, time-to-collision, continuity and constraint checks run in a seeded, reproducible engine. Uncalibrated video stays in pixel space — no fake metres.</p></div>
-  <div class="card"><h3>3 · Counterfact</h3><p>“What if the forklift had slowed 1s earlier?” A deterministic braking simulation reruns the world, Monte-Carlo intervals included, and an independent verifier checks the result.</p></div>
+
+ <h2 class="section-title">Everything in the workbench</h2>
+ <div class="bento">
+  <a class="card tile" data-goto="create"><div class="howico">✦</div><h3>Create Lab</h3><p>Compose scenes from forklifts, pedestrians, robots and shelves. Click paths, drag waypoints, set speeds — then analyse your own world.</p><span class="tilelink">Build a scene →</span></a>
+  <a class="card tile" data-goto="create"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><span class="tilelink">Generate with Muse →</span></a>
+  <a class="card tile" data-goto="studio"><div class="howico">▶</div><h3>Video Studio</h3><p>Frame-synchronised playback with heading-oriented entities, event seeking, occlusion markers and an all-pairs inspector.</p><span class="tilelink">Open the Studio →</span></a>
+  <a class="card tile" data-goto="counterfactual"><div class="howico">⇄</div><h3>Counterfactual simulator</h3><p>Pick scene, agent and target; brake earlier or harder. Trajectory map, separation chart, Monte-Carlo intervals, per-actor results.</p><span class="tilelink">Run a what-if →</span></a>
+  <a class="card tile" data-goto="evidence"><div class="howico">▤</div><h3>Evidence &amp; trace</h3><p>Nine auditable agent stages with artifact hashes, then a human-approved, hash-bound evidence packet you can export and replay.</p><span class="tilelink">Inspect evidence →</span></a>
+  <a class="card tile" data-goto="settings"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><span class="tilelink">Check the connection →</span></a>
  </div>
+
  <div class="card wide"><h3>Architecture</h3>
 <svg class="arch-svg" viewBox="0 0 1120 330" role="img" aria-label="FrontierSight architecture: video or fixture flows through SAM 3.1 segmentation, scene extraction and Muse Spark hypothesis, then deterministic counterfactual simulation, independent verification, human review, and a hash-bound evidence packet">
   <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="svg-arrowhead"/></marker></defs>
@@ -116,6 +154,20 @@
         (hash-bound)          (approval gate)      (engine/geometry)        (engine/counterfactual)</pre>
  </details>
   <p class="dim">Limitations, stated plainly: synthetic fixtures validate the pipeline on synthetic data only; no safety certification is claimed; metric claims require declared calibration. See <code>docs/</code> in the repo.</p>
+ </div>
+
+ <div class="card wide honesty"><h3>What we will not claim</h3>
+  <p>Synthetic fixtures validate the pipeline on synthetic data only. SAM video-mode tracking on real
+  industrial footage is integrated but not yet benchmarked. Counterfactuals are conditional predictions
+  under declared assumptions. <b>No physical safety certification is claimed</b> — and every evidence
+  packet says so, next to the numbers.</p>
+ </div>
+
+ <div class="ctaband">
+  <div><h2>Build a world. Then prove it.</h2>
+  <p class="dim">Free while the judges are watching — no card, no keys, nothing uploaded.</p></div>
+  <div class="row"><button data-goto="create">Open Create Lab</button>
+  <button class="ghostbtn" data-goto="pricing">See pricing</button></div>
  </div>
 </section>
 

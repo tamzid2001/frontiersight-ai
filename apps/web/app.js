@@ -534,3 +534,4 @@ window.addEventListener("hashchange", loadShared);
 refreshAuthUI();
 
 document.querySelectorAll("[data-foot]").forEach(a=>a.onclick=()=>{showView(a.dataset.foot);window.scrollTo({top:0});});
+document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.id));

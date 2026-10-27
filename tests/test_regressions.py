@@ -97,3 +97,10 @@ def test_diagram_and_legal_pages():
     assert "No safety certification" in html and "localStorage" in html
     readme = (ROOT / "README.md").read_text()
     assert "```mermaid" in readme and "docs/assets/studio.png" in readme and "youtu.be/mYTkPqigoz8" in readme
+
+def test_homepage_structure():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    home = html[html.index('<section id="view-home"'):html.index('<section id="view-workspace"')]
+    assert home.index('id="demo-video"') < home.index('id="onboarding"')  # video above the fold flow
+    assert 'class="hero-grid"' in home and 'class="proofstrip"' in home and 'class="bento"' in home
+    assert home.count('class="card tile"') == 6 and 'quick-scn' in home and 'class="ctaband"' in home
