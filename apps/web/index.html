@@ -35,7 +35,7 @@
    <button data-theme-mode="dark" title="Dark">☾ Dark</button>
    <button data-theme-mode="system" title="Match operating system">◐ System</button>
   </div>
-  <span id="plan-badge" class="pill ghost hidden"></span><button id="auth-btn" class="ghostbtn">Sign in</button>
+  <span id="plan-badge" class="pill ghost hidden"></span><span id="clerk-userbtn"></span><button id="auth-btn" class="ghostbtn">Sign in</button>
   <span id="mode" class="pill warn">checking…</span>
  </div>
 </header>
@@ -199,15 +199,15 @@
 
 <section id="view-workspace" class="view">
  <h2>Experiment workspace</h2>
- <div class="row" style="margin-bottom:12px"><input id="ws-search" type="text" placeholder="Filter scenarios… (e.g. occlusion, warehouse)" style="flex:1" aria-label="Filter scenarios"></div>
+ <div class="row" style="margin-bottom:12px">
+   <input id="ws-search" type="text" placeholder="Search scenarios &amp; workspaces… (e.g. occlusion, forklift, my scene)" style="flex:2" aria-label="Search scenarios and workspaces">
+   <select id="ws-lib-kind" aria-label="Filter by type" style="flex:1">
+    <option value="">Everything</option><option value="scenario">Built-in scenarios</option>
+    <option value="lab">My Lab scenes</option><option value="frames">My SAM frame sets</option></select>
+ </div>
  <div class="card wide" id="workspace-lib"><h3>My workspaces</h3>
   <p class="dim">Saved Create Lab scenes and SAM frame sets — yours, searchable, reopenable, updatable.
   <span id="ws-storage-note">Stored in this browser; sign in to keep them on the server too.</span></p>
-  <div class="row">
-   <input id="ws-lib-search" type="text" placeholder="Search workspaces…" aria-label="Search workspaces" style="flex:2">
-   <select id="ws-lib-kind" aria-label="Filter by kind" style="flex:1">
-    <option value="">All kinds</option><option value="lab">Create Lab scenes</option><option value="frames">SAM frame sets</option></select>
-  </div>
   <div id="workspace-list"><p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p></div>
  </div>
  <div id="scenario-list" class="grid3"></div>
@@ -404,7 +404,8 @@
  safely falls back to the waitlist and no card can be collected.</p>
  <div class="row" style="margin:14px 0"><span>Monthly</span>
   <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Switch to annual <span class="dim">(2 months free)</span></button></div>
- <div class="grid3">
+ <div id="clerk-pricing" class="hidden" style="margin-bottom:14px"></div>
+ <div class="grid3" id="plan-cards">
   <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Forever free · no card required</p>
    <ul><li>✓ All 5 built-in scenarios</li><li>✓ Create Lab + prompt-to-scene</li><li>✓ Deterministic analysis &amp; counterfactuals</li>
    <li>✓ Evidence export with recorded human approval</li><li>✓ 10 server-saved scenes · Monte-Carlo ≤ 200</li></ul>
@@ -459,6 +460,10 @@
 
 <section id="view-auth" class="view"><h2 id="auth-title">Sign in</h2>
  <div class="card wide" id="auth-card">
+  <div id="clerk-block">
+   <p id="clerk-note" class="dim">Checking sign-in providers…</p>
+   <div id="clerk-signin"></div>
+  </div>
   <div id="auth-signedout">
    <p>Create a free Explorer account to save scenes on the server, or sign in. Passwords are
    PBKDF2-hashed server-side; sessions last 30 days. <span class="dim">Demo-deployment note: the public

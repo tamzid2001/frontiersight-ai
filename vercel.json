@@ -168,6 +168,18 @@
     {
       "source": "/sam-default.jpg",
       "destination": "/api/index?ep=samdefault"
+    },
+    {
+      "source": "/api/auth/config",
+      "destination": "/api/index?ep=authconfig"
+    },
+    {
+      "source": "/api/auth/clerk-sync",
+      "destination": "/api/index?ep=clerksync"
+    },
+    {
+      "source": "/api/webhooks/clerk",
+      "destination": "/api/index?ep=clerkwh"
     }
   ],
   "functions": {

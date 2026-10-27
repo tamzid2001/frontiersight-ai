@@ -1001,8 +1001,15 @@ $("cf-export").onclick=()=>{if(!state.cfData){$("cf-results").textContent="Run a
  toast("Counterfactual result exported (JSON).");};
 
 // ---- workspace search + live counts ----
-$("ws-search").oninput=e=>{const q=e.target.value.toLowerCase();
- document.querySelectorAll(".scenario-card").forEach(c=>{c.style.display=c.dataset.search.includes(q)?"":"none";});};
+function applyUnifiedFilter(){const q=($("ws-search").value||"").toLowerCase();
+ const kind=$("ws-lib-kind").value;
+ document.querySelectorAll(".scenario-card").forEach(c=>{
+  c.style.display=(!kind||kind==="scenario")&&c.dataset.search.includes(q)?"":"none";});
+ document.querySelectorAll(".ws-card").forEach(c=>{
+  c.style.display=(!kind||c.dataset.kind===kind)&&c.dataset.search.includes(q)?"":"none";});
+ const sc=$("scenario-list");if(sc)sc.style.display=(!kind||kind==="scenario")?"":"none";}
+$("ws-search").addEventListener("input",applyUnifiedFilter);
+$("ws-lib-kind").addEventListener("change",applyUnifiedFilter);
 
 // ---- settings: version + clear local data ----
 (async()=>{try{const h=await(await fetch("/api/health")).json();
@@ -1087,34 +1094,56 @@ async function loadWorkspaces(){
  state.workspaces=list.sort((a,b)=>(b.updated||0)-(a.updated||0));
  renderWorkspaces(); populateStudioWorkspaces();}
 function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
- const q=($("ws-lib-search").value||"").toLowerCase(), kind=$("ws-lib-kind").value;
- const mine=state.workspaces.filter(w=>(!kind||w.kind===kind)&&(!q||(w.name+" "+w.kind).toLowerCase().includes(q)));
  if(!state.workspaces.length){host.innerHTML='<p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p>';return;}
- if(!mine.length){host.innerHTML='<p class="dim">No workspace matches that search.</p>';return;}
- host.innerHTML=mine.map((w,i)=>`<div class="labobj ws-card" data-key="${w.key}">
-  <b>${w.kind==="frames"?"▣":"✦"} ${w.name}</b>
-  <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
-  <span class="pill ghost">${w.server?"server":"this browser"}</span>
-  <span class="dim">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</span>
-  <div class="row">
+ host.innerHTML=state.workspaces.map(w=>`<article class="card ws-card" data-key="${w.key}" data-kind="${w.kind}"
+   data-search="${(w.name+" "+w.kind+" "+(w.objects?w.objects.map(o=>o.category).join(" "):"")).toLowerCase()}">
+  <button class="kebab" data-kebab aria-label="Workspace actions" title="Actions">\u22ef</button>
+  <div class="ws-menu hidden" role="menu">
    <button data-ws="open">Open</button>
-   ${w.kind==="lab"?'<button data-ws="update" class="ghostbtn">Update from current Lab</button>':""}
-   ${w.tracks?'<button data-ws="analyse" class="ghostbtn">Analyse tracks</button>':""}
-   ${(w.objects||w.tracks)?'<button data-ws="studio" class="ghostbtn">Open in Studio</button>':""}
-   <button data-ws="rename" class="ghostbtn">Rename</button>
-   <button data-ws="del" class="ghostbtn">Delete</button>
-  </div></div>`).join("");
+   ${(w.objects||w.tracks)?'<button data-ws="studio">Open in Studio</button>':""}
+   ${w.kind==="lab"?'<button data-ws="update">Update from current Lab</button>':""}
+   ${w.tracks?'<button data-ws="analyse">Analyse tracks</button>':""}
+   <button data-ws="rename">Rename</button>
+   <div class="sep"></div>
+   <button data-ws="del" class="danger">Delete</button>
+  </div>
+  <div class="ws-head"><h4>${w.kind==="frames"?"\u25a3":"\u2726"} ${w.name}</h4></div>
+  <div>
+   <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
+   <span class="pill ghost">${w.server?"server":"this browser"}</span>
+  </div>
+  <p class="ws-meta">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</p>
+  <div class="ws-foot"><button data-ws="open">Open</button>
+   <span class="dim">${w.kind==="frames"?"Reopen in the Studio SAM panel":"Reopen in Create Lab"}</span></div>
+ </article>`).join("");
  host.querySelectorAll(".ws-card").forEach(card=>{const w=state.workspaces.find(x=>x.key===card.dataset.key);
-  card.querySelectorAll("button").forEach(b=>b.onclick=async()=>{const a=b.dataset.ws;
+  const menu=card.querySelector(".ws-menu");
+  card.querySelector("[data-kebab]").onclick=e=>{e.stopPropagation();
+   document.querySelectorAll(".ws-menu").forEach(m=>{if(m!==menu)m.classList.add("hidden");});
+   menu.classList.toggle("hidden");};
+  card.querySelectorAll("button[data-ws]").forEach(b=>b.onclick=async()=>{const a=b.dataset.ws;
+   menu.classList.add("hidden");
    if(a==="open")openWorkspace(w);
+   if(a==="studio")loadWorkspaceIntoStudio(w);
    if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(()=>{});}
-   if(a==="studio"){loadWorkspaceIntoStudio(w);}
    if(a==="update"){w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
-    await persistWorkspace(w);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
-   if(a==="rename"){const name=prompt("Rename workspace:",w.name);if(!name)return;w.name=name.slice(0,120);w.updated=Date.now();
-    await persistWorkspace(w);loadWorkspaces();}
+    await persistWorkspace(w);labSetTitle(w.name,true);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
+   if(a==="rename"){wsRenameInline(card,w);}
    if(a==="del"){await deleteWorkspace(w);loadWorkspaces();}
-  });});}
+  });});
+ applyUnifiedFilter();}
+function wsRenameInline(card,w){const h4=card.querySelector("h4");if(!h4||card.querySelector(".ws-rename"))return;
+ const input=document.createElement("input");input.type="text";input.className="ws-rename";
+ input.value=w.name;input.setAttribute("aria-label","Rename workspace");
+ h4.replaceWith(input);input.focus();input.select();
+ const commit=async()=>{const name=input.value.trim().slice(0,120)||w.name;
+  w.name=name;w.updated=Date.now();await persistWorkspace(w);loadWorkspaces();};
+ input.addEventListener("keydown",e=>{if(e.key==="Enter")commit();if(e.key==="Escape")loadWorkspaces();});
+ input.addEventListener("blur",commit);}
+document.addEventListener("click",e=>{if(!e.target.closest(".ws-card"))
+ document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")
+ document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));});
 async function persistWorkspace(w){
  if(sessionToken()&&!w.legacy){
   const payload={workspace:{kind:w.kind,objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
@@ -1149,8 +1178,7 @@ function openWorkspace(w){state.openWorkspace=w;
   goto("create");
   const uw=$("lab-update-ws");if(uw)uw.classList.remove("hidden");
  }}
-$("ws-lib-search").addEventListener("input",renderWorkspaces);
-$("ws-lib-kind").addEventListener("change",renderWorkspaces);
+
 $("lab-save-ws").onclick=async()=>{if(!state.lab.objects.length){labStatus("Nothing to save yet — add a component first.");return;}
  const name=($("lab-ws-name").value||"").trim()||suggestedName(state.labTitle);
  const w={id:"ws-"+Date.now(),name,kind:"lab",updated:Date.now(),
@@ -1177,3 +1205,79 @@ $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capt
   el.innerHTML=`<b>${d.name} v${d.version}</b> · protocol ${d.protocol} · ${(d.tools||[]).length} tools<br>`+
    (d.tools||[]).map(t=>`<code>${t.name}</code>`).join(" · ");
  }catch(e){el.textContent="MCP endpoint unreachable from this browser.";}})();
+
+
+// ---- Clerk (identity + billing) — config-gated, first-party auth stays the fallback ----
+let ClerkApp = null;
+async function syncClerkSession() {
+  if (!ClerkApp || !ClerkApp.user) return;
+  try {
+    const token = await ClerkApp.session.getToken();
+    if (!token) return;
+    const out = await api("/api/auth/clerk-sync", { method: "POST",
+      headers: { "Authorization": "Bearer " + token },
+      body: JSON.stringify({ email: (ClerkApp.user.primaryEmailAddress || {}).emailAddress || "",
+                             name: ClerkApp.user.fullName || "" }) });
+    if (out.status === 200) {
+      localStorage.setItem("fs-session", out.body.token);
+      localStorage.setItem("fs-user", JSON.stringify(out.body.user));
+      await refreshMe(); renderMyScenes();
+    }
+  } catch (e) { /* server sync is best-effort; entitlements refresh on next load */ }
+}
+async function initClerk() {
+  const note = $("clerk-note");
+  let cfg = state.authConfig;
+  try { if (!cfg) { cfg = await (await fetch("/api/auth/config")).json(); state.authConfig = cfg; } }
+  catch (e) { if (note) note.textContent = "Sign-in providers unavailable right now; email/password below still works."; return; }
+  if (!cfg.clerk_enabled) {
+    if (note) note.textContent = "Clerk single sign-on is not configured on this deployment (CLERK_PUBLISHABLE_KEY missing). Email/password accounts below are fully functional.";
+    return;
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+      s.async = true; s.crossOrigin = "anonymous";
+      s.setAttribute("data-clerk-publishable-key", cfg.clerk_publishable_key);
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    ClerkApp = window.Clerk;
+    try { await ClerkApp.load({ publishableKey: cfg.clerk_publishable_key }); }
+    catch (e) { await ClerkApp.load(); }
+    if (note) note.innerHTML = `Signed in with <b>Clerk</b> (${cfg.clerk_instance} instance). ` +
+      (ClerkApp.user ? "Manage your account from the avatar menu." : "Use the Clerk form below, or email/password further down.");
+    const btnSlot = $("clerk-userbtn");
+    if (ClerkApp.user && btnSlot && ClerkApp.mountUserButton) {
+      ClerkApp.mountUserButton(btnSlot, {});
+      const ab = $("auth-btn"); if (ab) ab.classList.add("hidden");
+    }
+    const si = $("clerk-signin");
+    if (si && !ClerkApp.user && ClerkApp.mountSignIn) ClerkApp.mountSignIn(si, {});
+    if (ClerkApp.user) await syncClerkSession();
+    if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
+      if (user) syncClerkSession();
+      else { localStorage.removeItem("fs-session"); localStorage.removeItem("fs-user"); refreshMe(); }
+    });
+    // Clerk Billing pricing table (plans live in Clerk Dashboard)
+    const tableHost = $("clerk-pricing");
+    if (tableHost && typeof ClerkApp.mountPricingTable === "function") {
+      try {
+        ClerkApp.mountPricingTable(tableHost, {});
+        tableHost.classList.remove("hidden");
+        const cards = $("plan-cards"); if (cards) cards.style.display = "none";
+        const det = document.createElement("p"); det.className = "dim";
+        det.textContent = "Checkout and plan management run through Clerk (development instance). Feature comparison below still applies.";
+        tableHost.appendChild(det);
+      } catch (e) {
+        tableHost.innerHTML = `<p class="dim">Clerk Billing could not render here (${(e && e.message) || "billing not enabled"}). ` +
+          `Enable Billing in the Clerk Dashboard and create the plans described in docs/CLERK_SETUP.md — the plans below remain available via Stripe/waitlist.</p>`;
+        tableHost.classList.remove("hidden");
+      }
+    }
+  } catch (e) {
+    if (note) note.textContent = "Clerk could not be loaded (network/CDN). Email/password accounts below remain fully functional.";
+  }
+}
+initClerk();

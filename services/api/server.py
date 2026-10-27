@@ -123,6 +123,7 @@ class H(BaseHTTPRequestHandler):
                 "scenes": "/api/scenes", "scenedel": "/api/scenes/delete", "sceneupd": "/api/scenes/update",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
                 "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support", "mcp": "/api/mcp",
+                "authconfig": "/api/auth/config", "clerksync": "/api/auth/clerk-sync", "clerkwh": "/api/webhooks/clerk",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -168,6 +169,14 @@ class H(BaseHTTPRequestHandler):
                 name = parse_qs(urlparse(self.path).query).get("name", [None])[0]
                 if name: return self._send(200, scen.scenario_to_dict(get_scenario(name)))
                 return self._send(200, {"scenarios": [{"id": n, "description": get_scenario(n)["description"]} for n in scen.SCENARIOS]})
+            if route.startswith("/api/auth/config"):
+                from integrations import clerk_auth as _clerk
+                return self._send(200, {
+                    "clerk_enabled": _clerk.enabled(),
+                    "clerk_publishable_key": _clerk.publishable_key() or None,
+                    "clerk_instance": "development" if _clerk.publishable_key().startswith("pk_test_") else ("production" if _clerk.enabled() else None),
+                    "billing_provider": "clerk" if _clerk.enabled() else ("stripe" if _billing.configured() else "none"),
+                    "first_party_auth": True})
             if route.startswith("/api/me"):
                 user = _auth_user(self)
                 if not user: return self._send(200, {"authenticated": False, "plan": "explorer",
@@ -361,6 +370,59 @@ class H(BaseHTTPRequestHandler):
                     if scene: return self._send(200, {"scene": scene, "source": "OFFLINE_HEURISTIC", "model_call": None})
                     return self._send(202, {"status": "BLOCKED_CREDENTIALS",
                                             "detail": "Meta API not configured and no offline template matched. Try mentioning a warehouse near-miss, a road crossing, or a robot cell — or add MODEL_API_KEY."})
+            if route.startswith("/api/auth/clerk-sync"):
+                from integrations import clerk_auth as _clerk
+                if not _clerk.enabled():
+                    return self._send(503, {"error": "Clerk is not configured on this deployment", "code": "CLERK_NOT_CONFIGURED"})
+                auth = self.headers.get("Authorization", "")
+                if not auth.startswith("Bearer "):
+                    return self._send(401, {"error": "Clerk session token required (Authorization: Bearer)"})
+                try: claims = _clerk.verify_session_token(auth.removeprefix("Bearer ").strip())
+                except Exception as e: return self._send(401, {"error": f"clerk token rejected: {e}"})
+                email = str(body.get("email", "")).strip()
+                name = str(body.get("name", "")).strip() or "Clerk user"
+                user = _store.provision_clerk_user(claims["sub"], email, name)
+                _store.audit(user["id"], "clerk_sync")
+                return self._send(200, {"token": _store.new_session(user["id"]),
+                                        "user": {"id": user["id"], "name": user["name"], "email": user["email"]},
+                                        "plan": _plan_of(user), "clerk_user_id": claims["sub"]})
+            if route.startswith("/api/webhooks/clerk"):
+                from integrations import clerk_auth as _clerk
+                raw = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+                try: event = _clerk.verify_svix(raw, dict(self.headers))
+                except RuntimeError as e: return self._send(503, {"error": str(e), "code": "WEBHOOK_NOT_CONFIGURED"})
+                except Exception as e: return self._send(400, {"error": f"webhook rejected: {e}"})
+                etype = event.get("type", ""); data = event.get("data") or {}
+                if etype in ("user.created", "user.updated"):
+                    emails = data.get("email_addresses") or [{}]
+                    email = (emails[0].get("email_address") if emails else "") or ""
+                    nm = " ".join(x for x in [data.get("first_name"), data.get("last_name")] if x)
+                    if data.get("id"): _store.provision_clerk_user(data["id"], email, nm)
+                elif etype == "user.deleted":
+                    if data.get("id"):
+                        _store.q("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE clerk_id=?)", (data["id"],))
+                        _store.q("DELETE FROM users WHERE clerk_id=?", (data["id"],))
+                elif etype.startswith("subscription") or etype.startswith("subscriptionItem") or etype.startswith("paymentAttempt"):
+                    payer = data.get("payer") or {}
+                    items = data.get("items") or []
+                    slug = ((items[0].get("plan") or {}).get("slug")) if items else None
+                    status_raw = str(data.get("status", "")).lower()
+                    status = {"active": "active", "trialing": "trialing", "past_due": "past_due",
+                              "canceled": "canceled", "ended": "canceled", "expired": "canceled",
+                              "abandoned": "canceled", "incomplete": "past_due"}.get(status_raw)
+                    if etype in ("subscriptionItem.canceled", "subscriptionItem.ended",
+                                 "subscriptionItem.expired", "subscriptionItem.abandoned"):
+                        status = "canceled"
+                    clerk_uid = payer.get("user_id")
+                    if clerk_uid and slug and status:
+                        u = _store.one("SELECT id FROM users WHERE clerk_id=?", (clerk_uid,))
+                        if u:
+                            _store.q("INSERT OR REPLACE INTO subscriptions(user_id, stripe_customer_id, stripe_sub_id, price_id, status, updated_at) VALUES(?,?,?,?,?,?)",
+                                     (u["id"], "clerk", data.get("id"), "clerk:" + slug, status, __import__("time").time()))
+                            _store.audit(u["id"], "clerk_subscription_" + status, slug)
+                    elif payer.get("organization_id"):
+                        _store.audit(None, "clerk_org_subscription", f"{payer.get('organization_id')}:{slug}:{status or etype}")
+                return self._send(200, {"received": True, "type": etype})
             if route.startswith("/api/auth/signup"):
                 email = str(body.get("email", "")).strip().lower()
                 name = str(body.get("name", "")).strip()

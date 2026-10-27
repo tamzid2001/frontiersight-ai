@@ -176,3 +176,72 @@ def test_scene_description_length_is_a_client_error(api):
     from integrations.meta.spark import generate_scene
     with pytest.raises(ValueError):
         generate_scene("y" * 4001)
+
+
+def _rsa_keys():
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives import serialization
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pub = key.public_key().public_numbers()
+    import base64 as b64
+    def enc(n, size=None):
+        b = n.to_bytes((n.bit_length() + 7) // 8, "big")
+        return b64.urlsafe_b64encode(b).rstrip(b"=").decode()
+    jwks = {"keys": [{"kty": "RSA", "kid": "test-kid", "n": enc(pub.n), "e": enc(pub.e)}]}
+    pem = key.private_bytes(serialization.Encoding.PEM,
+                            serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    return pem, jwks
+
+def test_clerk_jwt_and_svix_verification(monkeypatch):
+    import base64 as b64, time as _t
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    from integrations import clerk_auth
+    pem, jwks = _rsa_keys()
+    monkeypatch.setattr(clerk_auth, "_fetch_jwks", lambda host: jwks)
+    host = "example.clerk.accounts.dev"
+    def b64u(b): return b64.urlsafe_b64encode(b).rstrip(b"=").decode()
+    header = b64u(b'{"alg":"RS256","kid":"test-kid"}')
+    claims = {"sub": "user_clerk123", "iss": f"https://{host}", "exp": _t.time() + 600}
+    payload = b64u(json.dumps(claims).encode() if False else __import__("json").dumps(claims).encode())
+    sig = load_pem_private_key(pem, None).sign(f"{header}.{payload}".encode(), padding.PKCS1v15(), hashes.SHA256())
+    token = f"{header}.{payload}.{b64u(sig)}"
+    out = clerk_auth.verify_session_token(token, host=host)
+    assert out["sub"] == "user_clerk123"
+    with pytest.raises(ValueError):
+        clerk_auth.verify_session_token(token + "x", host=host)
+    # svix webhook signature
+    import hashlib as hl
+    secret = "whsec_" + b64.b64encode(b"test-secret-key-0123456789").decode()
+    body = b'{"type":"user.created","data":{"id":"user_clerk123"}}'
+    ts = str(int(_t.time()))
+    sigv = b64.b64encode(__import__("hmac").new(b"test-secret-key-0123456789",
+                         f"msg_1.{ts}.".encode() + body, hl.sha256).digest()).decode()
+    evt = clerk_auth.verify_svix(body, {"svix-id": "msg_1", "svix-timestamp": ts,
+                                        "svix-signature": f"v1,{sigv}"}, secret=secret)
+    assert evt["type"] == "user.created"
+    with pytest.raises(ValueError):
+        clerk_auth.verify_svix(body, {"svix-id": "msg_1", "svix-timestamp": ts,
+                                      "svix-signature": "v1,forged"}, secret=secret)
+
+def test_clerk_config_and_sync(api, monkeypatch):
+    from services.api import store
+    s, out = call(api, "/api/auth/config", method="GET")
+    assert s == 200 and out["clerk_enabled"] is False  # no key in test env
+    from services.api import mcp  # noqa: F401  (import surface sanity)
+    import services.api.server as srv
+    monkeypatch.setattr("integrations.clerk_auth.verify_session_token",
+                        lambda tok: {"sub": "user_clerk123"})
+    monkeypatch.setenv("CLERK_PUBLISHABLE_KEY", "pk_test_ZXhhbXBsZS5jb21c")
+    # config now reports enabled (publishable key is server-config, read at call time)
+    s, out = call(api, "/api/auth/config", method="GET")
+    assert out["clerk_enabled"] is True
+    s, out = call(api, "/api/auth/clerk-sync", {"email": "ada@example.com", "name": "Ada"},
+                  headers={"Authorization": "Bearer faketoken"})
+    assert s == 200 and out["plan"] == "explorer", out
+    # the issued local session works with /api/me
+    s, me = call(api, "/api/me", method="GET", token=out["token"])
+    assert me["authenticated"] and me["user"]["email"] == "ada@example.com"
+    u = store.one("SELECT clerk_id FROM users WHERE email='ada@example.com'")
+    assert u["clerk_id"] == "user_clerk123"

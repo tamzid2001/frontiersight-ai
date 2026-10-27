@@ -55,6 +55,8 @@ def db() -> sqlite3.Connection:
         """)
         try: _conn.execute("ALTER TABLE scenes ADD COLUMN org TEXT")
         except Exception: pass
+        try: _conn.execute("ALTER TABLE users ADD COLUMN clerk_id TEXT")
+        except Exception: pass
         _conn.commit()
     return _conn
 
@@ -100,6 +102,8 @@ def plan_for(user_id: int) -> str:
     subscription at a Researcher price, or an org (Team) entitlement row."""
     sub = one("SELECT * FROM subscriptions WHERE user_id = ?", (user_id,))
     if sub and sub["status"] in ("active", "trialing", "past_due") and sub["price_id"]:
+        if sub["price_id"].startswith("clerk:"):  # Clerk Billing plan slug is authoritative
+            return "researcher" if sub["price_id"] == "clerk:researcher" else "explorer"
         configured = {p for p in (os.environ.get("PRICE_RESEARCHER_MONTHLY", ""),
                                   os.environ.get("PRICE_RESEARCHER_ANNUAL", "")) if p}
         if not configured or sub["price_id"] in configured:
@@ -107,3 +111,20 @@ def plan_for(user_id: int) -> str:
     row = one("SELECT detail FROM audit_log WHERE user_id = ? AND action = 'org_provisioned' ORDER BY ts DESC", (user_id,))
     if row: return "team"
     return "explorer"
+
+
+def provision_clerk_user(clerk_id: str, email: str, name: str):
+    """Find-or-create the local user linked to a Clerk identity.
+    Clerk owns the credential; the local password hash is random and unusable,
+    so first-party password login can never collide with a Clerk account."""
+    import time as _t
+    row = one("SELECT * FROM users WHERE clerk_id=?", (clerk_id,))
+    if row: return dict(row)
+    row = one("SELECT * FROM users WHERE email=?", (email.lower(),)) if email else None
+    if row:
+        q("UPDATE users SET clerk_id=? WHERE id=?", (clerk_id, row["id"]))
+        return dict(one("SELECT * FROM users WHERE id=?", (row["id"],)))
+    pw_hash, pw_salt = hash_password("clerk-managed-" + clerk_id)
+    q("INSERT INTO users(email, name, pw_hash, pw_salt, created_at, clerk_id) VALUES(?,?,?,?,?,?)",
+      (email.lower() or f"{clerk_id}@clerk.local", name or "Clerk user", pw_hash, pw_salt, _t.time(), clerk_id))
+    return dict(one("SELECT * FROM users WHERE clerk_id=?", (clerk_id,)))
