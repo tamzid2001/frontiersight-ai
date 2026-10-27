@@ -186,3 +186,10 @@ def test_transport_and_file_input_css():
     css = (ROOT / "apps" / "web" / "app.css").read_text()
     assert '.transport input[type="range"]{flex:1 1 160px' in css
     assert "::file-selector-button" in css
+
+def test_sam_default_frame():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    asset = ROOT / "apps/web/sam-default.jpg"
+    assert asset.exists() and asset.stat().st_size > 20_000
+    assert 'id="sam-restore"' in html and "_samDefaultImg" in js and 'samSource' in js

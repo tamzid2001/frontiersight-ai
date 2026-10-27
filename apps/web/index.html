@@ -245,7 +245,10 @@
     <video id="sam-video" controls playsinline style="width:100%;display:none;border-radius:12px"></video>
     <img id="sam-img" style="width:100%;display:none;border-radius:12px" alt="Uploaded still for segmentation">
     <canvas id="sam-canvas" width="880" height="520" role="img" aria-label="SAM segmentation overlay canvas"></canvas>
-    <p class="dim">Captured frames: <b id="sam-count">0</b> · overlays show SAM boxes, stable ids and confidences.</p>
+    <p class="dim">Captured frames: <b id="sam-count">0</b> · overlays show SAM boxes, stable ids and confidences.
+   The frame below is a <b>default example</b> (illustrative, generated with Muse Image) so you can try
+   segmentation immediately; load your own image or video to replace it.</p>
+   <button id="sam-restore" class="ghostbtn">Restore default frame</button>
    </div>
    <aside>
     <label>Concept 1 (one noun phrase)<input id="sam-concept" value="person" style="width:100%"></label>
@@ -254,7 +257,8 @@
     <button id="sam-build" class="ghostbtn">Build tracks &amp; analyse captures</button>
    <button id="sam-save-ws" class="ghostbtn">Save frames as workspace</button>
     <p id="sam-status" role="status" class="dim"></p>
-    <h3>Detections (latest frame)</h3><ul id="sam-records"><li class="dim">None yet.</li></ul>
+    <h3>Detections (latest frame)</h3><ul id="sam-records"><li class="dim">What to expect: labelled boxes on the frame plus a list like
+    <code>person #0 · box [756,668]–[961,1052] · confidence 0.973</code>. Zero matches is a valid SAM result and is shown as-is.</li></ul>
    </aside>
   </div>
  </div>

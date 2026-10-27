@@ -782,13 +782,29 @@ document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.
 // ---- SAM Vision panel (Studio) ----
 state.samCaptures=[];
 function samStatus(m){const e=$("sam-status");if(e)e.textContent=m;}
-$("sam-file").onchange=e=>{const f=e.target.files[0];if(!f)return;
+$("sam-file").onchange=e=>{const f=e.target.files[0];if(!f)return;state.samSource="upload";state.samCaptures=[];$("sam-count").textContent="0";
  if(f.size>60*1024*1024){samStatus("File exceeds the 60 MB browser-preview bound.");e.target.value="";return;}
  const url=URL.createObjectURL(f),v=$("sam-video"),im=$("sam-img");
  if(f.type.startsWith("video/")){im.style.display="none";v.style.display="block";v.src=url;samStatus("Video loaded locally — pause on a moment, then Segment. Loading it uploads nothing.");}
  else if(f.type.startsWith("image/")){v.style.display="none";im.style.display="block";im.src=url;samStatus("Image loaded locally. Segment it with SAM 3.1.");}
  else samStatus("Unsupported type — use a video or image, or build the scene in Create Lab.");};
-function samFrame(){const v=$("sam-video"),im=$("sam-img");
+state.samSource="default";
+const _samDefaultImg=new Image();
+_samDefaultImg.onload=()=>{if(state.samSource!=="default")return;
+ const c=$("sam-canvas");if(!c)return;const x=c.getContext("2d");
+ const s=Math.min(c.width/_samDefaultImg.naturalWidth,c.height/_samDefaultImg.naturalHeight);
+ const w=_samDefaultImg.naturalWidth*s,hh=_samDefaultImg.naturalHeight*s;
+ x.clearRect(0,0,c.width,c.height);x.drawImage(_samDefaultImg,(c.width-w)/2,(c.height-hh)/2,w,hh);
+ samStatus("Default example frame loaded — press “Segment current frame” to run SAM 3.1 on it, or load your own image/video. Expect labelled boxes with confidences; zero matches is a valid result.");};
+_samDefaultImg.src="/sam-default.jpg";
+$("sam-restore").onclick=()=>{state.samSource="default";state.samCaptures=[];$("sam-count").textContent="0";
+ $("sam-video").style.display="none";$("sam-img").style.display="none";
+ if(_samDefaultImg.complete)_samDefaultImg.onload();
+ samStatus("Default example frame restored. Press Segment to run SAM 3.1 on it.");};
+function samFrame(){if(state.samSource==="default"){
+ const c=document.createElement("canvas");c.width=_samDefaultImg.naturalWidth;c.height=_samDefaultImg.naturalHeight;
+ c.getContext("2d").drawImage(_samDefaultImg,0,0);return c;}
+ const v=$("sam-video"),im=$("sam-img");
  const src=v.style.display!=="none"?(v.videoWidth&&v):(im.naturalWidth&&im);
  if(!src){samStatus("Load an image or video frame first.");return null;}
  const c=document.createElement("canvas");c.width=src.videoWidth||src.naturalWidth;c.height=src.videoHeight||src.naturalHeight;

@@ -164,6 +164,10 @@
     {
       "source": "/three-view.js",
       "destination": "/api/index?ep=threeview"
+    },
+    {
+      "source": "/sam-default.jpg",
+      "destination": "/api/index?ep=samdefault"
     }
   ],
   "functions": {
