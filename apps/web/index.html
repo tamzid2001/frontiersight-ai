@@ -16,7 +16,6 @@
 <link rel="stylesheet" href="app.css"></head><body>
 <button type="button" class="skip" id="skip-link">Skip to content</button>
 <header>
- <div class="brand">◉ Frontier<b>Sight</b> <span class="tag">AI</span></div>
  <div class="headright">
   <div class="themeseg" role="group" aria-label="Colour theme">
    <button data-theme-mode="light" title="Light">☀ Light</button>
@@ -30,6 +29,12 @@
 
 
 <nav id="tabs" aria-label="Primary">
+ <div class="sidebrand">
+  <div class="logomark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg></div>
+  <div class="brandtext"><div class="brandname">Frontier<b>Sight</b> <span class="tag">AI</span></div>
+  <div class="brandsub">Quantura Studio</div></div>
+ </div>
+
  <div class="navlabel">General</div>
  <button data-view="home" class="on">⌂&nbsp; Overview</button>
  <button data-view="workspace">▦&nbsp; Workspace</button>
@@ -344,29 +349,48 @@
 
 
 <section id="view-pricing" class="view"><h2>Pricing</h2>
- <p class="sub">Simple, honest pricing. Paid plans run through Stripe (checkout + customer portal,
- server-enforced entitlements). <b>On this public demo deployment billing is not configured</b>, so
- Subscribe safely falls back to the waitlist and no card can be collected. Prices below are the launch prices.</p>
+ <p class="sub">Simple, honest pricing. Paid plans run through Stripe (checkout + customer portal) with
+ server-enforced entitlements. <b>On this public demo deployment Stripe is not configured</b>, so Subscribe
+ safely falls back to the waitlist and no card can be collected.</p>
  <div class="row" style="margin:14px 0"><span>Monthly</span>
-  <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Switch to annual <span class="dim">(2 months free, planned)</span></button></div>
+  <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Switch to annual <span class="dim">(2 months free)</span></button></div>
  <div class="grid3">
-  <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Forever free · available now</p>
+  <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Forever free · no card required</p>
    <ul><li>✓ All 5 built-in scenarios</li><li>✓ Create Lab + prompt-to-scene</li><li>✓ Deterministic analysis &amp; counterfactuals</li>
-   <li>✓ Evidence JSON/HTML export</li><li>✓ Local profile &amp; scene library</li></ul>
+   <li>✓ Evidence export with recorded human approval</li><li>✓ 10 server-saved scenes · Monte-Carlo ≤ 200</li></ul>
    <button data-goto="create">Start free</button></div>
   <div class="card plan featured"><h3>Researcher</h3><p class="price"><span class="amt" data-m="$19" data-a="$190">$19</span><span class="per">/mo</span></p>
-   <p class="dim">Planned launch price · <b>waitlist open</b></p>
-   <ul><li>✓ Everything in Explorer</li><li>◷ Your own Meta API key &amp; higher limits</li><li>◷ SAM 3.1 video-mode tracking</li>
-   <li>◷ Unlimited saved scenes &amp; runs</li><li>◷ Priority support</li></ul>
+   <p class="dim">For individual researchers &amp; engineers</p>
+   <ul><li>✓ Everything in Explorer</li><li>✓ Your own Meta API key (encrypted, server-side)</li>
+   <li>✓ SAM 3.1 video-mode tracking</li><li>✓ Unlimited server-saved scenes</li>
+   <li>✓ Monte-Carlo up to 2,000 runs</li><li>✓ Priority support requests</li></ul>
    <button id="sub-btn">Subscribe — <span id="sub-amt">$19/mo</span></button> <button class="waitlist-btn ghostbtn" data-plan="Researcher">or join waitlist</button></div>
-  <div class="card plan"><h3>Team / Enterprise</h3><p class="price">Custom</p><p class="dim">Planned · talk to us</p>
-   <ul><li>◷ Shared workspaces &amp; roles</li><li>◷ SSO / SAML</li><li>◷ Private deployment (VPC)</li>
-   <li>◷ Audit-log retention &amp; SLA</li><li>◷ Onboarding for safety teams</li></ul>
-   <button id="quote-open">Request a quote</button></div>
+  <div class="card plan"><h3>Team / Enterprise</h3><p class="price">Custom</p><p class="dim">Annual contract · provisioned for your org</p>
+   <ul><li>✓ Everything in Researcher</li><li>✓ Shared org workspace &amp; member roles</li>
+   <li>✓ Org audit log (exports, approvals, provisioning)</li><li>✓ Unlimited Monte-Carlo</li>
+   <li>✓ Onboarding session for your safety team</li></ul>
+   <button id="quote-open">Request a quote</button>
+   <p class="dim">Scoped in the custom contract: SSO/SAML via your identity provider, private VPC deployment, SLA terms.</p></div>
  </div>
- <p class="dim">✓ = available today · ◷ = planned, not yet shipped. Live Meta calls in this public demo run on the
- host's API key and are rate-limited (120 requests/min per client); production deployments use your own
- <code>MODEL_API_KEY</code>, and Meta Model API usage is billed by Meta separately from any FrontierSight plan.</p>
+
+ <div class="card wide"><h3>Compare plans</h3>
+  <div style="overflow-x:auto"><table class="pairtable compare">
+   <tr><th>Capability</th><th>Explorer</th><th>Researcher</th><th>Team</th></tr>
+   <tr><td>Built-in scenarios &amp; Create Lab</td><td>✓</td><td>✓</td><td>✓</td></tr>
+   <tr><td>Deterministic analysis &amp; counterfactuals</td><td>✓</td><td>✓</td><td>✓</td></tr>
+   <tr><td>Meta calls</td><td>Host key, fair use</td><td>Your own key (BYOK)</td><td>Your own key (BYOK)</td></tr>
+   <tr><td>SAM 3.1 video-mode tracking</td><td>—</td><td>✓</td><td>✓</td></tr>
+   <tr><td>Server-saved scenes</td><td>10</td><td>Unlimited</td><td>Unlimited + shared org library</td></tr>
+   <tr><td>Monte-Carlo runs / analysis</td><td>200</td><td>2,000</td><td>Unlimited</td></tr>
+   <tr><td>Evidence export with approval record</td><td>✓</td><td>✓</td><td>✓ + org audit log</td></tr>
+   <tr><td>Support</td><td>Standard queue</td><td>Priority queue</td><td>SLA (contract)</td></tr>
+   <tr><td>SSO / SAML · VPC · SLA terms</td><td>—</td><td>—</td><td>Custom contract</td></tr>
+  </table></div>
+  <p class="dim">Live Meta calls in this public demo run on the host's API key and are rate-limited
+  (120 requests/min per client; 30/min on model endpoints). Production deployments use your own
+  <code>MODEL_API_KEY</code>; Meta Model API usage is billed by Meta separately from any FrontierSight plan.</p>
+ </div>
+
  <div class="card wide hidden" id="quote-card"><h3>Team / Enterprise — request a quote</h3>
   <label>Company<input id="q-company" type="text" style="width:100%"></label>
   <label>Work email<input id="q-email" type="email" style="width:100%"></label>
@@ -374,11 +398,13 @@
   <label>What do you need? (SSO, VPC, SLA…)<textarea id="q-needs" rows="3" style="width:100%"></textarea></label>
   <button id="quote-send">Send quote request</button> <span id="quote-status" class="dim" role="status"></span>
   <p class="dim">Recorded on this deployment; in production this also emails the sales contact. Custom pricing is manual — no checkout for Team plans.</p></div>
+
  <div class="card wide"><h3>FAQ</h3>
-  <p><b>Will I be charged if I join the waitlist?</b> No. The waitlist records your email on this deployment
-  for launch notification; no payment is taken. Full integration details: <code>docs/PAID_PLANS_INTEGRATION_PROMPT.md</code>.</p>
+  <p><b>Will I be charged if I join the waitlist?</b> No. The waitlist records your email on this deployment for launch notification; no payment is taken. Full integration details: <code>docs/PAID_PLANS_INTEGRATION_PROMPT.md</code>.</p>
   <p><b>What does the free tier actually include today?</b> Everything running on this site right now.</p>
-  <p><b>Do prices include Meta API costs?</b> No — Meta Model API usage is billed by Meta under your own key in production.</p></div>
+  <p><b>Do prices include Meta API costs?</b> No — Meta Model API usage is billed by Meta under your own key in production.</p>
+  <p><b>How are Team plans provisioned?</b> Manually, per contract: we create your organisation, assign member roles, and record it in the org audit log (<code>scripts/provision_org.py</code>). SSO/SAML is then connected through your identity provider.</p>
+ </div>
 </section>
 
 <section id="view-auth" class="view"><h2 id="auth-title">Sign in</h2>
@@ -494,6 +520,11 @@
  <h3>Deployment &amp; limits</h3>
  <p class="dim">App version <b id="set-version">—</b> · ingest bound 12 MB per request · rate limit 120 POST/min per client ·
  retention: this demo stores scenes/runs only in your browser; the server keeps no uploaded media.</p>
+ <h3>Organisation (Team)</h3><div id="org-card" class="mono dim">Loading organisation…</div>
+ <h3>Support</h3>
+ <label>Subject<input id="sup-subject" type="text" style="width:100%"></label>
+ <label>Message<textarea id="sup-message" rows="3" style="width:100%"></textarea></label>
+ <button id="sup-send">Open support request</button> <span id="sup-status" class="dim" role="status"></span>
  <h3>Local data</h3>
  <p class="dim">Profiles, scenes, runs, theme and preferences live in this browser only.</p>
  <button id="clear-data" class="ghostbtn">Clear all local data &amp; reset</button> <span id="clear-status" class="dim" role="status"></span></div>

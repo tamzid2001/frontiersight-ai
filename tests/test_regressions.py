@@ -65,7 +65,9 @@ def test_inspector_inside_studio_and_entities():
 def test_pricing_and_auth_are_honest():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     assert 'id="view-pricing"' in html and 'id="view-auth"' in html
-    assert "billing is not configured" in html.lower()  # honest demo-deployment state
+    assert "stripe is not configured" in html.lower()  # honest demo-deployment state
+    pricing = html[html.index('id="view-pricing"'):html.index('id="view-auth"')]
+    assert "◷" not in pricing and "planned launch" not in pricing.lower()
     assert 'id="auth-signup"' in html and 'id="sub-btn"' in html  # real server accounts + subscribe flow
     assert 'data-theme-mode="system"' in html
 
@@ -146,3 +148,8 @@ def test_curved_paths_ui_and_schema():
         {"category": "robot", "waypoints": [[2, 2], [13, 2], [13, 11]], "speed": 1.2, "radius": .55, "curve": "smooth", "mode": "loop"},
         {"category": "shelf", "waypoints": [[8, 7]], "speed": 0, "radius": 1.4}]})
     assert out["objects"][0]["curve"] == "smooth"
+
+
+def test_sidebar_brand_block():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'class="sidebrand"' in html and "Quantura Studio" in html and 'class="logomark"' in html

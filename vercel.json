@@ -120,6 +120,14 @@
     {
       "source": "/api/tracks/from-paths",
       "destination": "/api/index?ep=from-paths"
+    },
+    {
+      "source": "/api/org",
+      "destination": "/api/index?ep=org"
+    },
+    {
+      "source": "/api/support",
+      "destination": "/api/index?ep=support"
     }
   ],
   "functions": {

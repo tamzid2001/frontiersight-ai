@@ -120,7 +120,7 @@ class H(BaseHTTPRequestHandler):
                 "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
                 "scenes": "/api/scenes", "scenedel": "/api/scenes/delete",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
-                "segment-video": "/api/meta/segment-video",
+                "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -139,7 +139,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.14.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.15.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -164,10 +164,28 @@ class H(BaseHTTPRequestHandler):
             if route.startswith("/api/scenes") and not route.startswith("/api/scenes/delete"):
                 user = _auth_user(self)
                 if not user: return self._send(401, {"error": "sign in required for server-saved scenes", "upgrade_url": "/#view-auth"})
-                rows = _store.q("SELECT id, name, payload, created_at FROM scenes WHERE user_id=? ORDER BY created_at DESC", (user["id"],))
-                return self._send(200, {"scenes": [{"id": r["id"], "name": r["name"], "created_at": r["created_at"],
-                                                    "payload": json.loads(r["payload"])} for r in rows],
-                                        "plan": _plan_of(user)})
+                rows = _store.q("SELECT id, name, payload, created_at, org, user_id FROM scenes WHERE user_id=? ORDER BY created_at DESC", (user["id"],))
+                scenes = [{"id": r["id"], "name": r["name"], "created_at": r["created_at"], "shared": False,
+                           "payload": json.loads(r["payload"])} for r in rows]
+                m = _store.one("SELECT org FROM org_members WHERE user_id=?", (user["id"],))
+                if m:
+                    shared = _store.q("SELECT id, name, payload, created_at FROM scenes WHERE org=? AND user_id!=? ORDER BY created_at DESC", (m["org"], user["id"]))
+                    scenes += [{"id": r["id"], "name": r["name"], "created_at": r["created_at"], "shared": True,
+                                "org": m["org"], "payload": json.loads(r["payload"])} for r in shared]
+                return self._send(200, {"scenes": scenes, "plan": _plan_of(user), "org": m["org"] if m else None})
+            if route.startswith("/api/org"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                m = _store.one("SELECT org, role FROM org_members WHERE user_id=?", (user["id"],))
+                if not m: return self._send(200, {"org": None, "note": "no organisation — Team plans are provisioned per contract (see Pricing)"})
+                members = _store.q("SELECT u.email, om.role AS role FROM org_members om JOIN users u ON u.id=om.user_id WHERE om.org=?", (m["org"],))
+                shared = _store.q("SELECT id, name, created_at, user_id FROM scenes WHERE org=? ORDER BY created_at DESC LIMIT 50", (m["org"],))
+                audit = _store.q("SELECT action, detail, ts FROM audit_log WHERE org=? ORDER BY ts DESC LIMIT 100", (m["org"],)) \
+                    if _plan_of(user) == "team" else []
+                return self._send(200, {"org": m["org"], "role": m["role"],
+                                        "members": [dict(r) for r in members],
+                                        "shared_scenes": [dict(r) for r in shared],
+                                        "audit_log": [dict(r) for r in audit]})
             if route.startswith("/api/validate"): return self._send(200, {"cases": validation_cases()})
             if route.startswith("/api/report"):
                 name = parse_qs(urlparse(self.path).query).get("name", ["warehouse-near-miss"])[0]
@@ -359,6 +377,20 @@ class H(BaseHTTPRequestHandler):
                     tok = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
                     _store.q("DELETE FROM sessions WHERE token_hash=?", (_hl.sha256(tok.encode()).hexdigest(),))
                 return self._send(200, {"ok": True})
+            if route.startswith("/api/support"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in to open a support request"})
+                subject = str(body.get("subject", "")).strip(); message = str(body.get("message", "")).strip()
+                if len(subject) < 3 or len(message) < 10:
+                    return self._send(400, {"error": "subject (3+ chars) and message (10+ chars) are required"})
+                plan = _plan_of(user)
+                _store.q("INSERT INTO support_tickets(user_id, subject, message, plan, created_at) VALUES(?,?,?,?,?)",
+                         (user["id"], subject[:200], message[:5000], plan, __import__("time").time()))
+                _store.audit(user["id"], "support_opened", subject[:80])
+                return self._send(201, {"ok": True,
+                    "priority": plan in ("researcher", "team"),
+                    "note": ("priority queue (Researcher/Team)" if plan in ("researcher", "team")
+                             else "standard queue (Explorer)") + " — requests are recorded on this deployment and answered by email in production"})
             if route.startswith("/api/waitlist"):
                 _store.q("INSERT INTO waitlist(email, plan, created_at) VALUES(?,?,?)",
                          (str(body.get("email", ""))[:200], str(body.get("plan", ""))[:40], __import__("time").time()))
@@ -423,10 +455,11 @@ class H(BaseHTTPRequestHandler):
                         raise _billing.PaymentRequired(f"server_scenes (limit {limit})", plan)
                 import uuid as _uuid
                 sid = _uuid.uuid4().hex[:16]
-                _store.q("INSERT INTO scenes(id, user_id, name, payload, created_at) VALUES(?,?,?,?,?)",
+                _m = _store.one("SELECT org FROM org_members WHERE user_id=?", (user["id"],))
+                _store.q("INSERT INTO scenes(id, user_id, name, payload, created_at, org) VALUES(?,?,?,?,?,?)",
                          (sid, user["id"], str(body.get("name", "scene"))[:120], json.dumps(payload)[:2_000_000],
-                          __import__("time").time()))
-                _store.audit(user["id"], "scene_saved", sid)
+                          __import__("time").time(), _m["org"] if _m else None))
+                _store.audit(user["id"], "scene_saved", sid, org=_m["org"] if _m else "")
                 return self._send(201, {"id": sid, "plan": plan, "limit": limit})
             if route.startswith("/api/meta/segment-video"):
                 user = _auth_user(self)

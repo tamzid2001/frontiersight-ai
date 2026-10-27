@@ -111,3 +111,33 @@ def test_waitlist_and_quote(api):
     assert s == 201
     s, out = call(api, "/api/sales/quote", {"company": "", "email": ""})
     assert s == 400
+
+
+def test_support_and_org_provisioning(api, tmp_path):
+    token = signup(api, "ops@acme.example")
+    s, out = call(api, "/api/support", {"subject": "SAM question", "message": "How do video quotas work?"}, token)
+    assert s == 201 and out["priority"] is False  # explorer = standard queue
+    s, out = call(api, "/api/org", method="GET", token=token)
+    assert out["org"] is None
+    # provision via the same code path as scripts/provision_org.py
+    from services.api import store
+    import time as _t
+    uid = store.one("SELECT id FROM users WHERE email='ops@acme.example'")["id"]
+    store.q("INSERT OR REPLACE INTO org_members(user_id, org, role, created_at) VALUES(?,?,?,?)",
+            (uid, "Acme Safety", "owner", _t.time()))
+    store.audit(uid, "org_provisioned", "Acme Safety (owner)", org="Acme Safety")
+    s, out = call(api, "/api/auth/login", {"email": "ops@acme.example", "password": "correct-horse-9"})
+    token2 = out["token"]
+    s, out = call(api, "/api/org", method="GET", token=token2)
+    assert out["org"] == "Acme Safety" and out["role"] == "owner" and len(out["members"]) == 1
+    s, me = call(api, "/api/me", method="GET", token=token2)
+    assert me["plan"] == "team"
+    # org-shared scene visible to a second member
+    s, out = call(api, "/api/scenes", {"name": "shared-cell", "payload": {"objects": []}}, token2)
+    assert s == 201
+    token3 = signup(api, "second@acme.example")
+    uid3 = store.one("SELECT id FROM users WHERE email='second@acme.example'")["id"]
+    store.q("INSERT OR REPLACE INTO org_members(user_id, org, role, created_at) VALUES(?,?,?,?)",
+            (uid3, "Acme Safety", "member", _t.time()))
+    s, out = call(api, "/api/scenes", method="GET", token=token3)
+    assert any(sc["shared"] for sc in out["scenes"])

@@ -47,7 +47,14 @@ def db() -> sqlite3.Connection:
           ciphertext TEXT NOT NULL, last4 TEXT NOT NULL, updated_at REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, user_id INTEGER,
           org TEXT, action TEXT NOT NULL, detail TEXT, ts REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS org_members(user_id INTEGER PRIMARY KEY, org TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member', created_at REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS support_tickets(id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL,
+          subject TEXT NOT NULL, message TEXT NOT NULL, plan TEXT, status TEXT NOT NULL DEFAULT 'open',
+          created_at REAL NOT NULL);
         """)
+        try: _conn.execute("ALTER TABLE scenes ADD COLUMN org TEXT")
+        except Exception: pass
         _conn.commit()
     return _conn
 

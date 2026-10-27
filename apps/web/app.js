@@ -584,6 +584,7 @@ async function refreshMe(){const {body}=await api("/api/me");state.me=body;
   if(badge)badge.classList.add("hidden");
   if(so)so.classList.remove("hidden");if(si)si.classList.add("hidden");
  }
+ loadOrg();
  const card=$("me-card");
  if(card)card.innerHTML=body.authenticated
   ? `Signed in as <b>${body.user.email}</b> · plan <b>${body.plan}</b>${body.subscription?` · subscription: ${body.subscription.status}${body.subscription.cancel_at_period_end?" (cancels at period end)":""}`:" · no subscription"}<br>Entitlements: SAM video ${body.entitlements.sam_video?"✓":"—"} · server scenes ${body.entitlements.server_scenes===null?"unlimited":body.entitlements.server_scenes} · Monte-Carlo ≤ ${body.entitlements.mc_runs===null?"unlimited":body.entitlements.mc_runs} · your Meta key ${body.meta_key.configured?("saved (…"+body.meta_key.last4+")"):"not saved"}<br>Billing (Stripe): ${body.billing_configured?"configured":"not configured on this deployment"}`
@@ -778,3 +779,17 @@ const _skipEl=$("skip-link");
 if(_skipEl)_skipEl.onclick=()=>{showView("home");
  const el=document.querySelector("#view-home h1");
  if(el){el.setAttribute("tabindex","-1");el.focus();el.scrollIntoView({behavior:"smooth",block:"start"});}};
+
+// ---- support + organisation (Settings) ----
+$("sup-send").onclick=async()=>{const out=await api("/api/support",{method:"POST",
+ body:JSON.stringify({subject:$("sup-subject").value.trim(),message:$("sup-message").value.trim()})});
+ $("sup-status").textContent=out.status===201?("Opened — "+out.body.note):(out.body.error||"Could not open the request.");
+ if(out.status===201){$("sup-subject").value="";$("sup-message").value="";toast("Support request opened ("+(out.body.priority?"priority":"standard")+" queue).");}};
+async function loadOrg(){const card=$("org-card");if(!card)return;
+ const out=await api("/api/org");
+ if(out.status===401){card.textContent="Sign in to see your organisation.";return;}
+ if(!out.body.org){card.textContent=out.body.note||"No organisation.";return;}
+ card.innerHTML=`<b>${out.body.org}</b> · your role: ${out.body.role} · ${out.body.members.length} member(s)<br>`+
+  out.body.members.map(m=>`${m.email} (${m.role})`).join("<br>")+
+  (out.body.shared_scenes.length?`<br>Shared org scenes: ${out.body.shared_scenes.map(s=>s.name).join(", ")}`:"")+
+  (out.body.audit_log&&out.body.audit_log.length?`<br>Audit log (latest): ${out.body.audit_log.slice(0,5).map(a=>a.action).join(", ")}`:"");}
