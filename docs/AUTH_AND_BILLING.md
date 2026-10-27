@@ -27,3 +27,11 @@
 4. **Meta costs:** production deployments use the customer's own
    `MODEL_API_KEY`; Meta Model API usage is billed by Meta and is never
    marked up or resold by FrontierSight plans.
+
+## Execution prompt
+
+The complete, ready-to-run integration spec for turning the Researcher ($19/mo)
+and Team/Enterprise (custom) plans into a live, server-enforced billing system
+(Stripe + Clerk + Postgres, entitlements matrix, webhook lifecycle, Team quote
+flow, tests and rollout) lives in `docs/PAID_PLANS_INTEGRATION_PROMPT.md`.
+It ends with the owner checklist of keys/decisions required to start.
