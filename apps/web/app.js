@@ -916,8 +916,10 @@ async function afterAuth(out, msg){state.openWorkspace=null;state.samCaptures=[]
  localStorage.setItem("fs-session",out.body.token);
  localStorage.setItem("fs-user",JSON.stringify(out.body.user));
  await refreshMe();renderMyScenes();toast(msg);goto("workspace");}
-$("form-signup").addEventListener("submit",e=>{e.preventDefault();$("auth-signup").click();});
-$("form-signin").addEventListener("submit",e=>{e.preventDefault();$("auth-signin").click();});
+// Enter-key submission already clicks the (submit) button natively; the form
+// listener only prevents the page reload — it must not click again (double signup).
+$("form-signup").addEventListener("submit",e=>e.preventDefault());
+$("form-signin").addEventListener("submit",e=>e.preventDefault());
 $("auth-signup").onclick=async()=>{const out=await api("/api/auth/signup",{method:"POST",
  body:JSON.stringify({name:$("su-name").value.trim(),email:$("su-email").value.trim(),password:$("su-password").value})});
  if(out.status!==201){$("auth-status").textContent=out.body.error||"Sign-up failed.";return;}

@@ -440,8 +440,11 @@ class H(BaseHTTPRequestHandler):
                 if _store.one("SELECT id FROM users WHERE email=?", (email,)):
                     return self._send(409, {"error": "an account with this email already exists — sign in"})
                 pw_hash, pw_salt = _store.hash_password(password)
-                _store.q("INSERT INTO users(email, name, pw_hash, pw_salt, created_at) VALUES(?,?,?,?,?)",
-                         (email, name, pw_hash, pw_salt, __import__("time").time()))
+                try:
+                    _store.q("INSERT INTO users(email, name, pw_hash, pw_salt, created_at) VALUES(?,?,?,?,?)",
+                             (email, name, pw_hash, pw_salt, __import__("time").time()))
+                except Exception:
+                    return self._send(409, {"error": "an account with this email already exists — sign in"})
                 user = dict(_store.one("SELECT * FROM users WHERE email=?", (email,)))
                 _store.audit(user["id"], "signup")
                 return self._send(201, {"token": _store.new_session(user["id"]),
