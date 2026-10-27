@@ -169,3 +169,10 @@ def test_mcp_http_and_tools(api):
     assert out["result"]["isError"] is True
     s, out = call(api, "/api/mcp", {"jsonrpc": "2.0", "id": 5, "method": "nope"})
     assert out["error"]["code"] == -32601
+
+def test_scene_description_length_is_a_client_error(api):
+    s, out = call(api, "/api/meta/scene", {"prompt": "x" * 4001})
+    assert s == 400 and "4000" in out["error"]
+    from integrations.meta.spark import generate_scene
+    with pytest.raises(ValueError):
+        generate_scene("y" * 4001)

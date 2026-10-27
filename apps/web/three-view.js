@@ -9,7 +9,8 @@ const REALC = { forklift: 0xe9a13b, pedestrian: 0xff7847, robot: 0xaebfd2,
 const BASER = { forklift: 0.9, pedestrian: 0.45, robot: 0.55, vehicle: 1.1, cyclist: 0.5, shelf: 1.1, object: 0.6 };
 let C = null;
 
-const toThree = (x, y) => [x - 8, 7 - y]; // stage (16x14, y up) -> three (x, z)
+let EXTENT = [16, 14];
+const toThree = (x, y) => [x - EXTENT[0] / 2, EXTENT[1] / 2 - y]; // stage (y up) -> three (x, z)
 
 function mat(color, rough = 0.65) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.08 });
@@ -88,27 +89,28 @@ function create(container, hooks) {
   scene.add(new THREE.HemisphereLight(0xdfeaff, 0x1a2233, 1.15));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(8, 18, 6); scene.add(sun);
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(16, 14),
+  const _ext = hooks.extent ? hooks.extent() : [16, 14]; EXTENT = _ext;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(_ext[0], _ext[1]),
     new THREE.MeshStandardMaterial({ color: new THREE.Color(cs.getPropertyValue("--panel2").trim() || "#10141c"), roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; scene.add(ground);
-  const grid = new THREE.GridHelper(16, 16, 0x2a3650, 0x232c44);
-  grid.scale.z = 14 / 16; grid.position.y = 0.01; scene.add(grid);
-  const border = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(16, 14)),
+  const grid = new THREE.GridHelper(_ext[0], Math.round(_ext[0]), 0x2a3650, 0x232c44);
+  grid.scale.z = _ext[1] / _ext[0]; grid.position.y = 0.01; scene.add(grid);
+  const border = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(_ext[0], _ext[1])),
     new THREE.LineBasicMaterial({ color: 0x38c6d9 }));
   border.rotation.x = -Math.PI / 2; border.position.y = 0.02; scene.add(border);
 
   const world = new THREE.Group(); scene.add(world);
   const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, raf: 0 };
 
-  function rebuild(objects) {
+  function rebuild(items) {
     world.clear(); state.entities.clear();
-    for (const o of objects) {
-      if (o.waypoints && o.waypoints.length > 1) {
-        const pts = hooks.resolve(o).pts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
+    for (const o of items) {
+      if (o.pathPts && o.pathPts.length > 1) {
+        const pts = o.pathPts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
           new THREE.LineBasicMaterial({ color: REALC[o.category] || 0xffffff, transparent: true, opacity: 0.75 }));
         world.add(line);
-        for (const [x, y] of o.waypoints) {
+        if (o.dots) for (const [x, y] of o.dots) {
           const dot = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8),
             new THREE.MeshBasicMaterial({ color: REALC[o.category] || 0xffffff }));
           const [tx, tz] = toThree(x, y); dot.position.set(tx, 0.07, tz); world.add(dot);
@@ -117,18 +119,18 @@ function create(container, hooks) {
       const ent = buildEntity(o);
       world.add(ent); state.entities.set(o.id, ent);
     }
-    state.sig = JSON.stringify(objects.map(o => [o.id, o.category, o.waypoints, o.curve, o.mode, o.radius]));
+    state.sig = hooks.sig ? hooks.sig() : "";
   }
 
-  function setTime(objects, t) {
-    for (const o of objects) {
+  function setTime(items, t) {
+    for (const o of items) {
       const ent = state.entities.get(o.id); if (!ent) continue;
       const pos = hooks.pos(o, t); if (!pos) { ent.visible = false; continue; }
       ent.visible = true;
       const [tx, tz] = toThree(pos[0], pos[1]); ent.position.set(tx, 0, tz);
       const ahead = hooks.pos(o, t + 0.35);
       if (ahead && (ahead[0] !== pos[0] || ahead[1] !== pos[1])) {
-        // local +X after rotY maps to (cos, 0, -sin); three z = 7 - stage y
+        // local +X after rotY maps to (cos, 0, -sin); three z = extent/2 - stage y
         const dx = ahead[0] - pos[0], dz = -(ahead[1] - pos[1]);
         ent.rotation.y = Math.atan2(-dz, dx);
       }
@@ -148,7 +150,8 @@ function create(container, hooks) {
                                   -((e.clientY - rect.top) / rect.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const hit = new THREE.Vector3();
-    if (ray.ray.intersectPlane(plane, hit)) hooks.onGroundClick(hit.x + 8, 7 - hit.z);
+    if (ray.ray.intersectPlane(plane, hit) && hooks.onGroundClick)
+      hooks.onGroundClick(hit.x + EXTENT[0] / 2, EXTENT[1] / 2 - hit.z);
   });
 
   new ResizeObserver(() => {
@@ -161,23 +164,53 @@ function create(container, hooks) {
     controls.update(); renderer.render(scene, camera);
     state.raf = requestAnimationFrame(loop);
   }
-  state.rebuild = rebuild; state.setTime = setTime;
+  state.rebuild = rebuild; state.setTime = setTime; state.hooks = hooks;
   state.start = () => { state.visible = true; cancelAnimationFrame(state.raf); loop(); };
   state.stop = () => { state.visible = false; cancelAnimationFrame(state.raf); };
   return state;
 }
 
+function labItems(objects) {
+  return objects.map(o => ({ id: o.id, category: o.category, radius: o.radius,
+    pathPts: o.waypoints && o.waypoints.length > 1 ? C0.resolve(o).pts : null, dots: o.waypoints, _lab: o }));
+}
+let C0 = null; // lab hooks (resolve) captured at show time for item building
 export function showLab3D(container, hooks) {
-  if (!C) C = create(container, hooks);
-  C.start();
+  C0 = hooks;
+  const wrapped = { ...hooks,
+    sig: () => JSON.stringify((C0._objs || []).map(o => [o.id, o.category, o.waypoints, o.curve, o.mode, o.radius])),
+    pos: (item, t) => hooks.pos(item._lab, t) };
+  if (!C) C = create(container, wrapped);
+  C.hooks = wrapped; C.start();
   return C;
 }
 export function hideLab3D() { if (C) C.stop(); }
 export function syncLab3D(objects, t, force = false) {
-  if (!C || !C.visible) return;
+  if (!C || !C.visible || !C0) return;
+  C0._objs = objects;
+  const items = labItems(objects);
   const sig = JSON.stringify(objects.map(o => [o.id, o.category, o.waypoints, o.curve, o.mode, o.radius]));
-  if (force || sig !== C.sig) C.rebuild(objects);
-  C.setTime(objects, t);
+  if (force || sig !== C.sig) { C.rebuild(items); C.sig = sig; }
+  C.setTime(items, t);
+}
+
+// ---- Studio 3D: same stage tech, read-only playback of scenario tracks ----
+let S = null;
+export function showStudio3D(container, hooks) {
+  const key = hooks.extent ? hooks.extent().join("x") : "16x14";
+  if (S && S._extentKey !== key) { container.innerHTML = ""; S.stop(); S = null; }
+  if (!S) { S = create(container, hooks); S._extentKey = key; }
+  S.start();
+  return S;
+}
+export function hideStudio3D() { if (S) S.stop(); }
+export function syncStudio3D(tracks, t, force = false) {
+  if (!S || !S.visible) return;
+  const items = tracks.map(tr => ({ id: tr.object_id, category: tr.category, radius: tr.radius,
+    pathPts: tr.points.map(p => [p[1], p[2]]), dots: null, _tr: tr }));
+  const sig = "studio:" + tracks.map(tr => tr.object_id + ":" + tr.points.length).join(",");
+  if (force || sig !== S.sig) { S.rebuild(items); S.sig = sig; }
+  S.setTime(items, t);
 }
 export function refreshLab3DTheme() {
   if (!C) return;

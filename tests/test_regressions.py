@@ -193,3 +193,18 @@ def test_sam_default_frame():
     asset = ROOT / "apps/web/sam-default.jpg"
     assert asset.exists() and asset.stat().st_size > 20_000
     assert 'id="sam-restore"' in html and "_samDefaultImg" in js and 'samSource' in js
+
+def test_studio_dropdown_and_autolabel():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert "populateStudioWorkspaces" in js and "My workspaces" in js
+    assert "loadWorkspaceIntoStudio" in js and "labSetTitle" in js and "suggestedName" in js
+    assert 'id="lab-scene-title"' in html and 'id="lab-saved-badge"' in html
+
+
+def test_studio_3d_and_delta_playback():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'id="studio-3d"' in html and "setStudioView" in js and "syncStudio3D" in js
+    assert "state._playLast" in js and "data-speed" in html  # delta-time, not frame-stepped
+    assert 'id="play-speed"' not in html

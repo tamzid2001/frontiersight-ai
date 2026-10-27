@@ -156,7 +156,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.23.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.25.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 return self._send(200, _mcp.catalog())
@@ -354,6 +354,8 @@ class H(BaseHTTPRequestHandler):
                 try:
                     scene, meta = spark.generate_scene(desc)
                     return self._send(200, {"scene": scene, "source": "MODEL_DERIVED", "model_call": meta})
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
                 except BlockedCredentials:
                     scene = _match(desc)
                     if scene: return self._send(200, {"scene": scene, "source": "OFFLINE_HEURISTIC", "model_call": None})

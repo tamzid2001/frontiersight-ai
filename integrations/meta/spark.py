@@ -111,7 +111,8 @@ def validate_scene(obj: dict) -> dict:
 
 def generate_scene(description: str) -> tuple[dict, dict]:
     """Muse Spark generates a Create Lab scene as strict JSON (validated)."""
-    if not description or len(description) > 800: raise ModelError("scene description must be 1..800 characters")
+    if not description or len(description) > 4000:
+        raise ValueError(f"scene description must be 1..4000 characters (yours: {len(description)})")
     prompt = ("You design scenes for a physical-AI safety workbench. Stage: 16 x 14 metres, "
               "x right, y up, origin bottom-left. Reply with ONLY a JSON object: "
               '{"name": str, "explanation": str (one sentence), "objects": [{"category": one of '
