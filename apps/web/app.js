@@ -98,10 +98,9 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
 }
 function renderMyScenes(){const host=$("scenario-list");if(!host)return;
  const old=$("my-scenes-card");if(old)old.remove();const oldRuns=$("runs-card");if(oldRuns)oldRuns.remove();
+ loadWorkspaces(); renderRuns();
  let mine=[];
- try{mine=JSON.parse(localStorage.getItem(sceneStoreKey())||localStorage.getItem("fs-my-scenes")||"[]");}catch(e){}
- renderRuns();
- if(!mine.length){renderRuns();return;}const div=document.createElement("div");div.className="card wide";div.id="my-scenes-card";
+ if(true){return;}const div=document.createElement("div");div.className="card wide";div.id="my-scenes-card";
  div.innerHTML=`<h3>My scenes (this browser)</h3>`+mine.map((s,i)=>`<p><b>${s.id}</b> <span class="dim">${new Date(s.when).toLocaleString()} · ${s.tracks.length} objects</span>
   <button data-mine="${i}" class="ghostbtn">Re-analyse</button> <button data-del="${i}" class="ghostbtn">Delete</button></p>`).join("");
  host.appendChild(div);
@@ -815,3 +814,108 @@ const _suBtn=$("auth-signup");if(_suBtn){const _su=_suBtn.onclick;
  _suBtn.onclick=async()=>{await _su();if($("auth-status").textContent)markInvalid(["su-name","su-email","su-password"],true);};}
 const _siBtn=$("auth-signin");if(_siBtn){const _si=_siBtn.onclick;
  _siBtn.onclick=async()=>{await _si();if($("auth-status").textContent)markInvalid(["si-email","si-password"],true);};}
+
+// ---- Workspaces: saved labs + SAM frame sets (search · open · update · delete) ----
+function wsKey(){const u=(typeof serverUser==="function")?serverUser():null;return "fs-workspaces:"+(u?("u"+u.id):"guest");}
+function wsLocalList(){try{return JSON.parse(localStorage.getItem(wsKey())||"[]");}catch(e){return[];}}
+function wsLocalSave(list){try{localStorage.setItem(wsKey(),JSON.stringify(list.slice(0,40)));return true;}
+ catch(e){toast("Browser storage is full — delete a workspace or sign in to save on the server.","err");return false;}}
+state.workspaces=[]; state.openWorkspace=null;
+function wsNormalizeLocal(w){return {...w, server:false, key:"local:"+w.id};}
+function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
+ return {key:"server:"+s.id, server:true, id:s.id, name:s.name||w.name||"workspace",
+  kind:w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
+  objects:w.objects||(s.payload&&s.payload.objects)||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
+  captures:w.captures||null, image:w.image||null};}
+async function loadWorkspaces(){
+ let list=wsLocalList().map(wsNormalizeLocal);
+ // legacy analysed scenes become workspaces (read-compat, deduped by id)
+ try{const legacy=JSON.parse(localStorage.getItem((typeof sceneStoreKey==="function"?sceneStoreKey():"fs-my-scenes"))||"[]");
+  for(const m of legacy) if(!list.some(w=>w.id===m.id))
+   list.push({key:"legacy:"+m.id, server:false, legacy:true, id:m.id, name:m.id, kind:"lab", updated:m.when, tracks:m.tracks, objects:null});}catch(e){}
+ if(sessionToken()){try{const out=await api("/api/scenes");
+   if(out.status===200){const srv=out.body.scenes.map(wsNormalizeServer);
+    const note=$("ws-storage-note");if(note)note.textContent="Synced with your account on the server (plus anything kept only in this browser).";
+    list=srv.concat(list.filter(w=>!srv.some(s=>s.name===w.name)));}}catch(e){}}
+ state.workspaces=list.sort((a,b)=>(b.updated||0)-(a.updated||0));
+ renderWorkspaces();}
+function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
+ const q=($("ws-lib-search").value||"").toLowerCase(), kind=$("ws-lib-kind").value;
+ const mine=state.workspaces.filter(w=>(!kind||w.kind===kind)&&(!q||(w.name+" "+w.kind).toLowerCase().includes(q)));
+ if(!state.workspaces.length){host.innerHTML='<p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p>';return;}
+ if(!mine.length){host.innerHTML='<p class="dim">No workspace matches that search.</p>';return;}
+ host.innerHTML=mine.map((w,i)=>`<div class="labobj ws-card" data-key="${w.key}">
+  <b>${w.kind==="frames"?"▣":"✦"} ${w.name}</b>
+  <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
+  <span class="pill ghost">${w.server?"server":"this browser"}</span>
+  <span class="dim">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</span>
+  <div class="row">
+   <button data-ws="open">Open</button>
+   ${w.kind==="lab"?'<button data-ws="update" class="ghostbtn">Update from current Lab</button>':""}
+   ${w.tracks?'<button data-ws="analyse" class="ghostbtn">Analyse tracks</button>':""}
+   <button data-ws="rename" class="ghostbtn">Rename</button>
+   <button data-ws="del" class="ghostbtn">Delete</button>
+  </div></div>`).join("");
+ host.querySelectorAll(".ws-card").forEach(card=>{const w=state.workspaces.find(x=>x.key===card.dataset.key);
+  card.querySelectorAll("button").forEach(b=>b.onclick=async()=>{const a=b.dataset.ws;
+   if(a==="open")openWorkspace(w);
+   if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(()=>{});}
+   if(a==="update"){w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
+    await persistWorkspace(w);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
+   if(a==="rename"){const name=prompt("Rename workspace:",w.name);if(!name)return;w.name=name.slice(0,120);w.updated=Date.now();
+    await persistWorkspace(w);loadWorkspaces();}
+   if(a==="del"){await deleteWorkspace(w);loadWorkspaces();}
+  });});}
+async function persistWorkspace(w){
+ if(sessionToken()&&!w.legacy){
+  const payload={workspace:{kind:w.kind,objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
+  if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload})});
+   if(out.status===200)return true;}
+  const out=await api("/api/scenes",{method:"POST",body:JSON.stringify({name:w.name,payload})});
+  if(out.status===201){w.server=true;w.id=out.body.id;return true;}
+  if(out.status===402){toast(out.body.error+" — saving in this browser instead.","warn");}
+ }
+ const list=wsLocalList().filter(x=>x.id!==w.id);
+ list.unshift({id:w.id||("ws-"+Date.now()),name:w.name,kind:w.kind,updated:w.updated||Date.now(),
+  objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null});
+ return wsLocalSave(list);}
+async function deleteWorkspace(w){
+ if(w.server&&sessionToken()){await api("/api/scenes/delete",{method:"POST",body:JSON.stringify({id:w.id})});}
+ wsLocalSave(wsLocalList().filter(x=>x.id!==w.id));
+ if(state.openWorkspace&&state.openWorkspace.key===w.key)state.openWorkspace=null;
+ toast(`Workspace "${w.name}" deleted.`);}
+function openWorkspace(w){state.openWorkspace=w;
+ if(w.kind==="frames"){
+  state.samCaptures=w.captures||[];
+  const cnt=$("sam-count");if(cnt)cnt.textContent=state.samCaptures.length;
+  goto("studio");
+  if(w.image){const img=new Image();img.onload=()=>{const c=$("sam-canvas");c.getContext("2d").drawImage(img,0,0,c.width,c.height);};img.src=w.image;}
+  else if(w.tracks){toast(`Workspace "${w.name}" has ${w.tracks.length} built track(s) — use "Analyse tracks" on its card, or segment new frames.`);}
+  else toast(`Workspace "${w.name}" reopened with ${state.samCaptures.length} captured frame(s) — Build tracks when ready.`);
+  const st=$("sam-status");if(st)st.textContent=`Workspace "${w.name}" loaded: ${state.samCaptures.length} captured frame(s). Segment more moments or Build tracks.`;
+  document.getElementById("sam-panel").scrollIntoView({behavior:"smooth"});
+ }else{
+  if(w.objects){labLoadScene({objects:w.objects},`Workspace "${w.name}" opened — edit anything, then Run analysis or Update.`);}
+  else if(w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(()=>{});return;}
+  goto("create");
+  const uw=$("lab-update-ws");if(uw)uw.classList.remove("hidden");
+ }}
+$("ws-lib-search").addEventListener("input",renderWorkspaces);
+$("ws-lib-kind").addEventListener("change",renderWorkspaces);
+$("lab-save-ws").onclick=async()=>{if(!state.lab.objects.length){labStatus("Nothing to save yet — add a component first.");return;}
+ const name=($("lab-ws-name").value||"").trim()||("Scene "+new Date().toLocaleTimeString());
+ const w={id:"ws-"+Date.now(),name,kind:"lab",updated:Date.now(),
+  objects:JSON.parse(JSON.stringify(state.lab.objects))};
+ state.openWorkspace=w;
+ if(await persistWorkspace(w)){state.openWorkspace=w;const uw=$("lab-update-ws");if(uw)uw.classList.remove("hidden");
+  toast(`Workspace "${name}" saved${w.server?" on the server":" in this browser"}. Find it in Workspace.`);loadWorkspaces();}};
+$("lab-update-ws").onclick=async()=>{const w=state.openWorkspace;
+ if(!w){toast("Open a workspace first, or use Save workspace.","warn");return;}
+ w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
+ if(await persistWorkspace(w)){toast(`Workspace "${w.name}" updated.`);loadWorkspaces();}};
+$("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capture at least one frame first.");return;}
+ let image=null;try{const c=$("sam-canvas");image=c.toDataURL("image/jpeg",0.62);if(image.length>600000)image=null;}catch(e){}
+ const w={id:"ws-"+Date.now(),name:"SAM frames "+new Date().toLocaleTimeString(),kind:"frames",
+  updated:Date.now(),captures:state.samCaptures,image,
+  tracks:null};
+ if(await persistWorkspace(w)){toast(`Frame workspace saved${w.server?" on the server":" in this browser"}${image?"":" (frame image too large to store — captures kept)"}.`);loadWorkspaces();}};

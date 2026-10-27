@@ -199,6 +199,16 @@
 <section id="view-workspace" class="view">
  <h2>Experiment workspace</h2>
  <div class="row" style="margin-bottom:12px"><input id="ws-search" type="text" placeholder="Filter scenarios… (e.g. occlusion, warehouse)" style="flex:1" aria-label="Filter scenarios"></div>
+ <div class="card wide" id="workspace-lib"><h3>My workspaces</h3>
+  <p class="dim">Saved Create Lab scenes and SAM frame sets — yours, searchable, reopenable, updatable.
+  <span id="ws-storage-note">Stored in this browser; sign in to keep them on the server too.</span></p>
+  <div class="row">
+   <input id="ws-lib-search" type="text" placeholder="Search workspaces…" aria-label="Search workspaces" style="flex:2">
+   <select id="ws-lib-kind" aria-label="Filter by kind" style="flex:1">
+    <option value="">All kinds</option><option value="lab">Create Lab scenes</option><option value="frames">SAM frame sets</option></select>
+  </div>
+  <div id="workspace-list"><p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p></div>
+ </div>
  <div id="scenario-list" class="grid3"></div>
  <div class="card wide"><h3>Analytical validation cases</h3><ul id="validation-list"><li class="dim">loading…</li></ul></div>
 </section>
@@ -241,6 +251,7 @@
     <label>Concept 2 (optional)<input id="sam-concept2" value="forklift" style="width:100%"></label>
     <button id="sam-run">Segment current frame (SAM 3.1)</button>
     <button id="sam-build" class="ghostbtn">Build tracks &amp; analyse captures</button>
+   <button id="sam-save-ws" class="ghostbtn">Save frames as workspace</button>
     <p id="sam-status" role="status" class="dim"></p>
     <h3>Detections (latest frame)</h3><ul id="sam-records"><li class="dim">None yet.</li></ul>
    </aside>
@@ -265,6 +276,9 @@
    <div class="row">
     <button id="lab-run">Run analysis →</button>
     <button id="lab-export" class="ghostbtn">Export scene JSON</button>
+    <input id="lab-ws-name" type="text" placeholder="Workspace name…" aria-label="Workspace name" style="max-width:190px">
+    <button id="lab-save-ws" class="ghostbtn">Save workspace</button>
+    <button id="lab-update-ws" class="ghostbtn hidden">Update opened workspace</button>
     <button id="lab-share" class="ghostbtn">Copy share link</button>
     <label class="ghostbtn" style="cursor:pointer">Import JSON<input id="lab-import" type="file" accept="application/json" hidden></label>
     <span id="lab-status" role="status" class="dim"></span>

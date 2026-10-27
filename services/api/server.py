@@ -119,7 +119,7 @@ class H(BaseHTTPRequestHandler):
                 "login": "/api/auth/login", "logout": "/api/auth/logout",
                 "checkout": "/api/billing/checkout", "portal": "/api/billing/portal",
                 "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
-                "scenes": "/api/scenes", "scenedel": "/api/scenes/delete",
+                "scenes": "/api/scenes", "scenedel": "/api/scenes/delete", "sceneupd": "/api/scenes/update",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
                 "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
@@ -155,7 +155,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.19.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.20.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -439,6 +439,19 @@ class H(BaseHTTPRequestHandler):
                          (user["id"], "meta", f.encrypt(key.encode()).decode(), key[-4:], __import__("time").time()))
                 _store.audit(user["id"], "byok_saved")
                 return self._send(200, {"ok": True, "configured": True, "last4": key[-4:]})
+            if route.startswith("/api/scenes/update"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                sid = str(body.get("id", ""))
+                row = _store.one("SELECT id FROM scenes WHERE id=? AND user_id=?", (sid, user["id"]))
+                if not row: return self._send(404, {"error": "workspace not found (or not yours)"})
+                payload = body.get("payload")
+                if not isinstance(payload, dict):
+                    return self._send(400, {"error": "payload must be a workspace object"})
+                _store.q("UPDATE scenes SET name=?, payload=? WHERE id=? AND user_id=?",
+                         (str(body.get("name", "workspace"))[:120], json.dumps(payload)[:2_000_000], sid, user["id"]))
+                _store.audit(user["id"], "workspace_updated", sid)
+                return self._send(200, {"ok": True, "id": sid})
             if route.startswith("/api/scenes/delete"):
                 user = _auth_user(self)
                 if not user: return self._send(401, {"error": "sign in required"})

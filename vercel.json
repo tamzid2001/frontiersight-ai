@@ -144,6 +144,10 @@
     {
       "source": "/favicon-32.png",
       "destination": "/api/index?ep=favicon"
+    },
+    {
+      "source": "/api/scenes/update",
+      "destination": "/api/index?ep=sceneupd"
     }
   ],
   "functions": {

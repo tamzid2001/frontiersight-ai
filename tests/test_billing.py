@@ -141,3 +141,15 @@ def test_support_and_org_provisioning(api, tmp_path):
             (uid3, "Acme Safety", "member", _t.time()))
     s, out = call(api, "/api/scenes", method="GET", token=token3)
     assert any(sc["shared"] for sc in out["scenes"])
+
+def test_workspace_update_endpoint(api):
+    token = signup(api, "ws@example.com")
+    s, out = call(api, "/api/scenes", {"name": "Lab A", "payload": {"workspace": {"kind": "lab", "objects": []}}}, token)
+    assert s == 201; sid = out["id"]
+    s, out = call(api, "/api/scenes/update", {"id": sid, "name": "Lab A2", "payload": {"workspace": {"kind": "lab", "objects": [1]}}}, token)
+    assert s == 200
+    s, out = call(api, "/api/scenes", method="GET", token=token)
+    assert out["scenes"][0]["name"] == "Lab A2"
+    token2 = signup(api, "other@example.com")
+    s, out = call(api, "/api/scenes/update", {"id": sid, "name": "hijack", "payload": {}}, token2)
+    assert s == 404  # cannot update someone else's workspace
