@@ -3,7 +3,7 @@
 - **Project:** FrontierSight AI — *From video to verifiable physical-world intelligence.*
 - **Owner:** Quantura Studio · **Track:** Startup · **Theme:** Push the Frontier
 - **Repo:** https://github.com/tamzid2001/frontiersight-ai
-- **Live app:** https://frontiersight-ai-ten.vercel.app (update if alias differs)
+- **Live app:** https://frontiersight-ai.vercel.app
 - **Deadline:** Nov 4, 2026, 9:00 PM ET
 
 ## Problem
