@@ -25,6 +25,7 @@
   <b>independent deterministic physics engine</b>. Models propose and explain. Geometry decides.
   Every number carries its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
   <div class="cta"><button id="cta-demo">Run the warehouse near-miss demo →</button>
+  <button id="cta-create" class="ghostbtn">Open Create Lab — build your own scene</button>
   <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai">GitHub repository</a></div>
   <p class="dim" id="hero-diag">Loading diagnostics…</p>
  </div>
@@ -99,7 +100,7 @@
     <button class="ghostbtn" data-tpl="near-miss">Near-miss</button>
     <button class="ghostbtn" data-tpl="crossing">Crossing</button>
     <button class="ghostbtn" data-tpl="cell">Robot cell</button></div>
-   <div id="lab-list"></div>
+   <p id="lab-ready" class="mono"></p><div id="lab-list"></div>
    <h3>How it flows</h3>
    <p class="dim">Run analysis samples every path into timestamped tracks, runs all-pairs closest-approach/TTC
    analysis, proposes a braking counterfactual for the focus pair, and lands you in the Studio with the full
@@ -117,6 +118,7 @@
   <div class="card stagecard"><canvas id="cf-chart" width="880" height="420"></canvas>
    <p class="dim">Distance between forklift and pedestrian over time: original (slate) vs counterfactual (teal). Sliders rerun the deterministic simulation on the server — nothing here is pre-baked text.</p></div>
   <aside class="card"><h3>Intervention</h3>
+   <label>Counterfactual agent (created/custom scenes)<select id="cf-agent"></select></label>
    <label>Speed reduction <b id="sr-val">40%</b><input id="sr" type="range" min="0" max="80" value="40"></label>
    <label>Intervention time <b id="it-val">1.0s</b><input id="it" type="range" min="0" max="4" step="0.25" value="1"></label>
    <button id="cf-run">Rerun simulation</button>

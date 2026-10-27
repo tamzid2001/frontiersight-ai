@@ -28,3 +28,8 @@ footer{padding:20px 22px;color:var(--dim);border-top:1px solid var(--line)}
 .labobj.sel{border-color:var(--cyan)}
 .labctl label{flex:1;font-size:12px}.labctl input{width:100%;background:#0a0e1a;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px}
 textarea{background:#0a0e1a;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px;font-family:var(--mono);font-size:12px}
+
+.objrow{cursor:pointer}.objrow:hover{color:var(--cyan)}
+.pairtable{border-collapse:collapse;width:100%;font-size:13px}.pairtable th,.pairtable td{border:1px solid var(--line);padding:6px 9px;text-align:left}
+.pairtable th{color:var(--dim);font-weight:600}
+select{background:#0a0e1a;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px}

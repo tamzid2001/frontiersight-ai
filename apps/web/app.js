@@ -5,7 +5,8 @@ const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc
 // tabs
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{
  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));
- document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="view-"+b.dataset.view));});
+ document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="view-"+b.dataset.view));
+ if(b.dataset.view==="create"&&typeof labDraw==="function")labDraw();});
 function goto(v){document.querySelector(`#tabs button[data-view="${v}"]`).click();}
 
 async function diag(){try{const d=await(await fetch("/api/diagnostics")).json();
@@ -20,13 +21,24 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
  $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card"><h3>${s.id}</h3><p class="dim">${s.description}</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
  const v=await(await fetch("/api/validate")).json();
  $("validation-list").innerHTML=v.cases.map(c=>`<li>${c.passed?"✓":"✗"} <b>${c.case}</b> — <span class="dim">${c.detail}</span></li>`).join("");
+ renderMyScenes();
  await pick(d.scenarios[0].id);}
+function renderMyScenes(){const host=$("scenario-list");if(!host)return;let mine=[];
+ try{mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");}catch(e){}
+ if(!mine.length)return;const div=document.createElement("div");div.className="card wide";
+ div.innerHTML=`<h3>My scenes (this browser)</h3>`+mine.map((s,i)=>`<p><b>${s.id}</b> <span class="dim">${new Date(s.when).toLocaleString()} · ${s.tracks.length} objects</span>
+  <button data-mine="${i}" class="ghostbtn">Re-analyse</button> <button data-del="${i}" class="ghostbtn">Delete</button></p>`).join("");
+ host.appendChild(div);
+ div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
+ div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem("fs-my-scenes",JSON.stringify(mine));div.remove();renderMyScenes();});}
 window.pick=async id=>{state.data=await(await fetch("/api/scenarios?name="+id)).json();state.scenario=id;state.t=0;
  $("scenario-select").value=id;renderObjects();draw();goto("studio");};
 $("scenario-select").onchange=e=>pick(e.target.value);
 
 function renderObjects(){if(!state.data)return;
- $("objects").innerHTML=state.data.tracks.map(t=>`<li><b style="color:${COL[t.category]||"#fff"}">●</b> ${t.object_id} · ${t.category} · <span class="dim">${t.source}, ${t.points.length} obs${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");}
+ $("objects").innerHTML=state.data.tracks.map(t=>`<li class="objrow" data-id="${t.object_id}" title="Click to highlight this track"><b style="color:${COL[t.category]||"#fff"}">●</b> ${t.object_id} · ${t.category} · <span class="dim">${t.source}, ${t.points.length} obs${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");
+ document.querySelectorAll(".objrow").forEach(el=>el.onclick=()=>{state.highlight=state.highlight===el.dataset.id?null:el.dataset.id;draw();});
+ populateCfAgents();}
 
 let WORLD={x:15,y:14};
 function computeWorld(){if(!state.data)return WORLD;let mx=1,my=1;
@@ -37,12 +49,12 @@ function posAt(track,t){const p=track.points;if(t<=p[0][0])return p[0];if(t>=p[p
  for(let i=1;i<p.length;i++){if(p[i][0]>=t){const[t0,a]=[p[i-1][0],p[i-1]],[t1,b]=[p[i][0],p[i]];const k=(t-t0)/(t1-t0||1);return[0,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];}}return p[p.length-1];}
 function draw(){const c=$("stage");if(!c||!state.data)return;computeWorld();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);x.strokeStyle="#1b2434";for(let gx=0;gx<=WORLD.x;gx+=2){const[a]=px(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
- for(const tr of state.data.tracks){const col=COL[tr.category]||"#fff";
-  x.strokeStyle=col+"55";x.beginPath();tr.points.forEach(p=>{const[a,b]=px(p[1],p[2],W,H);p===tr.points[0]?x.moveTo(a,b):x.lineTo(a,b);});x.stroke();
+ for(const tr of state.data.tracks){const col=COL[tr.category]||"#fff";const hl=!state.highlight||state.highlight===tr.object_id;
+  x.strokeStyle=col+(hl?"aa":"2a");x.lineWidth=hl?2:1;x.beginPath();tr.points.forEach(p=>{const[a,b]=px(p[1],p[2],W,H);p===tr.points[0]?x.moveTo(a,b):x.lineTo(a,b);});x.stroke();
   const occ=tr.occluded.some(o=>state.t>=o[0]&&state.t<=o[1]);
   const cur=posAt(tr,state.t);const[a,b]=px(cur[1],cur[2],W,H);const r=tr.radius/WORLD.x*W;
-  x.strokeStyle=occ?"#f26d7d":col;x.lineWidth=occ?3:2;x.setLineDash(occ?[5,4]:[]);x.beginPath();x.arc(a,b,r,0,7);x.stroke();x.setLineDash([]);x.lineWidth=1;
-  x.fillStyle="#e8edf6";x.font="13px system-ui";x.fillText(`${tr.object_id}${occ?" · OCCLUDED":""}`,a+r+6,b-6);}
+  x.strokeStyle=occ?"#f26d7d":col;x.globalAlpha=hl?1:0.35;x.lineWidth=occ?3:2;x.setLineDash(occ?[5,4]:[]);x.beginPath();x.arc(a,b,r,0,7);x.stroke();x.setLineDash([]);x.lineWidth=1;
+  x.fillStyle="#e8edf6";x.font="13px system-ui";x.fillText(`${tr.object_id}${occ?" · OCCLUDED":""}`,a+r+6,b-6);x.globalAlpha=1;x.lineWidth=1;}
  $("clock").textContent="t = "+state.t.toFixed(2)+"s";$("scrub").value=state.t;}
 $("scrub").oninput=e=>{state.t=+e.target.value;draw();};
 $("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.playing?"⏸ Pause":"▶ Play";
@@ -65,14 +77,18 @@ function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s
 function renderInspector(r){const sc=r.scenario;$("inspector-body").innerHTML=
  `<p><b>Coordinate frame:</b> ${sc.calibration.frame} · <b>Scale:</b> ${sc.calibration.metres_per_pixel} m/px (declared, synthetic) · <b>Units:</b> metres (calibrated) · <b>Space:</b> world</p>`+
  sc.tracks.map(t=>`<p><b>${t.object_id}</b> (${t.category}) — ${t.points.length} observations, radius ${t.radius} m, source <code>${t.source}</code>${t.occluded.length?`, occluded ${t.occluded.map(o=>o.join("–"))}s (missing evidence, not numerical uncertainty)`:""}</p>`).join("")+
- `<p class="dim">Assumption register: constant-velocity extrapolation for CPA/TTC; finite-difference velocities; smoothing (if applied) biases peaks downward and never overwrites ground truth, which is held separately in the evidence packet.</p>`;}
+ `<p class="dim">Assumption register: constant-velocity extrapolation for CPA/TTC; finite-difference velocities; smoothing (if applied) biases peaks downward and never overwrites ground truth, which is held separately in the evidence packet.</p>`+
+ (r.run&&r.run.findings.pairs?`<h3>All pairs (${r.run.findings.pairs.length})</h3><table class="pairtable"><tr><th>Pair</th><th>d_min</th><th>Units</th><th>TTC</th><th>Event</th><th>Metric claims</th></tr>${r.run.findings.pairs.map(p=>`<tr><td>${p.pair.join(" ↔ ")}</td><td>${p.d_min}</td><td>${p.units}</td><td>${p.ttc_s??"—"}</td><td>${p.event?p.event.type:"—"}</td><td>${p.metric_claims?"yes":"no (pixel space)"}</td></tr>`).join("")}</table>`:"");}
 
+function populateCfAgents(){const sel=$("cf-agent");if(!sel||!state.data)return;
+ sel.innerHTML=state.data.tracks.map(t=>`<option value="${t.object_id}">${t.object_id}</option>`).join("");
+ if(state.cfAgentId)sel.value=state.cfAgentId;}
 async function runCf(){const custom=state.data&&state.data.kind==="USER_UPLOADED";
  const r=await(await fetch(custom?"/api/counterfactual-custom":"/api/counterfactual",{method:"POST",headers:{"Content-Type":"application/json"},
- body:JSON.stringify(custom?{tracks:state.data.tracks,agent_id:state.data.tracks[0].object_id,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value}
+ body:JSON.stringify(custom?{tracks:state.data.tracks,agent_id:($("cf-agent")&&$("cf-agent").value)||state.data.tracks[0].object_id,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value}
   :{scenario:state.scenario,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value})})).json();
  if(r.error){$("cf-results").textContent="Simulation failed: "+r.error;return;}
- if(custom){$("cf-results").innerHTML=`agent <b>${state.data.tracks[0].object_id}</b> vs ${Object.keys(r.per_actor).length} other actor(s)<br>worst original d_min <b>${r.worst_original_d_min}</b> → counterfactual <b>${r.worst_counterfactual_d_min}</b> (Δ ${r.delta_worst_d_min>=0?"+":""}${r.delta_worst_d_min})<br>`+
+ if(custom){$("cf-results").innerHTML=`agent <b>${($("cf-agent")||{}).value||state.data.tracks[0].object_id}</b> vs ${Object.keys(r.per_actor).length} other actor(s)<br>worst original d_min <b>${r.worst_original_d_min}</b> → counterfactual <b>${r.worst_counterfactual_d_min}</b> (Δ ${r.delta_worst_d_min>=0?"+":""}${r.delta_worst_d_min})<br>`+
   Object.entries(r.per_actor).map(([k,v])=>`${k}: ${v.original_d_min} → ${v.counterfactual_d_min}`).join("<br>");
   state.cf={trajectories:r.trajectories,original:{d_min:r.worst_original_d_min},counterfactual:{d_min:r.worst_counterfactual_d_min},delta_d_min:r.delta_worst_d_min,monte_carlo:null,manifest_hash:"custom"};drawCf(state.cf);return;}
  state.cf=r;drawCf(r);
@@ -99,6 +115,7 @@ $("export-html").onclick=async()=>{const name=state.scenario||"warehouse-near-mi
  download(new Blob([`<!doctype html><title>FrontierSight evidence — ${name}</title><h1>FrontierSight AI evidence report</h1><p>${rep.disclaimer}</p><pre>${JSON.stringify(rep,null,2).replace(/</g,"&lt;")}</pre>`],{type:"text/html"}),`frontiersight-${name}-report.html`);};
 function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();}
 $("cta-demo").onclick=()=>{goto("studio");$("analyze").click();};
+$("cta-create").onclick=()=>goto("create");
 $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark…";
  const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss"})});
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};
@@ -111,9 +128,11 @@ const LAB={w:16,h:14};
 function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
+const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
 function labAdd(cat,waypoints,speed,radius,delay,mode){
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
   speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",waypoints:waypoints||[]};
+ if(!o.waypoints.length){const s=LAB_SLOTS[state.lab.objects.length%LAB_SLOTS.length];o.waypoints=[[s[0],s[1]]];o.spawned=true;}
  state.lab.objects.push(o);state.lab.selected=o.id;labRenderList();labDraw();return o;}
 function labClear(){$("lab-canvas").getContext("2d").clearRect(0,0,880,620);}
 function labXY(x,y,W,H){return [x/LAB.w*W, H-(y/LAB.h*H)];}
@@ -148,7 +167,15 @@ function labDraw(){const c=$("lab-canvas");if(!c)return;computeLabDuration();con
   live.style.color=best&&best.d<0.5?"var(--amber)":"";}
  const clk=$("lab-clock");if(clk)clk.textContent="t = "+state.lab.t.toFixed(2)+"s";const sc=$("lab-scrub");if(sc)sc.value=state.lab.t;}
 function computeLabDuration(){const sc=$("lab-scrub");if(sc)sc.max=labDuration();}
-function labRenderList(){const el=$("lab-list");if(!el)return;
+function labReady(){const el=$("lab-ready");if(!el)return;const os=state.lab.objects;
+ const moving=os.filter(o=>o.speed>0&&o.waypoints.length>1).length, placed=os.filter(o=>o.waypoints.length).length;
+ el.innerHTML=os.length<2?`Add at least <b>2 components</b> to run analysis (${os.length} so far).`
+  :`Ready check: <b>${os.length} components</b> · ${placed} placed · ${moving} moving · stage 16×14 m — ${moving?"press Run analysis.":"give a selected component a path (click the stage) to create motion."}`;
+ el.style.color=os.length>=2&&moving?"var(--teal)":"var(--amber)";}
+document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace")&&$("view-create").classList.contains("on")
+ &&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){const o=labObj(state.lab.selected);
+ if(o&&o.waypoints.length){o.waypoints.pop();labRenderList();labDraw();}}});
+function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
  el.innerHTML=state.lab.objects.length?state.lab.objects.map(o=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${o.id}">
   <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.id}</b> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
   <div class="row labctl">
@@ -175,12 +202,20 @@ function labRenderList(){const el=$("lab-list");if(!el)return;
 // canvas editing: click adds a waypoint to the selected component; drag moves one
 (()=>{const c=$("lab-canvas");if(!c)return;let drag=null,moved=false;
  const evPos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];};
- c.addEventListener("pointerdown",e=>{const[px,py]=evPos(e);moved=false;
+ c.addEventListener("pointerdown",e=>{const[px,py]=evPos(e);moved=false;c._suppressAdd=false;
+  // click any component's live marker to select it (drawn footprint, min 14px)
+  for(const o of state.lab.objects){const pos=posOnPath(o,state.lab.t);if(!pos)continue;
+   const[a,b]=labXY(pos[0],pos[1],c.width,c.height);const r=Math.max(14,o.radius/LAB.w*c.width);
+   if(Math.hypot(a-px,b-py)<r){if(state.lab.selected!==o.id){state.lab.selected=o.id;labRenderList();labDraw();}c._suppressAdd=true;break;}}
   const o=labObj(state.lab.selected);if(!o)return;
   o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);if(Math.hypot(a-px,b-py)<12)drag={o,i};});});
+ c.addEventListener("dblclick",e=>{const[px,py]=evPos(e);const o=labObj(state.lab.selected);if(!o)return;
+  let best=-1,bd=14;o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);const d=Math.hypot(a-px,b-py);if(d<bd){bd=d;best=i;}});
+  if(best>=0){o.waypoints.splice(best,1);labRenderList();labDraw();labStatus(`Waypoint ${best+1} removed from ${o.id}.`);}});
  c.addEventListener("pointermove",e=>{if(!drag)return;moved=true;const[px,py]=evPos(e);
   drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);labDraw();});
  c.addEventListener("pointerup",e=>{if(drag&&moved){drag=null;labRenderList();labDraw();return;}drag=null;
+  if(c._suppressAdd){c._suppressAdd=false;return;}
   const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
   const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));labRenderList();labDraw();});})();
 $("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
@@ -196,6 +231,7 @@ $("lab-scrub").oninput=e=>{state.lab.t=+e.target.value;labDraw();};
 function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
  for(const o of state.lab.objects){if(!o.waypoints.length)throw new Error(`${o.id} has no path — click the stage to add waypoints.`);
   if(o.category!=="shelf"&&o.speed<=0&&o.waypoints.length>1)throw new Error(`${o.id} has a path but speed 0 — set a speed or make it a shelf.`);
+  if(o.category!=="shelf"&&o.speed>0&&o.waypoints.length<2)throw new Error(`${o.id} is placed but has no path yet — select it and click the stage to add waypoints, or set its speed to 0 to keep it parked.`);
   const pts=[];for(let t=0;t<=T+1e-9;t=Math.round((t+dt)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
   tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
  if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");

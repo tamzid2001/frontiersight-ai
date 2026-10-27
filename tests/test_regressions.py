@@ -38,3 +38,11 @@ def test_create_lab_replaced_upload_lab():
     assert 'data-view="create"' in html and 'id="view-create"' in html
     assert 'id="lab-canvas"' in html and "labSampleTracks" in js and "posOnPath" in js
     assert "Upload Lab" not in html
+
+def test_create_lab_spawn_visibility_and_sections():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    # regression: a component added with no waypoints must spawn visible
+    assert "LAB_SLOTS" in js and "o.spawned=true" in js
+    assert 'id="lab-ready"' in html and 'id="cf-agent"' in html and 'id="cta-create"' in html
+    assert "populateCfAgents" in js and "renderMyScenes" in js and "pairtable" in js
