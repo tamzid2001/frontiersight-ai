@@ -67,7 +67,8 @@ const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc
 
 // tabs
 function showView(v){
- document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);x.toggleAttribute("aria-current",on);});
+ document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
+  if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
  if(v==="create"&&typeof labDraw==="function")labDraw();
  if(v==="counterfactual"&&state.data){populateCfScene();populateCfAgents();if(state.cfData){drawCfMap();drawCfChart();}}}
@@ -110,6 +111,8 @@ window.pick=async id=>{state.data=await(await fetch("/api/scenarios?name="+id)).
 $("scenario-select").onchange=e=>pick(e.target.value);
 
 function renderObjects(){if(!state.data)return;
+ const tEnd=Math.max(1,...state.data.tracks.map(t=>t.points.length?t.points[t.points.length-1][0]:0));
+ const sc=$("scrub");if(sc)sc.max=tEnd.toFixed(2);state.duration=tEnd;
  $("objects").innerHTML=state.data.tracks.map(t=>`<li class="objrow" data-id="${t.object_id}" title="Click to highlight this track"><b style="color:${COL[t.category]||"#fff"}">●</b> ${t.object_id} · ${t.category} · <span class="dim">${t.source}, ${t.points.length} obs${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");
  document.querySelectorAll(".objrow").forEach(el=>el.onclick=()=>{state.highlight=state.highlight===el.dataset.id?null:el.dataset.id;draw();});
  populateCfAgents();}
@@ -154,8 +157,12 @@ $("analyze").onclick=async()=>{$("analyze-status").textContent="Running bounded 
  recordRun({scenario:state.scenario,mode:r.run.mode,run:r.run.run_id,events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length}); obDone("demo");
  renderTrace(r.run);renderInspector(r);drawCfFromRun(r.run);};
 function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s.status}"><b>${s.name}</b> · ${s.status} · <span class="dim">${s.attribution}${s.artifact?" · artifact "+s.artifact:""}${s.retries?" · retries "+s.retries:""}</span><br><span class="dim mono">${JSON.stringify(s.detail).slice(0,320)}</span></li>`).join("");}
-function renderInspector(r){const sc=r.scenario;$("inspector-body").innerHTML=
- `<p><b>Coordinate frame:</b> ${sc.calibration.frame} · <b>Scale:</b> ${sc.calibration.metres_per_pixel} m/px (declared, synthetic) · <b>Units:</b> metres (calibrated) · <b>Space:</b> world</p>`+
+function renderInspector(r){const sc=r.scenario;const mpp=sc.calibration.metres_per_pixel;
+ const unitsLine=(sc.tracks[0]&&sc.tracks[0].space==="world")
+  ? `<b>Units:</b> metres (world space${mpp?`, declared scale ${mpp} m/px`:", 1 unit = 1 m by construction"})`
+  : `<b>Units:</b> pixels (uncalibrated) — <b>no metric claims</b>; declare a scale to convert`;
+ $("inspector-body").innerHTML=
+ `<p><b>Coordinate frame:</b> ${sc.calibration.frame} · ${unitsLine} · <b>Space:</b> ${sc.tracks[0]?sc.tracks[0].space:"—"}</p>`+
  sc.tracks.map(t=>`<p><b>${t.object_id}</b> (${t.category}) — ${t.points.length} observations, radius ${t.radius} m, source <code>${t.source}</code>${t.occluded.length?`, occluded ${t.occluded.map(o=>o.join("–"))}s (missing evidence, not numerical uncertainty)`:""}</p>`).join("")+
  `<p class="dim">Assumption register: constant-velocity extrapolation for CPA/TTC; finite-difference velocities; smoothing (if applied) biases peaks downward and never overwrites ground truth, which is held separately in the evidence packet.</p>`+
  (r.run&&r.run.findings.pairs?`<h3>All pairs (${r.run.findings.pairs.length})</h3><table class="pairtable"><tr><th>Pair</th><th>d_min</th><th>Units</th><th>TTC</th><th>Event</th><th>Metric claims</th></tr>${r.run.findings.pairs.map(p=>`<tr><td>${p.pair.join(" ↔ ")}</td><td>${p.d_min}</td><td>${p.units}</td><td>${p.ttc_s??"—"}</td><td>${p.event?p.event.type:"—"}</td><td>${p.metric_claims?"yes":"no (pixel space)"}</td></tr>`).join("")}</table>`:"");}
@@ -177,7 +184,10 @@ function populateCfAgents(){const sel=$("cf-agent"),tg=$("cf-target");if(!sel||!
 $("cf-agent").onchange=()=>{state.cfAgentId=$("cf-agent").value;populateCfAgents();runCf();};
 $("cf-target").onchange=()=>runCf();
 $("cf-scene").onchange=async()=>{const v=$("cf-scene").value;if(!v||v==="__current"||v===state.scenario){runCf();return;}
- state.data=await(await fetch("/api/scenarios?name="+v)).json();state.scenario=v;state.run=null;state.cfAgentId=null;
+ let d;try{d=await(await fetch("/api/scenarios?name="+v)).json();}
+ catch(e){$("cf-results").textContent="Could not load scene "+v+" — simulation not run.";return;}
+ resetRunState();state.data=d;state.scenario=v;state.t=0;
+ const ss=$("scenario-select");if(ss)ss.value=v;
  renderObjects();draw();populateCfAgents();runCf();};
 document.querySelectorAll(".cf-preset").forEach(b=>b.onclick=()=>{$("sr").value=b.dataset.sr;$("it").value=b.dataset.it;$("cf-decel").value=b.dataset.dec;
  $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";runCf();});
@@ -242,7 +252,7 @@ function drawCfMap(){const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x
  x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
  x.fillText(r.agent_id+" (counterfactual)",a2+13,b2+4);x.fillText("◇ closest approach "+cpa[5].toFixed(2)+" m",cx+12,cy-10);
  $("cf-clock").textContent="t = "+state.cfT.toFixed(2)+"s";$("cf-scrub").value=state.cfT;}
-function drawCfFromRun(run){ if(state.data&&$("cf-scene")){ populateCfScene(); runCf(); } }
+function drawCfFromRun(run){ if(state.data&&$("cf-scene")){ populateCfScene(); if(state.cfData)runCf(); } }
 function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);const f=r.results[r.focus_other];if(!f)return;
@@ -258,19 +268,50 @@ function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;con
  x.fillText("— original",52,24);x.fillStyle="#2dd4a8";x.fillText("— counterfactual",150,24);
  x.fillStyle="#f26d7d";x.fillText("contact ≤ "+f.radius_sum.toFixed(2)+" m",W-170,y0-6);
  const ink=getComputedStyle(document.documentElement).getPropertyValue("--dim");x.fillStyle=ink;x.fillText("focus pair: "+r.agent_id+" ↔ "+r.focus_other,52,H-8);}
+$("cf-run").onclick=()=>runCf();
+[["sr","sr-val",v=>v+"%"],["it","it-val",v=>(+v).toFixed(2)+"s"],["cf-decel","dec-val",v=>v+" m/s\u00b2"]].forEach(([id,lbl,f])=>{
+ const el=$(id);if(!el)return;el.addEventListener("input",()=>{$(lbl).textContent=f(el.value);clearTimeout(window._cfDeb);window._cfDeb=setTimeout(runCf,300);});});
 $("cf-scrub").oninput=e=>{state.cfT=+e.target.value;drawCfMap();drawCfChart();};
 $("cf-play").onclick=()=>{state.cfPlaying=!state.cfPlaying;$("cf-play").textContent=state.cfPlaying?"⏸ Pause":"▶ Play comparison";
  if(state.cfPlaying){const step=()=>{if(!state.cfPlaying)return;state.cfT+=0.05;if(state.cfT>6)state.cfT=0;drawCfMap();drawCfChart();requestAnimationFrame(step);};step();}};
 
-$("export-json").onclick=async()=>{const name=state.scenario||"warehouse-near-miss";
- const rep=await(await fetch("/api/report?name="+name)).json();if(state.run)rep.run=state.run;
- download(new Blob([JSON.stringify(rep,null,2)],{type:"application/json"}),`frontiersight-${name}-evidence.json`);};
-$("export-html").onclick=async()=>{const name=state.scenario||"warehouse-near-miss";
- const rep=await(await fetch("/api/report?name="+name)).json();if(state.run)rep.run=state.run;
- $("evidence-preview").textContent=JSON.stringify(rep,null,2).slice(0,2600);
- download(new Blob([`<!doctype html><title>FrontierSight evidence — ${name}</title><h1>FrontierSight AI evidence report</h1><p>${rep.disclaimer}</p><pre>${JSON.stringify(rep,null,2).replace(/</g,"&lt;")}</pre>`],{type:"text/html"}),`frontiersight-${name}-report.html`);};
-function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();}
-$("cta-demo").onclick=()=>{goto("studio");$("analyze").click();};
+// ---- human approval gate (Evidence) ----
+state.approvals=state.approvals||{};
+function runApproved(){return !!(state.run&&state.approvals[state.run.run_id]);}
+function syncApprovalUI(){const ok=runApproved(),has=!!state.run;
+ const note=$("gate-note"),aj=$("export-json"),ah=$("export-html"),es=$("export-status");
+ if(note)note.textContent=!has?"Export is locked: run an analysis first, review its trace, then approve that run here."
+  :ok?`Approved for run ${state.run.run_id} by ${state.approvals[state.run.run_id].by} — recorded in the exported packet.`
+  :`Export is locked until a named human approves run ${state.run.run_id}. Approval is recorded in the exported packet.`;
+ if(aj)aj.disabled=!ok;if(ah)ah.disabled=!ok;
+ if(es)es.textContent=has?(ok?"approved · export unlocked":"not approved · export locked"):"no run yet";
+ const cb=$("approve-evidence");if(cb)cb.checked=ok;
+ const cf=$("approve");if(cf)cf.checked=ok;}
+function applyApproval(){const name=($("approver-name").value||"").trim()||((typeof profile==="function"&&profile())?profile().name:"");
+ if(!state.run)return;
+ if($("approve-evidence").checked){ if(!name){toast("Enter the approver's name — approval must be attributable.","warn");$("approve-evidence").checked=false;return;}
+  state.approvals[state.run.run_id]={by:name,at:new Date().toISOString()}; }
+ else delete state.approvals[state.run.run_id];
+ const cf=$("approve");if(cf)cf.checked=$("approve-evidence").checked;
+ syncApprovalUI();}
+$("approve-evidence").onchange=applyApproval;
+$("approve").onchange=()=>{const ev=$("approve-evidence");if(ev){ev.checked=$("approve").checked;applyApproval();}};
+async function fetchReport(){const name=state.scenario||"warehouse-near-miss";
+ const rep=await(await fetch("/api/report?name="+encodeURIComponent(name))).json();
+ if(state.run){ if(rep.experiment_id!==`fs-${state.run.scenario_id||name}`&&state.data&&state.data.kind!=="USER_UPLOADED"){}
+  rep.run=state.run; rep.human_approval=state.approvals[state.run.run_id]||null; }
+ $("evidence-preview").textContent=JSON.stringify(
+  {experiment_id:rep.experiment_id, human_approval:rep.human_approval,
+   run:rep.run?{run_id:rep.run.run_id, mode:rep.run.mode, stages:rep.run.stages.map(s=>s.name+":"+s.status)}:null,
+   labels:rep.labels, note:"full packet downloaded as JSON"},null,2); return rep;}
+$("export-json").onclick=async()=>{if(!runApproved()){toast("Export locked — review the trace and approve this run first.","warn");return;}
+ const rep=await fetchReport();
+ download(new Blob([JSON.stringify(rep,null,2)],{type:"application/json"}),`frontiersight-${state.scenario}-evidence.json`);
+ toast("Evidence packet exported with recorded human approval.");};
+$("export-html").onclick=async()=>{if(!runApproved()){toast("Export locked — review the trace and approve this run first.","warn");return;}
+ const rep=await fetchReport();
+ download(new Blob([`<!doctype html><title>FrontierSight evidence — ${state.scenario}</title><h1>FrontierSight AI evidence report</h1><p>${rep.disclaimer||""}</p><p>Human approval: ${rep.human_approval?rep.human_approval.by+" at "+rep.human_approval.at:"none"}</p><pre>${JSON.stringify(rep,null,2).replace(/</g,"&lt;")}</pre>`],{type:"text/html"}),`frontiersight-${state.scenario}-report.html`);};
+$("cta-demo").onclick=async()=>{await pick("warehouse-near-miss");goto("studio");$("analyze").click();};
 $("cta-create").onclick=()=>goto("create");
 $("cta-video").onclick=()=>{showView("home");document.getElementById("demo-video").scrollIntoView({behavior:"smooth",block:"center"});};
 $("demo-play").onclick=()=>{const f=$("demo-frame");
@@ -365,7 +406,7 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
 // canvas editing: click adds a waypoint to the selected component; drag moves one
 (()=>{const c=$("lab-canvas");if(!c)return;let drag=null,moved=false;
  const evPos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];};
- c.addEventListener("pointerdown",e=>{const[px,py]=evPos(e);moved=false;c._suppressAdd=false;
+ c.addEventListener("pointerdown",e=>{try{c.setPointerCapture(e.pointerId);}catch(_){} const[px,py]=evPos(e);moved=false;c._suppressAdd=false;
   // click any component's live marker to select it (drawn footprint, min 14px)
   for(const o of state.lab.objects){const pos=posOnPath(o,state.lab.t);if(!pos)continue;
    const[a,b]=labXY(pos[0],pos[1],c.width,c.height);const r=Math.max(14,o.radius/LAB.w*c.width);
@@ -377,7 +418,9 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
   if(best>=0){o.waypoints.splice(best,1);labRenderList();labDraw();labStatus(`Waypoint ${best+1} removed from ${o.id}.`);}});
  c.addEventListener("pointermove",e=>{if(!drag)return;moved=true;const[px,py]=evPos(e);
   drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);labDraw();});
- c.addEventListener("pointerup",e=>{if(drag&&moved){drag=null;labRenderList();labDraw();return;}drag=null;
+ c.addEventListener("pointercancel",()=>{drag=null;});
+ c.addEventListener("pointerup",e=>{const wasDrag=!!drag;if(drag&&moved){drag=null;labRenderList();labDraw();return;}drag=null;
+  if(wasDrag){labRenderList();labDraw();return;}
   if(c._suppressAdd){c._suppressAdd=false;return;}
   const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
   const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));labRenderList();labDraw();});})();
@@ -413,7 +456,7 @@ async function analyzeCustom(tracks,label){
  }catch(e){
   if(e.name==="AbortError") e=new Error("analysis timed out after 95s in the browser — press Run analysis again.");
   labStatus("Analysis failed: "+e.message); const as=$("analyze-status"); if(as)as.textContent="Custom analysis failed: "+e.message;
-  goto("create"); throw e;
+  throw e;
  }finally{ clearTimeout(killer); }
  state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;
  try{const mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem("fs-my-scenes",JSON.stringify(mine.slice(-10)));}catch(e){}
@@ -462,6 +505,8 @@ function applyTheme(){const mode=localStorage.getItem("fs-theme")||"system";
 document.querySelectorAll("[data-theme-mode]").forEach(b=>b.onclick=()=>{localStorage.setItem("fs-theme",b.dataset.themeMode);applyTheme();});
 if(_mq.addEventListener)_mq.addEventListener("change",()=>{if((localStorage.getItem("fs-theme")||"system")==="system")applyTheme();});
 applyTheme();
+
+function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);}
 
 // ---- toasts ----
 function toast(msg, kind="ok"){const host=$("toasts");if(!host)return;const d=document.createElement("div");
@@ -610,5 +655,12 @@ $("lab-clear-all").onclick=()=>{state.lab.objects=[];state.lab.selected=null;lab
 
 // ---- global error surface (throttled; errors become visible, never silent) ----
 let _lastErr=0;
+window.addEventListener("unhandledrejection",e=>{const now=Date.now();if(now-_lastErr<5000)return;_lastErr=now;
+ toast("Something went wrong in the interface: "+((e.reason&&e.reason.message)||"async error")+" — reload if it persists.","err");});
 window.addEventListener("error",e=>{const now=Date.now();if(now-_lastErr<5000)return;_lastErr=now;
  toast("Something went wrong in the interface: "+(e.message||"unknown error")+" — the deterministic API is unaffected; reload if it persists.","err");});
+
+const _skipEl=$("skip-link");
+if(_skipEl)_skipEl.onclick=()=>{showView("home");
+ const el=document.querySelector("#view-home h1");
+ if(el){el.setAttribute("tabindex","-1");el.focus();el.scrollIntoView({behavior:"smooth",block:"start"});}};

@@ -141,3 +141,34 @@ def test_parse_tracks_rejects_duplicate_ids_and_bad_radius():
     with pytest.raises(ValueError): parse_tracks([{"object_id": "x", **base}, {"object_id": "x", **base}])
     with pytest.raises(ValueError): parse_tracks([{"object_id": "x", **base, "radius": -2},
                                                   {"object_id": "y", **base}])
+
+def test_review_regressions_backend():
+    from engine.counterfactual import simulate as _sim, SimParams as _SP
+    from engine.geometry import Vec as _V
+    with pytest.raises(ValueError): _sim(_V(0,0), _V(1,0), _V(9,0), _V(-1,0), 1.0, 40, _SP(braking_decel=-1))
+    with pytest.raises(ValueError): _sim(_V(0,0), _V(1,0), _V(9,0), _V(-1,0), float("inf"), 40)
+    with pytest.raises(ValueError): _sim(_V(0,0), _V(1,0), _V(9,0), _V(-1,0), 99.0, 40, _SP(duration=6))
+    # manifest covers radii now
+    a = _sim(_V(0,0), _V(1,0), _V(9,0), _V(-1,0), 1.0, 40, radius_a=0.1)
+    b = _sim(_V(0,0), _V(1,0), _V(9,0), _V(-1,0), 1.0, 40, radius_a=5.0)
+    assert a["manifest_hash"] != b["manifest_hash"]
+
+def test_workflow_disjoint_and_upload_provenance():
+    from agents.workflow import run_analysis as _run
+    from engine.tracking import Track as _T
+    from engine.geometry import Vec as _V
+    sc = {"id": "x", "kind": "USER_UPLOADED", "calibration": {"metres_per_pixel": None},
+          "tracks": [_T("a", "robot", "pixel", [(0.0, _V(0,0)), (1.0, _V(5,0))], 2, "USER_UPLOADED"),
+                     _T("b", "robot", "pixel", [(10.0, _V(50,0)), (11.0, _V(55,0))], 2, "USER_UPLOADED")],
+          "ground_truth": {}}
+    run = _run(sc)  # disjoint windows must not crash the run
+    assert run.findings["provenance"]["observations"].startswith("USER_UPLOADED")
+    with pytest.raises(ValueError): _run({**sc, "tracks": sc["tracks"][:1]})
+    with pytest.raises(ValueError): _run(sc, idempotency_key={"bad": "key"})
+
+def test_pixel_tracks_never_claim_metric():
+    from engine.kinematics import analyse_pair as _ap, Calibration as _Cal
+    a = Track("a", "forklift", "pixel", [(0.0, Vec(0,0)), (1.0, Vec(10,0))], 5, "USER_UPLOADED")
+    b = Track("b", "pedestrian", "pixel", [(0.0, Vec(100,30)), (1.0, Vec(90,30))], 5, "USER_UPLOADED")
+    out = _ap(a, b, _Cal(0.05))  # calibration alone must NOT relabel px as m
+    assert out["units"] == "px" and out["metric_claims"] is False

@@ -34,19 +34,25 @@ def analyse_pair(a: Track, b: Track, cal: Calibration, horizon: float = 6.0,
     """Proximity analysis over the overlapping observed window. Uses each track's
     latest finite-difference velocity at the window start (documented assumption)."""
     if a.space != b.space: raise ValueError("tracks must share a coordinate space")
+    _units = "m" if a.space == "world" else "px"
     if len(a.points) < 2 or len(b.points) < 2:
-        return {"pair": [a.object_id, b.object_id], "event": None,
+        return {"pair": [a.object_id, b.object_id], "event": None, "space": a.space,
                 "reason": "insufficient observations: a track has fewer than 2 points, so no velocity can be estimated",
-                "d_min": None, "closing": False, "ttc_s": None, "units": a.space,
-                "metric_claims": a.space == "world"}
+                "d_min": None, "closing": False, "ttc_s": None, "units": _units,
+                "metric_claims": a.space == "world", "window": None, "assumptions": []}
     t0 = max(a.points[0][0], b.points[0][0]); t1 = min(a.points[-1][0], b.points[-1][0])
-    if t1 <= t0: return {"pair": [a.object_id, b.object_id], "event": None,
-                         "reason": "no overlapping observed window"}
+    if t1 <= t0: return {"pair": [a.object_id, b.object_id], "event": None, "space": a.space,
+                         "reason": "no overlapping observed window", "d_min": None,
+                         "closing": False, "ttc_s": None, "units": _units,
+                         "metric_claims": a.space == "world", "window": None, "assumptions": []}
     pa, pb = a.position_at(t0), b.position_at(t0)
     va = a.velocity_at(_nearest_index(a, t0)); vb = b.velocity_at(_nearest_index(b, t0))
     cpa = closest_approach(pa, va, pb, vb, horizon)
     ttc = time_to_collision(pa, va, pb, vb, a.radius, b.radius, horizon)
-    units = "m" if (a.space == "world" or cal.calibrated) else "px"
+    # Metric claims derive ONLY from the track space. A calibration object does
+    # not convert coordinates by itself (use to_world first); pixel tracks with
+    # a declared calibration are reported in px until converted.
+    units = _units
     event = None
     if ttc is not None:
         event = {"type": "predicted_contact", "ttc_s": round(ttc, 3), "at_time_s": round(t0 + ttc, 3)}
@@ -54,7 +60,7 @@ def analyse_pair(a: Track, b: Track, cal: Calibration, horizon: float = 6.0,
         event = {"type": "near_miss", "d_min": round(cpa.d_min, 4), "units": units,
                  "t_star_s": round(t0 + cpa.t_star, 3) if math.isfinite(cpa.t_star) else None}
     return {"pair": [a.object_id, b.object_id], "space": a.space, "units": units,
-            "metric_claims": bool(a.space == "world" or cal.calibrated),
+            "metric_claims": a.space == "world",
             "window": [t0, t1], "d_min": round(cpa.d_min, 4), "closing": cpa.closing,
             "ttc_s": None if ttc is None else round(ttc, 3), "event": event,
             "assumptions": ["constant-velocity extrapolation over the stated horizon",

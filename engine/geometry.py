@@ -29,7 +29,7 @@ class ClosestApproach:
 def closest_approach(pa: Vec, va: Vec, pb: Vec, vb: Vec, horizon: float = 10.0) -> ClosestApproach:
     """Constant-velocity closest point of approach over a finite horizon.
     Analytic: minimise |r + v t|^2 for relative position r, velocity v."""
-    if horizon <= 0: raise ValueError("horizon must be positive")
+    if not math.isfinite(horizon) or horizon <= 0: raise ValueError("horizon must be positive and finite")
     r, v = pa - pb, va - vb
     vv = v.dot(v)
     if vv < 1e-12:  # no relative motion
@@ -37,14 +37,18 @@ def closest_approach(pa: Vec, va: Vec, pb: Vec, vb: Vec, horizon: float = 10.0) 
     t = -r.dot(v) / vv
     closing = t > 0
     t_c = min(max(t, 0.0), horizon)
-    return ClosestApproach(t if closing else math.inf, (r + v.scale(t_c)).norm(), closing)
+    # t_star is always the time at which d_min actually occurs (clamped);
+    # callers needing the unconstrained time can detect closing + horizon.
+    return ClosestApproach(t_c if closing else math.inf, (r + v.scale(t_c)).norm(), closing)
 
 def time_to_collision(pa: Vec, va: Vec, pb: Vec, vb: Vec,
                       radius_a: float, radius_b: float, horizon: float = 10.0) -> float | None:
     """Earliest t in [0, horizon] where |r + v t| <= radius_a + radius_b, else None.
     Solves the quadratic exactly; returns None (never a fake number) when the
     objects are separating, stationary relative to each other, or miss."""
-    if min(radius_a, radius_b) < 0: raise ValueError("radii must be non-negative")
+    if not (math.isfinite(radius_a) and math.isfinite(radius_b)) or min(radius_a, radius_b) < 0:
+        raise ValueError("radii must be finite and non-negative")
+    if not math.isfinite(horizon) or horizon <= 0: raise ValueError("horizon must be positive and finite")
     r, v = pa - pb, va - vb
     R = radius_a + radius_b
     c = r.dot(r) - R * R

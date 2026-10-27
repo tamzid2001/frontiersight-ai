@@ -19,9 +19,12 @@ def analyse_all(tracks: list, cal: Calibration, horizon: float = 6.0,
     return out
 
 def focus_pair(pairs: list) -> dict | None:
-    """The pair a human should look at first: smallest d_min among closing pairs."""
-    closing = [p for p in pairs if p.get("closing")]
-    return min(closing, key=lambda p: p["d_min"]) if closing else (min(pairs, key=lambda p: p["d_min"]) if pairs else None)
+    """The pair a human should look at first: smallest d_min among closing pairs.
+    Pairs without a computed d_min (insufficient/disjoint observations) are ignored."""
+    usable = [p for p in pairs if p.get("d_min") is not None]
+    if not usable: return None
+    closing = [p for p in usable if p.get("closing")]
+    return min(closing or usable, key=lambda p: p["d_min"])
 
 def simulate_agent(agent_state, others: list, intervention_t: float,
                    speed_reduction_pct: float, params: SimParams = SimParams()) -> dict:

@@ -14,7 +14,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2338c6d9' stroke-width='3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2338c6d9'/%3E%3C/svg%3E">
 <script>try{var m=localStorage.getItem("fs-theme")||"system";var r=m==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):m;document.documentElement.dataset.theme=r;}catch(e){document.documentElement.dataset.theme="dark";}</script>
 <link rel="stylesheet" href="app.css"></head><body>
-<a class="skip" href="#view-home">Skip to content</a>
+<button type="button" class="skip" id="skip-link">Skip to content</button>
 <header>
  <div class="brand">◉ Frontier<b>Sight</b> <span class="tag">AI</span></div>
  <div class="headright">
@@ -109,12 +109,12 @@
 
  <h2 class="section-title">Everything in the workbench</h2>
  <div class="bento">
-  <a class="card tile" data-goto="create"><div class="howico">✦</div><h3>Create Lab</h3><p>Compose scenes from forklifts, pedestrians, robots and shelves. Click paths, drag waypoints, set speeds — then analyse your own world.</p><span class="tilelink">Build a scene →</span></a>
-  <a class="card tile" data-goto="create"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><span class="tilelink">Generate with Muse →</span></a>
-  <a class="card tile" data-goto="studio"><div class="howico">▶</div><h3>Video Studio</h3><p>Frame-synchronised playback with heading-oriented entities, event seeking, occlusion markers and an all-pairs inspector.</p><span class="tilelink">Open the Studio →</span></a>
-  <a class="card tile" data-goto="counterfactual"><div class="howico">⇄</div><h3>Counterfactual simulator</h3><p>Pick scene, agent and target; brake earlier or harder. Trajectory map, separation chart, Monte-Carlo intervals, per-actor results.</p><span class="tilelink">Run a what-if →</span></a>
-  <a class="card tile" data-goto="evidence"><div class="howico">▤</div><h3>Evidence &amp; trace</h3><p>Nine auditable agent stages with artifact hashes, then a human-approved, hash-bound evidence packet you can export and replay.</p><span class="tilelink">Inspect evidence →</span></a>
-  <a class="card tile" data-goto="settings"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><span class="tilelink">Check the connection →</span></a>
+  <button type="button" class="card tile" data-goto="create"><div class="howico">✦</div><h3>Create Lab</h3><p>Compose scenes from forklifts, pedestrians, robots and shelves. Click paths, drag waypoints, set speeds — then analyse your own world.</p><span class="tilelink">Build a scene →</span></button>
+  <button type="button" class="card tile" data-goto="create"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><span class="tilelink">Generate with Muse →</span></button>
+  <button type="button" class="card tile" data-goto="studio"><div class="howico">▶</div><h3>Video Studio</h3><p>Frame-synchronised playback with heading-oriented entities, event seeking, occlusion markers and an all-pairs inspector.</p><span class="tilelink">Open the Studio →</span></button>
+  <button type="button" class="card tile" data-goto="counterfactual"><div class="howico">⇄</div><h3>Counterfactual simulator</h3><p>Pick scene, agent and target; brake earlier or harder. Trajectory map, separation chart, Monte-Carlo intervals, per-actor results.</p><span class="tilelink">Run a what-if →</span></button>
+  <button type="button" class="card tile" data-goto="evidence"><div class="howico">▤</div><h3>Evidence &amp; trace</h3><p>Nine auditable agent stages with artifact hashes, then a human-approved, hash-bound evidence packet you can export and replay.</p><span class="tilelink">Inspect evidence →</span></button>
+  <button type="button" class="card tile" data-goto="settings"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><span class="tilelink">Check the connection →</span></button>
  </div>
 
  <div class="card wide"><h3>Architecture</h3>
@@ -192,10 +192,10 @@
   <span class="pill ghost">SYNTHETIC FIXTURE REPLAY — canvas-rendered from stored fixture tracks, ground truth held separately</span></div>
  <div class="studio">
   <div class="card stagecard">
-   <canvas id="stage" width="880" height="560"></canvas>
+   <canvas id="stage" width="880" height="560" role="img" aria-label="Scene stage: tracked entities moving along their observed paths"></canvas>
    <div class="transport"><button id="play">▶ Play</button>
     <select id="play-speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
-    <input id="scrub" type="range" min="0" max="8" step="0.05" value="0"><span id="clock" class="mono">t = 0.00s</span></div>
+    <input id="scrub" type="range" aria-label="Scene time scrubber" min="0" max="8" step="0.05" value="0"><span id="clock" class="mono">t = 0.00s</span></div>
    <p class="dim">Entities are drawn to scale and oriented to their heading:
    <span class="sw" style="--sw:#e9a13b">forklift</span> <span class="sw" style="--sw:#ff7847">pedestrian</span>
    <span class="sw" style="--sw:#aebfd2">robot</span> <span class="sw" style="--sw:#4d8dff">vehicle</span>
@@ -216,7 +216,7 @@
     <input type="file" id="sam-file" accept="video/*,image/*">
     <video id="sam-video" controls playsinline style="width:100%;display:none;border-radius:12px"></video>
     <img id="sam-img" style="width:100%;display:none;border-radius:12px" alt="Uploaded still for segmentation">
-    <canvas id="sam-canvas" width="880" height="520"></canvas>
+    <canvas id="sam-canvas" width="880" height="520" role="img" aria-label="SAM segmentation overlay canvas"></canvas>
     <p class="dim">Captured frames: <b id="sam-count">0</b> · overlays show SAM boxes, stable ids and confidences.</p>
    </div>
    <aside>
@@ -240,9 +240,9 @@
  from <em>your</em> paths at 10 Hz when you press Run analysis.</p>
  <div class="studio">
   <div class="card stagecard">
-   <canvas id="lab-canvas" width="880" height="620"></canvas>
+   <canvas id="lab-canvas" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
    <div class="transport"><button id="lab-play">▶ Preview motion</button>
-    <input id="lab-scrub" type="range" min="0" max="20" step="0.05" value="0"><span id="lab-clock" class="mono">t = 0.00s</span></div>
+    <input id="lab-scrub" type="range" aria-label="Preview time scrubber" min="0" max="20" step="0.05" value="0"><span id="lab-clock" class="mono">t = 0.00s</span></div>
    <p id="lab-live" class="mono dim">Closest pair: —</p><p class="dim">Select a component, then <b>click the stage to add waypoints</b>. Drag any waypoint to move it.
    The marker shows where each component will be at the preview time.</p>
    <div class="row">
@@ -302,13 +302,13 @@
  <div class="studio">
   <div class="card stagecard">
    <h3 style="margin-top:0">Trajectory map — top-down</h3>
-   <canvas id="cf-map" width="880" height="520"></canvas>
+   <canvas id="cf-map" width="880" height="520" role="img" aria-label="Counterfactual trajectory map, top-down"></canvas>
    <div class="transport"><button id="cf-play">▶ Play comparison</button>
-    <input id="cf-scrub" type="range" min="0" max="6" step="0.05" value="0"><span id="cf-clock" class="mono">t = 0.00s</span></div>
+    <input id="cf-scrub" type="range" aria-label="Comparison time scrubber" min="0" max="6" step="0.05" value="0"><span id="cf-clock" class="mono">t = 0.00s</span></div>
    <p class="dim">Dashed slate = agent's original path · teal = counterfactual · thin lines = other actors ·
    ◇ = closest approach (counterfactual). Ghost marker = where the original agent would have been.</p>
    <h3>Separation over time</h3>
-   <canvas id="cf-chart" width="880" height="330"></canvas>
+   <canvas id="cf-chart" width="880" height="330" role="img" aria-label="Separation over time chart for the focus pair"></canvas>
    <p class="dim">Focus pair distance: original (slate) vs counterfactual (teal); red band = contact distance (sum of radii).</p>
   </div>
   <aside class="card"><h3>Intervention</h3>
@@ -323,14 +323,22 @@
  </div>
 </section>
 
-<section id="view-evidence" class="view"><h2>
- <div class="card wide"><h2>Agent reasoning &amp; verification</h2>
+<section id="view-evidence" class="view"><h2>Evidence &amp; trace</h2>
+ <div class="card wide"><h3>Agent reasoning &amp; verification</h3>
  <p class="dim">Structured stage evidence — status, attribution, artifact hashes, retries. No private chain-of-thought is exposed; decision summaries and tool evidence only.</p>
  <ol id="trace" class="trace"><li class="dim">Run analysis to populate the trace.</li></ol>
-</div>Evidence report</h2>
- <div class="card wide"><p>Hash-bound report: experiment id, source digest, calibration, ground truth, run stages, validation cases, and honest labels
+</div>
+ <div class="card wide"><h3>Evidence report</h3>
+ <p>Hash-bound report: experiment identifier, source digest, calibration, ground truth, run stages, validation cases, and honest labels
  (<code>real_video_evaluation_completed: false</code>, <code>hardware_validation: unavailable</code>, no safety certification claimed).</p>
- <button id="export-json">Download evidence JSON</button> <button id="export-html" class="ghostbtn">Download report HTML</button>
+ <div class="approvalbox">
+  <b>Human approval gate</b>
+  <p class="dim" id="gate-note">Export is locked until a named human approves the current run. Approval is recorded in the exported packet.</p>
+  <div class="row"><input id="approver-name" type="text" placeholder="Approver name, e.g. safety-lead" aria-label="Approver name">
+  <label class="chk"><input type="checkbox" id="approve-evidence"> I have reviewed this run and approve its export</label></div>
+ </div>
+ <button id="export-json" disabled>Download evidence JSON</button> <button id="export-html" class="ghostbtn" disabled>Download report HTML</button>
+ <span id="export-status" class="dim" role="status"></span>
  <pre id="evidence-preview" class="mono">Run analysis first for a run-bound report.</pre></div>
 </section>
 
@@ -469,8 +477,8 @@
 
 <footer>
  <div class="flinks">
-  <a data-foot="home">Overview</a><a data-foot="pricing">Pricing</a><a data-foot="terms">Terms of Service</a>
-  <a data-foot="privacy">Privacy Policy</a><a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Demo video ↗</a>
+  <button type="button" class="flink" data-foot="home">Overview</button><button type="button" class="flink" data-foot="pricing">Pricing</button><button type="button" class="flink" data-foot="terms">Terms of Service</button>
+  <button type="button" class="flink" data-foot="privacy">Privacy Policy</button><a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Demo video ↗</a>
   <a href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub ↗</a>
  </div>
  FrontierSight AI <span id="foot-version" class="dim"></span> · Quantura Studio · Meta Global AI Developer Hackathon 2026 · Indie Track · Push the Frontier ·

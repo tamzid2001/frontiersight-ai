@@ -22,12 +22,12 @@ MAX_BODY = 12 * 1024 * 1024          # 12 MB hard ingest bound
 RATE_LIMIT, RATE_WINDOW = 120, 60.0  # POST requests per IP per minute (best-effort, per-instance)
 _hits: dict = {}
 
-def _rate_ok(ip: str) -> bool:
+def _rate_ok(ip: str, limit: int = RATE_LIMIT) -> bool:
     import time
     now = time.time()
     bucket = [t for t in _hits.get(ip, []) if now - t < RATE_WINDOW]
-    bucket.append(now); _hits[ip] = bucket
-    return len(bucket) <= RATE_LIMIT
+    bucket.append(now); _hits[ip] = bucket[-limit * 2:]
+    return len(bucket) <= limit
 
 def parse_tracks(payload: list):
     """Validate user-supplied tracks. Hard bounds; invalid input raises ValueError
@@ -39,18 +39,30 @@ def parse_tracks(payload: list):
     tracks = []
     seen_ids = set()
     for raw in payload:
+        if not isinstance(raw, dict): raise ValueError("each track must be an object")
         oid = str(raw.get("object_id", ""))[:64]
         if not oid or oid in seen_ids: raise ValueError(f"duplicate or missing object_id: {oid!r} (ids must be unique)")
         seen_ids.add(oid)
         if not 0 <= float(raw.get("radius", 0.0)) <= 100: raise ValueError(f"track {oid}: radius out of range [0,100]")
         pts = raw.get("points", [])
-        if not 2 <= len(pts) <= 5000: raise ValueError(f"track {raw.get('object_id')}: need 2..5000 points")
+        if not isinstance(pts, list) or not 2 <= len(pts) <= 5000:
+            raise ValueError(f"track {raw.get('object_id')}: need 2..5000 points")
+        for pt in pts:
+            if not (isinstance(pt, (list, tuple)) and len(pt) == 3
+                    and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in pt)):
+                raise ValueError(f"track {raw.get('object_id')}: each point must be [t, x, y] numbers")
+        occ = raw.get("occluded", [])
+        if not (isinstance(occ, list) and all(isinstance(o, (list, tuple)) and len(o) == 2
+                and all(isinstance(v, (int, float)) for v in o) and o[0] <= o[1] for o in occ)):
+            raise ValueError(f"track {raw.get('object_id')}: occluded must be [[t0, t1], ...] with t0 <= t1")
         points = [(float(t), Vec(float(x), float(y))) for t, x, y in pts]
         tracks.append(Track(str(raw.get("object_id", f"obj-{len(tracks)+1}"))[:64],
                             str(raw.get("category", "object"))[:32],
                             raw.get("space", "pixel"), points,
                             float(raw.get("radius", 0.0)), str(raw.get("source", "USER_UPLOADED"))[:32],
-                            [tuple(o) for o in raw.get("occluded", [])]))
+                            [tuple(o) for o in occ]))
+    if len({tr.space for tr in tracks}) > 1:
+        raise ValueError("all tracks must share one coordinate space")
     return tracks
 
 def get_scenario(name: str) -> dict:
@@ -70,6 +82,9 @@ def report_for(name: str, run_dict: dict | None = None) -> dict:
                        "no_safety_certification_claimed": True}}
 
 class H(BaseHTTPRequestHandler):
+    server_version = "FrontierSight"
+    sys_version = ""
+    def version_string(self): return "FrontierSight"
     def log_message(self, *a): pass
     def _route(self) -> str:
         u = urlparse(self.path)
@@ -83,13 +98,20 @@ class H(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json"):
         b = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code); self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        self.send_header("Content-Length", str(len(b)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Cache-Control", "no-store" if ctype == "application/json" else "no-cache")
+        self.end_headers(); self.wfile.write(b)
     def _body(self) -> dict:
-        return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        def _bad_const(x): raise ValueError(f"non-finite JSON number not accepted: {x}")
+        return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}",
+                          parse_constant=_bad_const)
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.11.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.12.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -103,8 +125,9 @@ class H(BaseHTTPRequestHandler):
                 name = parse_qs(urlparse(self.path).query).get("name", ["warehouse-near-miss"])[0]
                 return self._send(200, report_for(name))
             name = "index.html" if route in ("/", "") else route.lstrip("/").split("?")[0]
-            f = WEB / name
-            if f.is_file() and f.suffix in TYPES: return self._send(200, f.read_bytes(), TYPES[f.suffix])
+            f = (WEB / name).resolve()
+            if f.is_file() and f.suffix in TYPES and f.is_relative_to(WEB.resolve()):
+                return self._send(200, f.read_bytes(), TYPES[f.suffix])
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(400, {"error": str(e)[:300]})
@@ -115,6 +138,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(413, {"error": f"payload exceeds {MAX_BODY // (1024*1024)} MB ingest bound"})
             if not _rate_ok(self.client_address[0]):
                 return self._send(429, {"error": "rate limit exceeded (120 POST/min per client)"})
+            if route.startswith("/api/meta/") and not _rate_ok("meta:" + self.client_address[0], limit=30):
+                return self._send(429, {"error": "model endpoint quota exceeded (30 POST/min per client) — these calls spend the host's Meta API credits"})
             body = self._body()
             if route.startswith("/api/analyze-custom"):
                 tracks = parse_tracks(body.get("tracks", []))
@@ -136,7 +161,8 @@ class H(BaseHTTPRequestHandler):
                 from engine.multi import simulate_agent
                 tracks = parse_tracks(body.get("tracks", []))
                 agent_id = body.get("agent_id", tracks[0].object_id)
-                agent = next((t for t in tracks if t.object_id == agent_id), tracks[0])
+                agent = next((t for t in tracks if t.object_id == agent_id), None)
+                if agent is None: return self._send(400, {"error": f"unknown agent_id: {agent_id}"})
                 t0 = agent.points[0][0]
                 others = [(t.object_id, t.position_at(max(t0, t.points[0][0])),
                            t.velocity_at(1) if len(t.points) > 1 else __import__("engine.geometry", fromlist=["Vec"]).Vec(0, 0),
@@ -144,6 +170,7 @@ class H(BaseHTTPRequestHandler):
                 r = simulate_agent((agent.position_at(t0), agent.velocity_at(1), agent.radius), others,
                                    float(body.get("intervention_t", 1.0)), float(body.get("speed_reduction_pct", 40)),
                                    SimParams(duration=6.0, dt=0.02, braking_decel=float(body.get("braking_decel", 2.5))))
+                r["agent_id"] = agent.object_id
                 return self._send(200, r)
             if route.startswith("/api/tracks"):
                 from engine.iou_tracking import build_tracks

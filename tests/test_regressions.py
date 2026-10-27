@@ -119,3 +119,13 @@ def test_sam_vision_and_site_upgrades():
                    "application/ld+json", 'class="skip"']:
         assert marker in html, marker
     assert js.count('$("play").onclick') == 1 and "samCaptures" in js
+
+
+def test_review_fixes_present():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    css = (ROOT / "apps" / "web" / "app.css").read_text()
+    assert '$("cf-run").onclick' in js and 'id="approve-evidence"' in html
+    assert "runApproved" in js and "sceneStoreKey" in js
+    assert 'class="skip"' in html and ".skip:focus" in css and "#tabs{top:59px" in css.replace(" ", "")
+    assert "@media(max-width:900px)" in css

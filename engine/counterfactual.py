@@ -20,8 +20,16 @@ class SimParams:
 def _run(pa: Vec, va: Vec, pb: Vec, vb: Vec, intervention_t: float,
          target_speed_factor: float, params: SimParams, radius_sum: float):
     if not (0.0 <= target_speed_factor <= 1.0): raise ValueError("speed factor must be in [0,1]")
-    if params.braking_decel > params.max_decel: raise ValueError("braking decel exceeds declared physical limit")
+    for _name, _v in (("dt", params.dt), ("duration", params.duration), ("braking_decel", params.braking_decel),
+                      ("radius_sum", radius_sum)):
+        if not math.isfinite(_v): raise ValueError(f"{_name} must be finite")
+    if math.isnan(intervention_t): raise ValueError("intervention_t must not be NaN")  # +inf = internal no-intervention sentinel
+    if not 0 <= params.braking_decel <= params.max_decel: raise ValueError("braking decel must be in [0, max_decel]")
     if params.dt <= 0 or params.duration <= 0: raise ValueError("duration/dt must be positive")
+    if params.dt > params.duration: raise ValueError("dt must not exceed duration")
+    if intervention_t != math.inf and not 0 <= intervention_t <= params.duration:
+        raise ValueError("intervention_t must be within [0, duration]")
+    if radius_sum < 0: raise ValueError("radii must be non-negative")
     pa_c, va_c = pa, va
     speed0 = va.norm()
     traj, d_min, t_min = [], math.inf, 0.0
@@ -48,6 +56,7 @@ def simulate(pa: Vec, va: Vec, pb: Vec, vb: Vec, intervention_t: float,
     """Original (no intervention) vs counterfactual (speed reduced by
     `speed_reduction_pct` starting at `intervention_t`). A 30% reduction
     provably changes the trajectory: the agent travels less far."""
+    if not math.isfinite(intervention_t): raise ValueError("intervention_t must be finite")
     if not 0 <= speed_reduction_pct <= 100: raise ValueError("speed reduction must be in [0,100]")
     factor = 1.0 - speed_reduction_pct / 100.0
     R = radius_a + radius_b
@@ -55,7 +64,10 @@ def simulate(pa: Vec, va: Vec, pb: Vec, vb: Vec, intervention_t: float,
     cf_traj, cf_dmin, cf_tmin = _run(pa, va, pb, vb, intervention_t, factor, params, R)
     manifest_src = {"pa": [pa.x, pa.y], "va": [va.x, va.y], "pb": [pb.x, pb.y], "vb": [vb.x, vb.y],
                     "intervention_t": intervention_t, "speed_reduction_pct": speed_reduction_pct,
-                    "dt": params.dt, "duration": params.duration, "decel": params.braking_decel, "seed": seed}
+                    "dt": params.dt, "duration": params.duration, "decel": params.braking_decel,
+                    "max_decel": params.max_decel, "radius_a": radius_a, "radius_b": radius_b,
+                    "position_sigma": position_sigma, "mc_runs": mc_runs, "seed": seed,
+                    "manifest_schema": 2}
     result = {
         "original": {"d_min": round(orig_dmin, 4), "t_at_d_min": orig_tmin, "contact": orig_dmin <= R,
                      "final_agent": orig_traj[-1][1:3]},

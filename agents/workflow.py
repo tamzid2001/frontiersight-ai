@@ -49,8 +49,21 @@ _checkpoint_store: dict = {}
 
 def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention_t: float = 1.0,
                  human_approved: bool = False, idempotency_key: str | None = None) -> Run:
-    if idempotency_key and idempotency_key in _checkpoint_store:
-        return _checkpoint_store[idempotency_key]
+    if len(scenario.get("tracks", [])) < 2:
+        raise ValueError("scene needs at least two tracks to analyse interactions")
+    if len({tr.space for tr in scenario["tracks"]}) > 1:
+        raise ValueError("all tracks must share one coordinate space (convert pixel tracks with calibration first)")
+    _cache_key = None
+    if idempotency_key is not None:
+        if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 128:
+            raise ValueError("idempotency_key must be a string of 1..128 characters")
+        _fp = hashlib.sha256(json.dumps(
+            {"s": scenario.get("id"), "t": [ (tr.object_id, len(tr.points)) for tr in scenario["tracks"]],
+             "sr": speed_reduction_pct, "it": intervention_t, "ha": human_approved},
+            sort_keys=True).encode()).hexdigest()
+        _cache_key = (idempotency_key, _fp)
+        if _cache_key in _checkpoint_store:
+            return _checkpoint_store[_cache_key]
     live = spark.configured()
     run = Run(str(uuid.uuid4())[:8], scenario["id"], "LIVE_META" if live else "FIXTURE_REPLAY")
     def stage(name, attribution, fn):
@@ -95,15 +108,20 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
     stage("scene_extraction", "deterministic-engine", _extract)
 
     from engine.multi import focus_pair
+    from engine.geometry import Vec as _Vec
     _fp = focus_pair(analysis.get("pairs", [])) if analysis.get("pairs") else None
     _by_id = {t.object_id: t for t in tracks}
     agent = _by_id[_fp["pair"][0]] if _fp else tracks[0]
     other = _by_id[_fp["pair"][1]] if _fp and len(tracks) > 1 else tracks[-1]
-    t0 = max(agent.points[0][0], other.points[0][0])
-    pa, pb = agent.position_at(t0), other.position_at(t0)
-    from engine.geometry import Vec as _Vec
-    va = agent.velocity_at(1) if len(agent.points) > 1 else _Vec(0, 0)
-    vb = other.velocity_at(1) if len(other.points) > 1 else _Vec(0, 0)
+    _sim_error = None
+    try:
+        t0 = max(agent.points[0][0], other.points[0][0])
+        pa, pb = agent.position_at(t0), other.position_at(t0)
+        va = agent.velocity_at(1) if len(agent.points) > 1 else _Vec(0, 0)
+        vb = other.velocity_at(1) if len(other.points) > 1 else _Vec(0, 0)
+    except Exception as _e:  # disjoint/insufficient tracks: sim stage reports it, run survives
+        _sim_error = f"cannot initialise simulation: {_e}"
+        pa = pb = va = vb = _Vec(0, 0)
 
     hypothesis = {"hypothesis": f"Reduce {agent.object_id} speed by {speed_reduction_pct:.0f}% from t={intervention_t}s",
                   "intervention": {"speed_reduction_pct": speed_reduction_pct, "intervention_time_s": intervention_t},
@@ -125,6 +143,7 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
     iv = hypothesis["intervention"]
     sim = {}
     def _sim():
+        if _sim_error: raise ValueError(_sim_error)
         r = simulate(pa, va, pb, vb, intervention_t=float(iv["intervention_time_s"]),
                      speed_reduction_pct=float(iv["speed_reduction_pct"]),
                      params=SimParams(duration=6.0, dt=0.02), radius_a=agent.radius, radius_b=other.radius,
@@ -135,10 +154,17 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
     stage("simulation", "deterministic-engine", _sim)
 
     def _verify():
+        import hashlib as _hl
+        recomputed = _hl.sha256(json.dumps(sim.get("params", {}), sort_keys=True).encode()).hexdigest() \
+            if sim.get("params") else ""
         checks = [{"check": "counterfactual_did_not_worsen_d_min", "passed": sim.get("delta_d_min", -1) >= 0},
-                  {"check": "manifest_hash_recomputable", "passed": bool(sim.get("manifest_hash"))},
-                  {"check": "metric_claims_only_when_calibrated", "passed": all(p["metric_claims"] for p in analysis["pairs"])},
-                  {"check": "no_llm_numbers_used_as_measurements", "passed": True}]
+                  {"check": "manifest_hash_recomputable",
+                   "passed": bool(sim.get("manifest_hash")) and recomputed == sim.get("manifest_hash")},
+                  {"check": "metric_claims_match_coordinate_space",
+                   "passed": all((not p["metric_claims"]) or p.get("space") == "world" for p in analysis["pairs"])},
+                  {"check": "model_proposed_intervention_disclosed",
+                   "passed": True,
+                   "note": "intervention parameters may be model-proposed (see hypothesis stage); they are inputs, never measurements"}]
         return ({"checks": checks, "verdict": "PASS" if all(c["passed"] for c in checks) else "FAIL"}, checks)
     stage("independent_verification", "deterministic-engine", _verify)
 
@@ -153,9 +179,13 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
                     {"original": sim.get("original"), "counterfactual": sim.get("counterfactual"),
                      "delta_d_min": sim.get("delta_d_min"), "monte_carlo": sim.get("monte_carlo")},
                     "hypothesis": hypothesis,
-                    "provenance": {"observations": "FIXTURE (synthetic, ground truth held separately)",
+                    "provenance": {"observations": (f"{scenario.get('kind', 'FIXTURE')} (synthetic, ground truth held separately)"
+                                                    if scenario.get("kind") == "SYNTHETIC_FIXTURE"
+                                                    else f"{scenario.get('kind', 'USER_UPLOADED')} (user-supplied tracks, no ground truth held)"),
+                                   "track_sources": sorted({tr.source for tr in tracks}),
                                    "calculations": "DETERMINISTIC (engine/)",
                                    "model_contributions": "hypothesis/narration only" if live else "none (fixture replay)",
                                    "assumptions": sim.get("assumptions", [])}}
-    if idempotency_key: _checkpoint_store[idempotency_key] = run
+    if _cache_key is not None and len(_checkpoint_store) < 256:
+        _checkpoint_store[_cache_key] = run
     return run

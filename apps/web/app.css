@@ -129,3 +129,36 @@ footer a{cursor:pointer}
 .ctaband h2{margin:0 0 6px}
 @media(max-width:1000px){.hero-grid{grid-template-columns:1fr}.hero-copy h1{font-size:34px}
  .bento{grid-template-columns:1fr}.proofstrip{grid-template-columns:repeat(2,1fr)}}
+
+/* ---- skip link: hidden until focused, then visible & usable ---- */
+.skip{position:fixed;left:12px;top:-70px;z-index:100;background:var(--cyan);color:var(--accent-ink);
+ border:0;border-radius:10px;padding:10px 16px;font-weight:650;cursor:pointer;transition:top .15s}
+.skip:focus{top:12px}
+/* ---- sidebar: sit under the header, no dead whitespace on top ---- */
+#tabs{top:59px;padding:14px 12px 16px}
+.flink{background:none;border:0;color:var(--cyan);cursor:pointer;font:inherit;padding:0}
+.approvalbox{border:1px dashed var(--amber);border-radius:12px;padding:12px 14px;margin:12px 0}
+.approvalbox input[type=text]{flex:1;min-width:200px;background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px}
+#inspector-body{overflow-x:auto}
+.arch-svg{min-width:640px}.card:has(.arch-svg){overflow-x:auto}
+/* ---- mobile (<=900px): full-width, horizontal nav, no overflow ---- */
+@media(max-width:900px){
+ header{flex-wrap:wrap;gap:8px;padding:10px 14px}
+ .brand{font-size:17px}
+ .themeseg button{padding:5px 9px;font-size:12px}
+ #tabs{position:sticky;top:0;z-index:25;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;
+   width:auto;padding:8px;gap:4px;border-right:0;border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch}
+ #tabs button{flex:0 0 auto;width:auto;white-space:nowrap;padding:8px 11px;font-size:13.5px}
+ .view{padding:14px 12px}
+ input,select,textarea{font-size:16px}  /* prevents iOS focus zoom */
+ .transport{flex-wrap:wrap}
+ .proofstrip{grid-template-columns:repeat(2,1fr)}
+ .ctaband{padding:18px}
+ .pairtable{font-size:12px}
+ .demo-frame button{width:64px;height:64px}
+ footer{padding:16px 14px}
+}
+
+.trace li{overflow-wrap:anywhere}
+.trace li span{overflow-wrap:anywhere;word-break:break-word}
+#evidence-preview{overflow-wrap:anywhere}
