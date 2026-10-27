@@ -131,11 +131,11 @@
     },
     {
       "source": "/robots.txt",
-      "destination": "/api/index"
+      "destination": "/api/index?ep=robots"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "/api/index"
+      "destination": "/api/index?ep=sitemap"
     }
   ],
   "functions": {

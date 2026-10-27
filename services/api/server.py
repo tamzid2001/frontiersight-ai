@@ -112,6 +112,7 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         ep = parse_qs(u.query).get("ep", [None])[0]
         return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
+                "robots": "/robots.txt", "sitemap": "/sitemap.xml",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
                 "tracks": "/api/tracks", "from-paths": "/api/tracks/from-paths", "me": "/api/me", "signup": "/api/auth/signup",
@@ -139,10 +140,10 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if self.path.split("?")[0] in ("/robots.txt", "/sitemap.xml"):
+            if route in ("/robots.txt", "/sitemap.xml") or self.path.split("?")[0] in ("/robots.txt", "/sitemap.xml"):
                 import datetime as _dt
                 base = os.environ.get("APP_BASE_URL", "https://frontiersight-ai.vercel.app").rstrip("/")
-                if self.path.startswith("/robots.txt"):
+                if route == "/robots.txt" or self.path.startswith("/robots.txt"):
                     return self._send(200, f"User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {base}/sitemap.xml\n".encode(), "text/plain")
                 today = _dt.date.today().isoformat()
                 xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
