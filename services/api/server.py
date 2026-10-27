@@ -113,6 +113,7 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
+                "three": "/vendor/three.module.min.js", "orbit": "/vendor/addons/OrbitControls.js", "threeview": "/three-view.js",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
                 "tracks": "/api/tracks", "from-paths": "/api/tracks/from-paths", "me": "/api/me", "signup": "/api/auth/signup",
@@ -121,7 +122,7 @@ class H(BaseHTTPRequestHandler):
                 "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
                 "scenes": "/api/scenes", "scenedel": "/api/scenes/delete", "sceneupd": "/api/scenes/update",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
-                "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support",
+                "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support", "mcp": "/api/mcp",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
                 "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
@@ -155,7 +156,10 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.20.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.21.0"})
+            if route.startswith("/api/mcp"):
+                from services.api import mcp as _mcp
+                return self._send(200, _mcp.catalog())
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -255,6 +259,13 @@ class H(BaseHTTPRequestHandler):
                 return self._send(429, {"error": "rate limit exceeded (120 POST/min per client)"})
             if route.startswith("/api/meta/") and not _rate_ok("meta:" + self.client_address[0], limit=30):
                 return self._send(429, {"error": "model endpoint quota exceeded (30 POST/min per client) — these calls spend the host's Meta API credits"})
+            if route.startswith("/api/mcp"):
+                from services.api import mcp as _mcp
+                try: payload = self._body()
+                except Exception as e: return self._send(400, {"error": f"invalid JSON: {e}"})
+                resp = _mcp.handle_jsonrpc(payload)
+                if resp is None: return self._send(202, b"", "application/json")
+                return self._send(200, resp)
             body = self._body()
             if route.startswith("/api/analyze-custom"):
                 tracks = parse_tracks(body.get("tracks", []))

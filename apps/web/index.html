@@ -25,7 +25,8 @@
 <link rel="icon" type="image/svg+xml" href="/logo-mark.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <script>try{var m=localStorage.getItem("fs-theme")||"system";var r=m==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):m;document.documentElement.dataset.theme=r;}catch(e){document.documentElement.dataset.theme="dark";}</script>
-<link rel="stylesheet" href="app.css"></head><body>
+<link rel="stylesheet" href="app.css">
+<script type="importmap">{"imports":{"three":"/vendor/three.module.min.js","three/addons/":"/vendor/addons/"}}</script></head><body>
 <button type="button" class="skip" id="skip-link">Skip to content</button>
 <header>
  <div class="headright">
@@ -268,7 +269,12 @@
  from <em>your</em> paths at 10 Hz when you press Run analysis.</p>
  <div class="studio">
   <div class="card stagecard">
+   <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
+    <button id="lab-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
+    <button id="lab-view-3d" class="ghostbtn" aria-pressed="false">3D view (beta)</button>
+    <span class="dim">3D visualises the same 2D scene model — heights are illustrative, physics stays planar. Drag waypoints in 2D; click the 3D ground to add them.</span></div>
    <canvas id="lab-canvas" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
+   <div id="lab-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the Create Lab scene"></div>
    <div class="transport"><button id="lab-play">▶ Preview motion</button>
     <input id="lab-scrub" type="range" aria-label="Preview time scrubber" min="0" max="20" step="0.05" value="0"><span id="lab-clock" class="mono">t = 0.00s</span></div>
    <p id="lab-live" class="mono dim">Closest pair: —</p><p class="dim">Select a component, then <b>click the stage to add waypoints</b>. Drag any waypoint to move it.
@@ -543,6 +549,12 @@
  <h3>Meta Model API connection (deployment)</h3><div id="diag" class="mono dim">loading…</div>
  <p class="dim">The API key lives server-side only (<code>MODEL_API_KEY</code>) and is never sent to the browser. Model ids are configurable via <code>META_MODEL</code> / <code>META_SAM_MODEL</code> / <code>META_IMAGE_MODEL</code>. Retention: uploaded media is processed in-memory in this demo deployment; fixtures are synthetic and openly redistributable.</p>
  <button id="live-test" class="ghostbtn">Test Muse Spark hypothesis (live call)</button><pre id="live-out" class="mono"></pre>
+ <h3>API &amp; MCP server</h3>
+ <p class="dim">MCP endpoint: <code id="mcp-endpoint">/api/mcp</code> · also runnable offline over stdio:
+ <code>python3 scripts/mcp_stdio.py</code> · docs: <code>docs/MCP.md</code></p>
+ <div id="mcp-tools" class="mono dim">loading tool list…</div>
+ <pre class="mono" style="white-space:pre-wrap">Claude Code:  claude mcp add --transport http frontiersight https://frontiersight-ai.vercel.app/api/mcp
+Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://frontiersight-ai.vercel.app/api/mcp"}}}</pre>
  <h3>Deployment &amp; limits</h3>
  <p class="dim">App version <b id="set-version">—</b> · ingest bound 12 MB per request · rate limit 120 POST/min per client ·
  retention: this demo stores scenes/runs only in your browser; the server keeps no uploaded media.</p>

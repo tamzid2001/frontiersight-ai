@@ -153,3 +153,19 @@ def test_workspace_update_endpoint(api):
     token2 = signup(api, "other@example.com")
     s, out = call(api, "/api/scenes/update", {"id": sid, "name": "hijack", "payload": {}}, token2)
     assert s == 404  # cannot update someone else's workspace
+
+def test_mcp_http_and_tools(api):
+    s, out = call(api, "/api/mcp", {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+    assert s == 200 and out["result"]["serverInfo"]["name"] == "frontiersight-ai"
+    s, out = call(api, "/api/mcp", {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    names = [t["name"] for t in out["result"]["tools"]]
+    assert "analyse_scenario" in names and "simulate_counterfactual" in names
+    s, out = call(api, "/api/mcp", {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                                    "params": {"name": "analyse_scenario", "arguments": {"name": "warehouse-near-miss"}}})
+    pairs = out["result"]["structuredContent"]["pairs"]
+    assert pairs and pairs[0]["measured"]["d_min"] is not None
+    s, out = call(api, "/api/mcp", {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                                    "params": {"name": "validate_scene", "arguments": {"scene": {"objects": [{"category": "dragon", "waypoints": [[1, 1]]}] * 2}}}})
+    assert out["result"]["isError"] is True
+    s, out = call(api, "/api/mcp", {"jsonrpc": "2.0", "id": 5, "method": "nope"})
+    assert out["error"]["code"] == -32601

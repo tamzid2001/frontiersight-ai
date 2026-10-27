@@ -380,7 +380,8 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
  const D=r.total/o.speed;
  if(lt>=D){if(o.mode==="loop")lt=lt%D;else if(o.mode==="pingpong"){const m=lt%(2*D);lt=m>D?2*D-m:m;}else lt=D;}
  return pathPosAtDistance(o,o.speed*lt);}
-function labDraw(){const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
+function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
+ const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
  const _labLabels=[];
@@ -466,6 +467,28 @@ document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.obje
  if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[6,6.8],[10,8],[15,11]],2.4,1.1,0,"stop","smooth");labAdd("cyclist",[[9,13.5],[8.6,8],[9.2,3],[9.5,0.5]],1.9,0.5,0.5,"stop","smooth");labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1,"stop","smooth");}
  if(b.dataset.tpl==="cell"){labAdd("robot",[[2,2],[13,2],[13,11],[2,11]],1.2,0.55,0,"loop","smooth");labAdd("forklift",[[1,12],[14,12]],0.9,0.9,1);labAdd("shelf",[[8,7]],0,1.4,0);labAdd("pedestrian",[[15,1],[10,6],[15,12]],1.1,0.45,2,"stop","smooth");}
  labStatus(`Template "${b.dataset.tpl}" loaded — edit any path, then Run analysis.`);labDraw();});
+state.labView="2d";
+async function setLabView(v){state.labView=v;
+ $("lab-view-2d").setAttribute("aria-pressed",String(v==="2d"));
+ $("lab-view-3d").setAttribute("aria-pressed",String(v==="3d"));
+ $("lab-canvas").classList.toggle("hidden",v==="3d");
+ $("lab-3d").classList.toggle("hidden",v!=="3d");
+ if(v==="3d"){
+  try{
+   if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
+   const mod=window.__lab3dMod;
+   mod.showLab3D($("lab-3d"),{resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
+    onGroundClick:(x,y)=>{const o=labObj(state.lab.selected);
+     if(!o){labStatus("Select a component first, then click the ground to add waypoints.");return;}
+     o.waypoints.push([Math.round(x*10)/10,Math.round(y*10)/10]);delete o._res;
+     labRenderList();labDraw();}});
+   window.__lab3dSync=(objs,t)=>mod.syncLab3D(objs,t);
+   mod.syncLab3D(state.lab.objects,state.lab.t,true);
+  }catch(e){toast("3D view unavailable (WebGL): "+e.message+" — the 2D editor is unaffected.","err");setLabView("2d");}
+ } else if(window.__lab3dMod){window.__lab3dMod.hideLab3D();}
+}
+$("lab-view-2d").onclick=()=>setLabView("2d");
+$("lab-view-3d").onclick=()=>setLabView("3d");
 $("lab-play").onclick=()=>{state.lab.playing=!state.lab.playing;$("lab-play").textContent=state.lab.playing?"⏸ Pause preview":"▶ Preview motion";
  if(state.lab.playing){const step=()=>{if(!state.lab.playing)return;state.lab.t+=0.05;if(state.lab.t>labDuration())state.lab.t=0;labDraw();requestAnimationFrame(step);};step();}};
 $("lab-scrub").oninput=e=>{state.lab.t=+e.target.value;labDraw();};
@@ -919,3 +942,11 @@ $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capt
   updated:Date.now(),captures:state.samCaptures,image,
   tracks:null};
  if(await persistWorkspace(w)){toast(`Frame workspace saved${w.server?" on the server":" in this browser"}${image?"":" (frame image too large to store — captures kept)"}.`);loadWorkspaces();}};
+
+// ---- MCP server card (Settings) ----
+(async()=>{const el=$("mcp-tools");if(!el)return;
+ try{const r=await fetch("/api/mcp");const d=await r.json();
+  $("mcp-endpoint").textContent=location.origin+"/api/mcp";
+  el.innerHTML=`<b>${d.name} v${d.version}</b> · protocol ${d.protocol} · ${(d.tools||[]).length} tools<br>`+
+   (d.tools||[]).map(t=>`<code>${t.name}</code>`).join(" · ");
+ }catch(e){el.textContent="MCP endpoint unreachable from this browser.";}})();

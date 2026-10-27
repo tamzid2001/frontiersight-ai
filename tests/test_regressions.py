@@ -173,3 +173,10 @@ def test_world_class_form_system():
     assert "passwrap" in js and "paintRange" in js
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     assert 'src="/logo-mark.svg"' in html and 'type="image/svg+xml" href="/logo-mark.svg"' in html
+
+def test_3d_and_mcp_assets():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert "importmap" in html and "three.module.min.js" in html and 'id="lab-3d"' in html and 'id="mcp-tools"' in html
+    assert (ROOT / "apps/web/vendor/three.module.min.js").stat().st_size > 500_000
+    assert (ROOT / "apps/web/vendor/THREE-LICENSE.txt").exists()
+    assert (ROOT / "services/api/mcp.py").exists() and (ROOT / "scripts/mcp_stdio.py").exists()

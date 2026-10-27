@@ -148,6 +148,22 @@
     {
       "source": "/api/scenes/update",
       "destination": "/api/index?ep=sceneupd"
+    },
+    {
+      "source": "/api/mcp",
+      "destination": "/api/index?ep=mcp"
+    },
+    {
+      "source": "/vendor/three.module.min.js",
+      "destination": "/api/index?ep=three"
+    },
+    {
+      "source": "/vendor/addons/OrbitControls.js",
+      "destination": "/api/index?ep=orbit"
+    },
+    {
+      "source": "/three-view.js",
+      "destination": "/api/index?ep=threeview"
     }
   ],
   "functions": {
