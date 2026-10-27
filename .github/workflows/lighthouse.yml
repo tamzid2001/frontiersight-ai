@@ -1,0 +1,31 @@
+name: lighthouse
+on: [push, workflow_dispatch]
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Serve the app
+        run: |
+          PYTHONPATH=. nohup python3 -m services.api.server --port 8799 > server.log 2>&1 &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/api/health && break || sleep 1; done
+      - name: Run Lighthouse (a11y/BP/SEO >= 95, performance >= 90 under throttled emulation)
+        run: |
+          npx -y lighthouse@latest http://127.0.0.1:8799/ --output=json --output-path=lh.json \
+            --chrome-flags="--headless --no-sandbox" --quiet
+          python3 - << 'PY'
+          import json, sys
+          d = json.load(open("lh.json"))
+          scores = {k: round(v["score"] * 100) for k, v in d["categories"].items()}
+          print("Lighthouse:", scores)
+          limits = {"performance": 90}
+          failing = {k: v for k, v in scores.items() if v < limits.get(k, 95)}
+          if failing:
+              print("Below 95:", failing); sys.exit(1)
+          PY
+      - name: Upload Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: lighthouse-report, path: lh.json }

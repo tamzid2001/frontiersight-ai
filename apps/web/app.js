@@ -74,6 +74,8 @@ function showView(v){
    if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
  if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
+ if(v==="auth"||v==="pricing")initClerk();
+ if(v==="workspace")loadScenarioCounts();
  if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
    if(!changed&&state.cfData){drawCfMap();drawCfChart();}});}}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
@@ -89,10 +91,7 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
  catch(e){$("scenario-list").innerHTML='<div class="card wide"><h3>Could not load scenarios</h3><p class="dim">The API is unreachable. Check <code>/api/health</code>, then reload. Nothing has been simulated or hidden.</p><button onclick="location.reload()">Reload</button></div>';return;}
  state.scenarioList=d.scenarios; populateCfScene(); populateStudioWorkspaces();
  $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card scenario-card" data-search="${(s.id+" "+s.description).toLowerCase()}" data-card="${s.id}"><h3>${s.id}</h3><p class="dim">${s.description}</p><p class="dim counts" data-counts="${s.id}">loading counts…</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
- d.scenarios.forEach(async s=>{try{const f=await(await fetch("/api/scenarios?name="+s.id)).json();
-  const el=document.querySelector(`[data-counts="${s.id}"]`);const n=f.tracks.length;
-  if(el){const smooth=Object.values(f.ground_truth||{}).filter(g=>g.curve==="smooth").length;
-   el.textContent=`${n} objects · ${n*(n-1)/2} analysed pairs · ${f.calibration.metres_per_pixel?"calibrated (m)":"pixel space"}${smooth?` · ${smooth} curved path${smooth>1?"s":""}`:""}`;}}catch(e){}});
+ state._countsPending=d.scenarios;
  const v=await(await fetch("/api/validate")).json();
  $("validation-list").innerHTML=v.cases.map(c=>`<li>${c.passed?"✓":"✗"} <b>${c.case}</b> — <span class="dim">${c.detail}</span></li>`).join("");
  renderMyScenes();
@@ -448,7 +447,10 @@ $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark�
  const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss"})});
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};
 
-diag();loadScenarios().then(()=>runCf());
+diag();
+const _boot=()=>loadScenarios().then(()=>{ if(state.data) runCf(); });
+if("requestIdleCallback" in window) requestIdleCallback(_boot,{timeout:1200});
+else setTimeout(_boot,250);
 
 // ---- Create Lab ----
 state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
@@ -913,6 +915,7 @@ $("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form
 $("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");
  $("tab-signin").setAttribute("aria-selected","true");$("tab-signup").setAttribute("aria-selected","false");};
 async function afterAuth(out, msg){state.openWorkspace=null;state.samCaptures=[];
+ localStorage.setItem("fs-auth-provider", "local");
  localStorage.setItem("fs-session",out.body.token);
  localStorage.setItem("fs-user",JSON.stringify(out.body.user));
  await refreshMe();renderMyScenes();toast(msg);goto("workspace");}
@@ -998,7 +1001,9 @@ document.querySelectorAll(".waitlist-btn").forEach(b=>b.onclick=async()=>{
  const out=await api("/api/waitlist",{method:"POST",body:JSON.stringify({email,plan:b.dataset.plan})});
  toast(out.status===201?`Waitlist joined for ${b.dataset.plan} as ${email}. No payment taken — billing is not enabled on this deployment.`
    :"Waitlist failed: "+(out.body.error||"unknown"),"warn");});
-$("quote-open").onclick=()=>{$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});};
+function openQuote(){$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});}
+$("quote-open").onclick=openQuote;
+$("quote-open-2").onclick=openQuote;
 $("quote-send").onclick=async()=>{const out=await api("/api/sales/quote",{method:"POST",
  body:JSON.stringify({company:$("q-company").value.trim(),email:$("q-email").value.trim(),
   seats:$("q-seats").value.trim(),needs:$("q-needs").value.trim()})});
@@ -1113,6 +1118,12 @@ $("cf-export").onclick=()=>{if(!state.cfData){$("cf-results").textContent="Run a
  toast("Counterfactual result exported (JSON).");};
 
 // ---- workspace search + live counts ----
+let _countsLoaded=false;
+async function loadScenarioCounts(){if(_countsLoaded||!state._countsPending)return;_countsLoaded=true;
+ for(const s of state._countsPending){try{const f=await(await fetch("/api/scenarios?name="+s.id)).json();
+  const el=document.querySelector(`[data-counts="${s.id}"]`);const n=f.tracks.length;
+  if(el){const smooth=Object.values(f.ground_truth||{}).filter(g=>g.curve==="smooth").length;
+   el.textContent=`${n} objects · ${n*(n-1)/2} analysed pairs · ${f.calibration.metres_per_pixel?"calibrated (m)":"pixel space"}${smooth?` · ${smooth} curved path${smooth>1?"s":""}`:""}`;}}catch(e){}}}
 function applyUnifiedFilter(){const q=($("ws-search").value||"").toLowerCase();
  const kind=$("ws-lib-kind").value;
  document.querySelectorAll(".scenario-card").forEach(c=>{
@@ -1336,13 +1347,16 @@ async function syncClerkSession() {
       body: JSON.stringify({ email: (ClerkApp.user.primaryEmailAddress || {}).emailAddress || "",
                              name: ClerkApp.user.fullName || "" }) });
     if (out.status === 200) {
+      localStorage.setItem("fs-auth-provider", "clerk");
       localStorage.setItem("fs-session", out.body.token);
       localStorage.setItem("fs-user", JSON.stringify(out.body.user));
       await refreshMe(); renderMyScenes();
     }
   } catch (e) { /* server sync is best-effort; entitlements refresh on next load */ }
 }
+let _clerkInitStarted = false;
 async function initClerk() {
+  if (_clerkInitStarted) return; _clerkInitStarted = true;
   const note = $("clerk-note");
   let cfg = state.authConfig;
   try { if (!cfg) { cfg = await (await fetch("/api/auth/config")).json(); state.authConfig = cfg; } }
@@ -1375,7 +1389,10 @@ async function initClerk() {
     if (ClerkApp.user) await syncClerkSession();
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
       if (user) syncClerkSession();
-      else { localStorage.removeItem("fs-session"); localStorage.removeItem("fs-user");
+      else if (localStorage.getItem("fs-auth-provider") === "clerk") {
+   // Only a session that Clerk created may be ended by Clerk signing out.
+   localStorage.removeItem("fs-session"); localStorage.removeItem("fs-user");
+   localStorage.removeItem("fs-auth-provider");
    state.openWorkspace=null;state.samCaptures=[]; loadCustomObjects(); refreshMe(); }
     });
     // Clerk Billing pricing table (plans live in Clerk Dashboard)
@@ -1385,6 +1402,7 @@ async function initClerk() {
         ClerkApp.mountPricingTable(tableHost, {});
         tableHost.classList.remove("hidden");
         const cards = $("plan-cards"); if (cards) cards.style.display = "none";
+        const tq = $("team-quote-row"); if (tq) tq.classList.remove("hidden");
         const det = document.createElement("p"); det.className = "dim";
         det.textContent = "Checkout and plan management run through Clerk (development instance). Feature comparison below still applies.";
         tableHost.appendChild(det);
@@ -1398,7 +1416,8 @@ async function initClerk() {
     if (note) note.textContent = "Clerk could not be loaded (network/CDN). Email/password accounts below remain fully functional.";
   }
 }
-initClerk();
+// ClerkJS loads on first need (auth/pricing view or an explicit billing action),
+// keeping third-party scripts and cookies out of the initial page load.
 
 // ---- help search + jump navigation ----
 $("help-search").addEventListener("input",e=>{const q=e.target.value.toLowerCase();
