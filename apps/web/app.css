@@ -91,3 +91,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .demo-frame iframe{display:block;width:100%;aspect-ratio:16/9;border:0}
 
 .sw::before{content:"\25A0  ";color:var(--sw)}
+
+.arch-svg{width:100%;height:auto;display:block}
+.svg-node{fill:var(--panel2);stroke:var(--line);stroke-width:1.2}
+.svg-node.accent{stroke:var(--cyan)}
+.svg-edge{stroke:var(--dim);stroke-width:1.6}
+.svg-arrowhead{fill:var(--dim)}
+.svg-ico{fill:none;stroke:var(--cyan);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.arch-svg text{font-family:ui-sans-serif,system-ui,sans-serif}
+.svg-t{fill:var(--ink);font-size:16.5px;font-weight:650}
+.svg-s{fill:var(--dim);font-size:12.5px}
+.legal h3{margin-top:22px}.legal p,.legal li{max-width:78ch}
+footer .flinks{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+footer a{cursor:pointer}

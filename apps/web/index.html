@@ -72,10 +72,49 @@
   <div class="card"><h3>3 · Counterfact</h3><p>“What if the forklift had slowed 1s earlier?” A deterministic braking simulation reruns the world, Monte-Carlo intervals included, and an independent verifier checks the result.</p></div>
  </div>
  <div class="card wide"><h3>Architecture</h3>
+<svg class="arch-svg" viewBox="0 0 1120 330" role="img" aria-label="FrontierSight architecture: video or fixture flows through SAM 3.1 segmentation, scene extraction and Muse Spark hypothesis, then deterministic counterfactual simulation, independent verification, human review, and a hash-bound evidence packet">
+  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="svg-arrowhead"/></marker></defs>
+  <!-- row 1 -->
+  <g><rect class="svg-node" x="10" y="30" width="235" height="92" rx="14"/>
+   <path class="svg-ico" d="M42 58 h44 v36 h-44 z M42 68 h44 M52 58 v36 M76 58 v36 M42 84 h44"/>
+   <text class="svg-t" x="100" y="72">Video / fixture</text><text class="svg-s" x="100" y="92">observed scene in</text></g>
+  <line class="svg-edge" x1="245" y1="76" x2="290" y2="76" marker-end="url(#arr)"/>
+  <g><rect class="svg-node" x="295" y="30" width="235" height="92" rx="14"/>
+   <path class="svg-ico" d="M330 56 v-8 h10 M364 48 h10 v8 M374 86 v8 h-10 M340 94 h-10 v-8 M338 76 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0"/>
+   <text class="svg-t" x="390" y="72">SAM 3.1</text><text class="svg-s" x="390" y="92">segmentation &amp; tracks</text></g>
+  <line class="svg-edge" x1="530" y1="76" x2="575" y2="76" marker-end="url(#arr)"/>
+  <g><rect class="svg-node" x="580" y="30" width="235" height="92" rx="14"/>
+   <path class="svg-ico" d="M622 52 l18 10 v20 l-18 10 l-18 -10 v-20 z M604 62 l18 10 l18 -10 M622 72 v20"/>
+   <text class="svg-t" x="660" y="72">Scene extraction</text><text class="svg-s" x="660" y="92">tracks · frames · units</text></g>
+  <line class="svg-edge" x1="815" y1="76" x2="860" y2="76" marker-end="url(#arr)"/>
+  <g><rect class="svg-node accent" x="865" y="30" width="245" height="92" rx="14"/>
+   <path class="svg-ico" d="M902 50 l4.5 12.5 L919 67 l-12.5 4.5 L902 84 l-4.5 -12.5 L885 67 l12.5 -4.5 z M922 88 l2 5.5 l5.5 2 l-5.5 2 l-2 5.5 l-2 -5.5 l-5.5 -2 l5.5 -2 z"/>
+   <text class="svg-t" x="945" y="64">Muse Spark</text><text class="svg-s" x="945" y="84" textLength="148" lengthAdjust="spacingAndGlyphs">hypothesis · MODEL_DERIVED</text><text class="svg-s" x="945" y="101">schema-checked</text></g>
+  <!-- down -->
+  <line class="svg-edge" x1="987" y1="122" x2="987" y2="188" marker-end="url(#arr)"/>
+  <!-- row 2 (right to left flow) -->
+  <g><rect class="svg-node" x="865" y="195" width="245" height="92" rx="14"/>
+   <path class="svg-ico" d="M895 218 h34 M895 236 h34 M895 254 h34 M938 218 v36 M952 218 v36 M966 218 v36 M938 227 h28 M938 245 h28"/>
+   <text class="svg-t" x="982" y="230">Deterministic</text><text class="svg-t" x="982" y="250">simulation</text><text class="svg-s" x="982" y="268" textLength="118" lengthAdjust="spacingAndGlyphs">counterfactual · seeded</text></g>
+  <line class="svg-edge" x1="865" y1="241" x2="820" y2="241" marker-end="url(#arr)"/>
+  <g><rect class="svg-node" x="580" y="195" width="235" height="92" rx="14"/>
+   <path class="svg-ico" d="M630 214 l26 9 v18 c0 16 -11 26 -26 32 c-15 -6 -26 -16 -26 -32 v-18 z M619 240 l8 8 l15 -16"/>
+   <text class="svg-t" x="672" y="230">Independent</text><text class="svg-t" x="672" y="250">verification</text><text class="svg-s" x="672" y="268" textLength="128" lengthAdjust="spacingAndGlyphs">engine/geometry · no LLM</text></g>
+  <line class="svg-edge" x1="580" y1="241" x2="535" y2="241" marker-end="url(#arr)"/>
+  <g><rect class="svg-node" x="295" y="195" width="235" height="92" rx="14"/>
+   <path class="svg-ico" d="M352 224 a10 10 0 1 0 0.01 0 M336 262 c2 -12 10 -17 16 -17 s14 5 16 17 M392 232 l7 7 l13 -14"/>
+   <text class="svg-t" x="425" y="238">Human review</text><text class="svg-s" x="425" y="258">approval gate</text></g>
+  <line class="svg-edge" x1="295" y1="241" x2="250" y2="241" marker-end="url(#arr)"/>
+  <g><rect class="svg-node accent" x="10" y="195" width="235" height="92" rx="14"/>
+   <path class="svg-ico" d="M44 216 h34 v52 h-34 z M52 228 h18 M52 240 h18 M52 252 h12 M86 224 l10 6 l-10 6 z"/>
+   <text class="svg-t" x="110" y="238">Evidence packet</text><text class="svg-s" x="110" y="258">hash-bound · replayable</text></g>
+ </svg>
+ <details><summary class="dim">Text version (for screen readers &amp; copying)</summary>
   <pre class="arch">Video / fixture ─► SAM 3.1 segmentation ─► Scene extraction ─► Muse Spark hypothesis
                                                               │
         Evidence packet ◄─ Human review ◄─ Independent verification ◄─ Deterministic counterfactual simulation
         (hash-bound)          (approval gate)      (engine/geometry)        (engine/counterfactual)</pre>
+ </details>
   <p class="dim">Limitations, stated plainly: synthetic fixtures validate the pipeline on synthetic data only; no safety certification is claimed; metric claims require declared calibration. See <code>docs/</code> in the repo.</p>
  </div>
 </section>
@@ -265,13 +304,83 @@
  </div>
 </section>
 
+
+<section id="view-terms" class="view legal"><h2>Terms of Service</h2>
+ <p class="dim">Last updated: October 27, 2026 · FrontierSight AI by Quantura Studio ("FrontierSight", "we").</p>
+ <h3>1. What this service is</h3>
+ <p>FrontierSight AI is a research workbench that connects Meta AI models (Muse Spark, SAM 3.1, Muse Image)
+ to a deterministic physics/geometry engine for analysing recorded physical scenes. This deployment is a
+ hackathon demonstration build. Features marked "planned" on the Pricing page are not yet provided.</p>
+ <h3>2. No safety certification</h3>
+ <p>Outputs are conditional analyses under declared assumptions. They are <b>not</b> safety certifications,
+ risk assessments for operational use, or guarantees about real-world behaviour. You must not rely on
+ FrontierSight output as the sole basis for deploying robots, vehicles, or industrial equipment. Synthetic
+ fixtures validate the software pipeline on synthetic data only.</p>
+ <h3>3. Your content</h3>
+ <p>You retain all rights to scenes, paths, and media you create or load. Scenes you create are stored only
+ in your browser (and encoded in share links you choose to copy) unless a future server-persistence feature
+ is explicitly enabled and described. You grant us no licence to your content beyond operating the features
+ you invoke. You are responsible for having the right to use any footage or data you analyse, including
+ the privacy rights of people appearing in it.</p>
+ <h3>4. Acceptable use</h3>
+ <ul><li>Do not use the service to operate or control physical equipment.</li>
+ <li>Do not attempt to extract API keys, bypass rate limits, or disrupt the service.</li>
+ <li>Do not upload unlawful content or content you have no right to process.</li></ul>
+ <h3>5. AI model outputs</h3>
+ <p>Model-derived content (hypotheses, narration, generated scenes, segmentation) may be inaccurate and is
+ labelled by provenance in-product. Deterministic calculations are reproducible from the artefacts exported
+ in an evidence packet; model outputs are not represented as measurements.</p>
+ <h3>6. Availability &amp; liability</h3>
+ <p>The service is provided "as is" without warranties. To the maximum extent permitted by law, Quantura
+ Studio is not liable for indirect or consequential damages arising from use of this demonstration. Any
+ future paid service will be governed by updated terms published before billing is enabled.</p>
+ <h3>7. Changes</h3>
+ <p>We may update these terms; material changes will be dated here. Questions: via the GitHub repository.</p>
+</section>
+
+<section id="view-privacy" class="view legal"><h2>Privacy Policy</h2>
+ <p class="dim">Last updated: October 27, 2026 · This policy describes this build accurately; if a feature
+ is not listed as collecting data, it does not.</p>
+ <h3>What we collect on servers</h3>
+ <ul><li><b>Nothing by default.</b> This build has no user accounts on a server, no analytics, and no
+ advertising or tracking cookies.</li>
+ <li>When you invoke a live Meta feature (hypothesis, scene generation, segmentation, live test), the
+ relevant prompt or image is transmitted to the Meta Model API from our server so the feature can work.
+ That processing is governed by Meta's terms. Do not submit confidential footage or personal data through
+ live features unless you accept that transmission.</li>
+ <li>Our hosting provider (Vercel) may keep standard infrastructure request logs (IP address, timestamps,
+ URLs) under its own policies.</li></ul>
+ <h3>What stays in your browser</h3>
+ <ul><li>Local profile (name/email you type), created scenes, run history, onboarding progress, theme
+ preference, and waitlist entries — all in <code>localStorage</code>, never transmitted by this build.</li>
+ <li>Video/image files you load in Create/Studio flows are read locally; frames are sent only when you
+ explicitly press a SAM segmentation button.</li>
+ <li>The YouTube demo player loads only after you press play (privacy-enhanced embed).</li></ul>
+ <h3>Deleting your data</h3>
+ <p>Sign out removes the active profile pointer; clearing your browser's site data for this domain deletes
+ all locally stored profiles, scenes, runs and preferences. There is no server-side copy for us to delete
+ in this build.</p>
+ <h3>Children &amp; sensitive data</h3>
+ <p>The service is for professional/research use and is not directed at children. Please do not submit
+ sensitive personal data (including identifiable footage of private individuals) through live AI features.</p>
+ <h3>Changes &amp; contact</h3>
+ <p>Material changes will be dated here. Questions or requests: open an issue on the GitHub repository.</p>
+</section>
+
 <section id="view-settings" class="view"><h2>System settings</h2>
  <div class="card wide"><h3>Meta Model API connection</h3><div id="diag" class="mono dim">loading…</div>
  <p class="dim">The API key lives server-side only (<code>MODEL_API_KEY</code>) and is never sent to the browser. Model ids are configurable via <code>META_MODEL</code> / <code>META_SAM_MODEL</code> / <code>META_IMAGE_MODEL</code>. Retention: uploaded media is processed in-memory in this demo deployment; fixtures are synthetic and openly redistributable.</p>
  <button id="live-test" class="ghostbtn">Test Muse Spark hypothesis (live call)</button><pre id="live-out" class="mono"></pre></div>
 </section>
 
-<footer>FrontierSight AI · Quantura Studio · Meta Global AI Developer Hackathon 2026 · Startup Track · Push the Frontier ·
- <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span></footer>
+<footer>
+ <div class="flinks">
+  <a data-foot="home">Overview</a><a data-foot="pricing">Pricing</a><a data-foot="terms">Terms of Service</a>
+  <a data-foot="privacy">Privacy Policy</a><a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Demo video ↗</a>
+  <a href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub ↗</a>
+ </div>
+ FrontierSight AI · Quantura Studio · Meta Global AI Developer Hackathon 2026 · Startup Track · Push the Frontier ·
+ <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span>
+</footer>
 <div id="toasts" aria-live="polite"></div>
 <script src="app.js"></script></body></html>

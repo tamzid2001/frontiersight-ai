@@ -88,3 +88,12 @@ def test_architecture_text_theme_aware():
     css = (ROOT / "apps" / "web" / "app.css").read_text()
     assert "color:var(--code)" in css and "#a9c6d8" in css  # token defined for dark, overridden for light
     assert css.count("--code:") >= 2
+
+def test_diagram_and_legal_pages():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert html.count('class="svg-node') >= 8 and "Text version" in html  # accessible fallback kept
+    assert 'id="view-terms"' in html and 'id="view-privacy"' in html
+    assert 'data-foot="terms"' in html and 'data-foot="privacy"' in html
+    assert "No safety certification" in html and "localStorage" in html
+    readme = (ROOT / "README.md").read_text()
+    assert "```mermaid" in readme and "docs/assets/studio.png" in readme and "youtu.be/mYTkPqigoz8" in readme

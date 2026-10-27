@@ -532,3 +532,5 @@ loadShared();
 window.addEventListener("hashchange", loadShared);
 
 refreshAuthUI();
+
+document.querySelectorAll("[data-foot]").forEach(a=>a.onclick=()=>{showView(a.dataset.foot);window.scrollTo({top:0});});
