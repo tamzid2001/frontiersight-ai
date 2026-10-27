@@ -454,7 +454,7 @@ else setTimeout(_boot,250);
 
 // ---- Create Lab ----
 state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
-const LAB={w:16,h:14};
+const LAB={w:parseFloat(localStorage.getItem("fs-stage-w"))||16,h:parseFloat(localStorage.getItem("fs-stage-h"))||14};
 function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
@@ -541,7 +541,7 @@ function realismWarnings(o){const out=[];if(!o.waypoints.length)return out;
  const dyn=DYN[o.category]||DYN.object,r=minTurnRadius(o);
  if(dyn.turn&&isFinite(r)&&r<dyn.turn)out.push(`${o.id}: tightest turn ${r.toFixed(2)} m is below the ${o.category} limit ${dyn.turn} m — widen the curve`);
  const pts=resolvePath(o).pts;
- if(pts.some(q=>q[0]<-0.05||q[0]>16.05||q[1]<-0.05||q[1]>14.05))out.push(`${o.id}: path leaves the stage bounds`);
+ if(pts.some(q=>q[0]<-0.05||q[0]>LAB.w+0.05||q[1]<-0.05||q[1]>LAB.h+0.05))out.push(`${o.id}: path leaves the ${LAB.w} × ${LAB.h} m stage bounds`);
  for(const s of state.lab.objects){if(s.category!=="shelf"||!s.waypoints.length)continue;
   const sp=s.waypoints[0];
   if(pts.some(q=>Math.hypot(q[0]-sp[0],q[1]-sp[1])<s.radius+(o.radius||0)*0.6))
@@ -705,6 +705,17 @@ function labAddCustom(rec){const spec=rec.spec;
  const o=labAdd(spec.base_category,null,spec.base_category==="shelf"?0:1.2,spec.radius,0,"stop","straight");
  o.custom={id:rec.id,spec,image:rec.image||null};o.displayName=spec.name;
  labRenderList();labDraw();return o;}
+function applyStageSize(){const w=Math.min(60,Math.max(6,+$("lab-stage-w").value||16));
+ const d=Math.min(60,Math.max(6,+$("lab-stage-h").value||14));
+ LAB.w=w;LAB.h=d;localStorage.setItem("fs-stage-w",w);localStorage.setItem("fs-stage-h",d);
+ const l=$("lab-stage-label");if(l)l.textContent=`${w} × ${d}`;
+ state.lab.objects.forEach(o=>{delete o._res;delete o._prof;});
+ labDraw();
+ labStatus(`Stage set to ${w} × ${d} m. Existing paths are unchanged — check the warnings if anything now leaves the stage.`);}
+$("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;
+{const l=$("lab-stage-label");if(l)l.textContent=`${LAB.w} × ${LAB.h}`;}
+$("lab-stage-w").addEventListener("change",applyStageSize);
+$("lab-stage-h").addEventListener("change",applyStageSize);
 $("lab-add").onclick=()=>{const v=$("lab-new-cat").value;
  if(v.startsWith("custom:")){const rec=(state.customObjects||[]).find(x=>x.id===v.slice(7));
   if(rec){const o=labAddCustom(rec);labStatus(`${spec_name(o)} added — click the stage to lay its path.`);return;}}
@@ -1491,10 +1502,9 @@ $("mic-btn").onclick = async () => {
       if (wav.size > 9 * 1024 * 1024) { micStatus("That take is too long for one transcription — keep it under about 2 minutes."); return; }
       const dataUrl = await new Promise(res => { const fr = new FileReader();
         fr.onload = () => res(fr.result); fr.readAsDataURL(wav); });
-      const lang = $("voice-lang").value;
       const resp = await fetch("/api/meta/transcribe", { method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio_data_url: dataUrl, language_bias: lang ? [lang] : null }) });
+        body: JSON.stringify({ audio_data_url: dataUrl, language_bias: null }) });
       const out = await resp.json();
       if (resp.status === 200 && !out.transcript) {
         micStatus("Meta heard no speech in that take — try again a little closer to the microphone, or type the scene.");
@@ -1522,10 +1532,8 @@ $("mic-btn").onclick = async () => {
 $("voice-fallback").onclick = () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { micStatus("This browser has no built-in speech recognition either — typing is the way."); return; }
-  const langMap = { "": navigator.language || "en-US", English: "en-US", Spanish: "es-ES", Hindi: "hi-IN",
-    French: "fr-FR", German: "de-DE", Portuguese: "pt-PT", Japanese: "ja-JP", Korean: "ko-KR", "Mandarin Chinese": "zh-CN" };
   const rec = new SR();
-  rec.lang = langMap[$("voice-lang").value] || "en-US";
+  rec.lang = navigator.language || "en-US";
   rec.interimResults = false;
   micStatus("Listening with your browser's speech recognition (not Meta)…");
   rec.onresult = e => { const text = e.results[0][0].transcript;
