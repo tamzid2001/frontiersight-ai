@@ -15,6 +15,7 @@
    <button data-theme-mode="dark" title="Dark">☾ Dark</button>
    <button data-theme-mode="system" title="Match operating system">◐ System</button>
   </div>
+  <button id="auth-btn" class="ghostbtn">Sign in</button>
   <span id="mode" class="pill warn">checking…</span>
  </div>
 </header>
@@ -24,6 +25,7 @@
  <div class="navlabel">General</div>
  <button data-view="home" class="on">⌂&nbsp; Overview</button>
  <button data-view="workspace">▦&nbsp; Workspace</button>
+ <button data-view="pricing">◈&nbsp; Pricing</button>
  <div class="navlabel">Experiments</div>
  <button data-view="create">✦&nbsp; Create Lab</button>
  <button data-view="studio">▶&nbsp; Video Studio</button>
@@ -44,6 +46,11 @@
   <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai">GitHub repository</a></div>
   <p class="dim" id="hero-diag">Loading diagnostics…</p>
  </div>
+ <div class="card wide" id="onboarding"><h3>Get started in three moves</h3>
+  <p class="ob-row" data-ob="demo">○ &nbsp;Run the warehouse near-miss demo (Studio → Run analysis)</p>
+  <p class="ob-row" data-ob="created">○ &nbsp;Build or generate a scene in Create Lab and analyse it</p>
+  <p class="ob-row" data-ob="muse">○ &nbsp;Ask Muse Spark to design a scene from a sentence</p>
+  <p class="dim" id="ob-note">Progress is kept in this browser. <a href="#" id="ob-hide">Dismiss</a></p></div>
  <div class="grid3">
   <div class="card"><h3>1 · Observe</h3><p>SAM 3.1 segments and tracks people, forklifts, robots in video. Muse Spark proposes what to look for — it never invents a detection.</p></div>
   <div class="card"><h3>2 · Verify</h3><p>Closest-approach, time-to-collision, continuity and constraint checks run in a seeded, reproducible engine. Uncalibrated video stays in pixel space — no fake metres.</p></div>
@@ -101,6 +108,7 @@
    <div class="row">
     <button id="lab-run">Run analysis →</button>
     <button id="lab-export" class="ghostbtn">Export scene JSON</button>
+    <button id="lab-share" class="ghostbtn">Copy share link</button>
     <label class="ghostbtn" style="cursor:pointer">Import JSON<input id="lab-import" type="file" accept="application/json" hidden></label>
     <span id="lab-status" role="status" class="dim"></span>
    </div>
@@ -184,6 +192,64 @@
  <pre id="evidence-preview" class="mono">Run analysis first for a run-bound report.</pre></div>
 </section>
 
+
+<section id="view-pricing" class="view"><h2>Pricing</h2>
+ <p class="sub">Simple, honest pricing. <b>Billing is not enabled in this hackathon build</b> — no card is
+ collected and nothing is charged. Paid tiers below are the planned launch prices; join the waitlist and we
+ will email you before anything becomes payable.</p>
+ <div class="row" style="margin:14px 0"><span>Monthly</span>
+  <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Switch to annual <span class="dim">(2 months free, planned)</span></button></div>
+ <div class="grid3">
+  <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Forever free · available now</p>
+   <ul><li>✓ All 5 built-in scenarios</li><li>✓ Create Lab + prompt-to-scene</li><li>✓ Deterministic analysis &amp; counterfactuals</li>
+   <li>✓ Evidence JSON/HTML export</li><li>✓ Local profile &amp; scene library</li></ul>
+   <button data-goto="create">Start free</button></div>
+  <div class="card plan featured"><h3>Researcher</h3><p class="price"><span class="amt" data-m="$19" data-a="$190">$19</span><span class="per">/mo</span></p>
+   <p class="dim">Planned launch price · <b>waitlist open</b></p>
+   <ul><li>✓ Everything in Explorer</li><li>◷ Your own Meta API key &amp; higher limits</li><li>◷ SAM 3.1 video-mode tracking</li>
+   <li>◷ Unlimited saved scenes &amp; runs</li><li>◷ Priority support</li></ul>
+   <button class="waitlist-btn" data-plan="Researcher">Join waitlist</button></div>
+  <div class="card plan"><h3>Team / Enterprise</h3><p class="price">Custom</p><p class="dim">Planned · talk to us</p>
+   <ul><li>◷ Shared workspaces &amp; roles</li><li>◷ SSO / SAML</li><li>◷ Private deployment (VPC)</li>
+   <li>◷ Audit-log retention &amp; SLA</li><li>◷ Onboarding for safety teams</li></ul>
+   <button class="waitlist-btn" data-plan="Team">Contact sales (waitlist)</button></div>
+ </div>
+ <p class="dim">✓ = available today · ◷ = planned, not yet shipped. Live Meta calls in this public demo run on the
+ host's API key and are rate-limited (120 requests/min per client); production deployments use your own
+ <code>MODEL_API_KEY</code>, and Meta Model API usage is billed by Meta separately from any FrontierSight plan.</p>
+ <div class="card wide"><h3>FAQ</h3>
+  <p><b>Will I be charged if I join the waitlist?</b> No. The waitlist stores your email in this browser only in
+  this build (no payment integration exists yet); production waitlist handling is described in <code>docs/AUTH_AND_BILLING.md</code>.</p>
+  <p><b>What does the free tier actually include today?</b> Everything running on this site right now.</p>
+  <p><b>Do prices include Meta API costs?</b> No — Meta Model API usage is billed by Meta under your own key in production.</p></div>
+</section>
+
+<section id="view-auth" class="view"><h2 id="auth-title">Sign in</h2>
+ <div class="card wide" id="auth-card">
+  <div id="auth-signedout">
+   <p>Sign in to personalise this workspace: your created scenes, run history and onboarding progress are
+   kept under your profile <em>on this device</em>.</p>
+   <p class="pill warn" style="display:inline-block">Demo authentication — read this</p>
+   <p class="dim">This hackathon build uses <b>device-local profiles</b>: no password is sent anywhere, no
+   account exists on a server, and clearing browser data deletes the profile. It is a profile switcher, not
+   production identity. The production path (Clerk/OIDC + server sessions) is documented in
+   <code>docs/AUTH_AND_BILLING.md</code> and drops into the same UI.</p>
+   <label>Full name<input id="auth-name" type="text" placeholder="Ada Lovelace" style="width:100%"></label>
+   <label>Email<input id="auth-email" type="email" placeholder="ada@example.com" style="width:100%"></label>
+   <div class="row"><button id="auth-create">Create local profile &amp; sign in</button>
+   <button id="auth-guest" class="ghostbtn">Continue as guest</button></div>
+   <p id="auth-status" role="status" class="dim"></p>
+  </div>
+  <div id="auth-signedin" class="hidden">
+   <p><b id="auth-who"></b> <span class="dim" id="auth-meta"></span></p>
+   <p class="dim">Workspace data on this device is scoped to this profile. Other profiles on the same
+   browser cannot see your scenes or runs (device-local separation, not a security boundary).</p>
+   <div class="row"><button id="auth-goto-app">Open workspace</button>
+   <button id="auth-signout" class="ghostbtn">Sign out</button></div>
+  </div>
+ </div>
+</section>
+
 <section id="view-settings" class="view"><h2>System settings</h2>
  <div class="card wide"><h3>Meta Model API connection</h3><div id="diag" class="mono dim">loading…</div>
  <p class="dim">The API key lives server-side only (<code>MODEL_API_KEY</code>) and is never sent to the browser. Model ids are configurable via <code>META_MODEL</code> / <code>META_SAM_MODEL</code> / <code>META_IMAGE_MODEL</code>. Retention: uploaded media is processed in-memory in this demo deployment; fixtures are synthetic and openly redistributable.</p>
@@ -192,4 +258,5 @@
 
 <footer>FrontierSight AI · Quantura Studio · Meta Global AI Developer Hackathon 2026 · Startup Track · Push the Frontier ·
  <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span></footer>
+<div id="toasts" aria-live="polite"></div>
 <script src="app.js"></script></body></html>

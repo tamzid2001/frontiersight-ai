@@ -61,3 +61,10 @@ def test_inspector_inside_studio_and_entities():
     assert 'id="inspector-body"' in html[s:e]
     assert "function drawEntity" in js and '"forklift"' in js and "labelPill" in js
     assert "--accent-ink" in (ROOT / "apps" / "web" / "app.css").read_text()
+
+def test_pricing_and_auth_are_honest():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'id="view-pricing"' in html and 'id="view-auth"' in html
+    assert "Billing is not enabled" in html and "device-local" in html
+    assert "stripe" not in html.lower() and "checkout" not in html.lower()
+    assert 'data-theme-mode="system"' in html

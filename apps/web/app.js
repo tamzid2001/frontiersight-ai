@@ -66,12 +66,13 @@ function headingAt(track,t){const p0=posAt(track,t),p1=posAt(track,Math.min(t+0.
 const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc9ff",cyclist:"#c792ff",shelf:"#5b6b9f",person:"#f2b04a",object:"#e8edf6"};
 
 // tabs
-document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{
- document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));
- document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="view-"+b.dataset.view));
- if(b.dataset.view==="create"&&typeof labDraw==="function")labDraw();
- if(b.dataset.view==="counterfactual"&&state.data){populateCfScene();populateCfAgents();if(state.cfData){drawCfMap();drawCfChart();}}});
-function goto(v){document.querySelector(`#tabs button[data-view="${v}"]`).click();}
+function showView(v){
+ document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);x.toggleAttribute("aria-current",on);});
+ document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
+ if(v==="create"&&typeof labDraw==="function")labDraw();
+ if(v==="counterfactual"&&state.data){populateCfScene();populateCfAgents();if(state.cfData){drawCfMap();drawCfChart();}}}
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+function goto(v){showView(v);}
 
 async function diag(){try{const d=await(await fetch("/api/diagnostics")).json();
  $("mode").textContent=d.meta_configured?"● LIVE META":"● FIXTURE REPLAY";
@@ -90,14 +91,17 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
  state.data=await(await fetch("/api/scenarios?name="+d.scenarios[0].id)).json();state.scenario=d.scenarios[0].id;
  renderObjects();draw();populateCfScene();   // silent preload: user stays on Overview
 }
-function renderMyScenes(){const host=$("scenario-list");if(!host)return;let mine=[];
- try{mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");}catch(e){}
- if(!mine.length)return;const div=document.createElement("div");div.className="card wide";
+function renderMyScenes(){const host=$("scenario-list");if(!host)return;
+ const old=$("my-scenes-card");if(old)old.remove();const oldRuns=$("runs-card");if(oldRuns)oldRuns.remove();
+ let mine=[];
+ try{mine=JSON.parse(localStorage.getItem(sceneStoreKey())||localStorage.getItem("fs-my-scenes")||"[]");}catch(e){}
+ renderRuns();
+ if(!mine.length){renderRuns();return;}const div=document.createElement("div");div.className="card wide";div.id="my-scenes-card";
  div.innerHTML=`<h3>My scenes (this browser)</h3>`+mine.map((s,i)=>`<p><b>${s.id}</b> <span class="dim">${new Date(s.when).toLocaleString()} · ${s.tracks.length} objects</span>
   <button data-mine="${i}" class="ghostbtn">Re-analyse</button> <button data-del="${i}" class="ghostbtn">Delete</button></p>`).join("");
  host.appendChild(div);
  div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
- div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem("fs-my-scenes",JSON.stringify(mine));div.remove();renderMyScenes();});}
+ div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem(sceneStoreKey(),JSON.stringify(mine));div.remove();renderMyScenes();});}
 window.pick=async id=>{state.data=await(await fetch("/api/scenarios?name="+id)).json();state.scenario=id;state.t=0;
  $("scenario-select").value=id;renderObjects();draw();populateCfScene();goto("studio");};
 $("scenario-select").onchange=e=>pick(e.target.value);
@@ -145,6 +149,7 @@ $("analyze").onclick=async()=>{$("analyze-status").textContent="Running bounded 
   const seek=()=>{state.t=+el.dataset.t;draw();};el.onclick=seek;
   el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();seek();}};});
  $("analyze-status").textContent=`Run ${r.run.run_id} · ${r.run.mode} · ${r.run.stages.filter(s=>s.status==="completed").length}/${r.run.stages.length} stages completed`;
+ recordRun({scenario:state.scenario,mode:r.run.mode,run:r.run.run_id,events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length}); obDone("demo");
  renderTrace(r.run);renderInspector(r);drawCfFromRun(r.run);};
 function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s.status}"><b>${s.name}</b> · ${s.status} · <span class="dim">${s.attribution}${s.artifact?" · artifact "+s.artifact:""}${s.retries?" · retries "+s.retries:""}</span><br><span class="dim mono">${JSON.stringify(s.detail).slice(0,320)}</span></li>`).join("");}
 function renderInspector(r){const sc=r.scenario;$("inspector-body").innerHTML=
@@ -437,7 +442,7 @@ $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
  catch(e){$("lab-gen-status").textContent="Generation failed: API unreachable.";return;}
  if(r.status==="BLOCKED_CREDENTIALS"){$("lab-gen-status").textContent=r.detail;return;}
  if(r.error||r.status==="MODEL_ERROR"){$("lab-gen-status").textContent="Muse could not produce a valid scene: "+(r.error||r.detail)+" — try a clearer description.";return;}
- labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`);
+ labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`); obDone("muse"); toast("Scene generated by Muse Spark — edit any waypoint, then Run analysis.");
  $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
 // starter template so the Lab is never an empty, unexplained canvas
 if(!state.lab.objects.length){$("lab-add")&&document.querySelector('[data-tpl="near-miss"]').click();}
@@ -452,3 +457,75 @@ function applyTheme(){const mode=localStorage.getItem("fs-theme")||"system";
 document.querySelectorAll("[data-theme-mode]").forEach(b=>b.onclick=()=>{localStorage.setItem("fs-theme",b.dataset.themeMode);applyTheme();});
 if(_mq.addEventListener)_mq.addEventListener("change",()=>{if((localStorage.getItem("fs-theme")||"system")==="system")applyTheme();});
 applyTheme();
+
+// ---- toasts ----
+function toast(msg, kind="ok"){const host=$("toasts");if(!host)return;const d=document.createElement("div");
+ d.className="toast "+(kind==="ok"?"":kind);d.textContent=msg;host.appendChild(d);
+ setTimeout(()=>{d.style.opacity="0";d.style.transition="opacity .4s";setTimeout(()=>d.remove(),420);},4200);}
+
+// ---- device-local profiles (demo auth; production path in docs/AUTH_AND_BILLING.md) ----
+function profile(){try{return JSON.parse(localStorage.getItem("fs-profile")||"null");}catch(e){return null;}}
+function sceneStoreKey(){const p=profile();return "fs-my-scenes:"+(p?p.id:"guest");}
+function runsKey(){const p=profile();return "fs-runs:"+(p?p.id:"guest");}
+function refreshAuthUI(){const p=profile(),btn=$("auth-btn");if(!btn)return;
+ btn.textContent=p?("● "+p.name.split(" ")[0]+" · profile"):"Sign in";
+ const so=$("auth-signedout"),si=$("auth-signedin");
+ if(so&&si){so.classList.toggle("hidden",!!p);si.classList.toggle("hidden",!p);
+  if(p){$("auth-who").textContent=p.name;$("auth-meta").textContent=`· ${p.email} · local profile created ${new Date(p.created).toLocaleDateString()}`;}}}
+$("auth-btn").onclick=()=>goto("auth");
+$("auth-create").onclick=()=>{const name=$("auth-name").value.trim(),email=$("auth-email").value.trim();
+ if(name.length<2||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){$("auth-status").textContent="Enter your name and a valid-looking email to create the local profile.";return;}
+ localStorage.setItem("fs-profile",JSON.stringify({id:email.toLowerCase(),name,email,created:Date.now()}));
+ refreshAuthUI();renderMyScenes();toast(`Welcome, ${name.split(" ")[0]} — local profile created on this device.`);goto("workspace");};
+$("auth-guest").onclick=()=>{localStorage.removeItem("fs-profile");refreshAuthUI();toast("Continuing as guest. Your scenes stay in this browser.","warn");goto("home");};
+$("auth-signout").onclick=()=>{localStorage.removeItem("fs-profile");refreshAuthUI();renderMyScenes();toast("Signed out. Profile data remains on this device until browser data is cleared.","warn");goto("home");};
+$("auth-goto-app").onclick=()=>goto("workspace");
+
+// ---- run history ----
+function recordRun(rec){try{const k=runsKey();const arr=JSON.parse(localStorage.getItem(k)||"[]");
+ arr.unshift({when:Date.now(),...rec});localStorage.setItem(k,JSON.stringify(arr.slice(0,20)));}catch(e){} renderRuns();}
+function renderRuns(){const host=$("scenario-list");if(!host||$("runs-card"))return;let runs=[];
+ try{runs=JSON.parse(localStorage.getItem(runsKey())||"[]");}catch(e){}
+ if(!runs.length)return;const div=document.createElement("div");div.className="card wide";div.id="runs-card";
+ div.innerHTML=`<h3>Recent runs</h3>`+runs.slice(0,8).map(r=>`<p><b>${r.scenario}</b> <span class="dim">${new Date(r.when).toLocaleString()} · ${r.mode} · ${r.pairs} pairs · ${r.events} event(s) · run ${r.run}</span></p>`).join("");
+ host.appendChild(div);}
+
+// ---- onboarding checklist ----
+function obDone(k){try{const o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");o[k]=true;localStorage.setItem("fs-onboard",JSON.stringify(o));}catch(e){}renderOnboard();}
+function renderOnboard(){let o={};try{o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");}catch(e){}
+ document.querySelectorAll(".ob-row").forEach(r=>{const done=!!o[r.dataset.ob];r.classList.toggle("done",done);
+  r.firstChild.textContent=(done?"✓ ":"○ ");});
+ const card=$("onboarding");if(card&&o.demo&&o.created&&o.muse)$("ob-note").innerHTML="All three done — you have used the full loop. <a href='#' id='ob-hide'>Dismiss</a>";
+ const hide=$("ob-hide");if(hide)hide.onclick=e=>{e.preventDefault();card.style.display="none";localStorage.setItem("fs-onboard-hide","1");};
+ if(card&&localStorage.getItem("fs-onboard-hide")==="1")card.style.display="none";}
+renderOnboard();
+
+// ---- pricing toggle + waitlist (no billing exists; see docs/AUTH_AND_BILLING.md) ----
+$("bill-toggle").onclick=()=>{const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
+ $("bill-toggle").setAttribute("aria-pressed",String(!annual));
+ document.querySelectorAll(".amt").forEach(a=>{a.textContent=annual?a.dataset.m:a.dataset.a;});
+ document.querySelectorAll(".per").forEach(a=>{a.textContent=annual?"/mo":"/yr";});
+ $("bill-toggle").firstChild.textContent=annual?"Switch to annual ":"Switch to monthly ";};
+document.querySelectorAll(".waitlist-btn").forEach(b=>b.onclick=()=>{
+ const p=profile();const email=p?p.email:"";
+ try{const w=JSON.parse(localStorage.getItem("fs-waitlist")||"[]");w.push({plan:b.dataset.plan,email,when:Date.now()});localStorage.setItem("fs-waitlist",JSON.stringify(w));}catch(e){}
+ toast(email?`Waitlist joined for ${b.dataset.plan} as ${email}. No payment taken — billing is not enabled.`
+            :`Waitlist joined for ${b.dataset.plan} (guest). No payment taken — billing is not enabled. Sign in to attach an email.`,"warn");});
+document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>goto(b.dataset.goto));
+
+// ---- shareable Create Lab links ----
+$("lab-share").onclick=async()=>{const payload={objects:state.lab.objects};
+ const enc=btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ const url=location.origin+location.pathname+"#view=create&s="+enc;
+ try{await navigator.clipboard.writeText(url);toast("Share link copied — it encodes your scene (components + paths), nothing is uploaded.");}
+ catch(e){labStatus("Copy this link: "+url);}};
+function loadShared(){if(!location.hash.includes("s="))return;
+ try{const enc=new URLSearchParams(location.hash.slice(1)).get("s");
+  const payload=JSON.parse(decodeURIComponent(escape(atob(enc.replace(/-/g,"+").replace(/_/g,"/")))));
+  labLoadScene({objects:payload.objects},"Shared scene loaded from link — press Run analysis.");
+  goto("create");toast("Shared scene loaded from link.");}
+ catch(e){toast("That share link could not be decoded — starting with the template instead.","err");}}
+loadShared();
+window.addEventListener("hashchange", loadShared);
+
+refreshAuthUI();
