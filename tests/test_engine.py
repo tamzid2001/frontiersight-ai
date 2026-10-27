@@ -79,15 +79,22 @@ def test_curved_paths_arc_length_and_speed():
     assert dense[0] == Vec(0, 0) and dense[24] == Vec(5, 5) and dense[-1] == Vec(10, 0)
     curved = Path(pts, "smooth"); straight = Path(pts, "straight")
     assert curved.length > straight.length  # the arc over the top is longer than chords... (chords are the straight path)
-    # constant speed: equal time steps -> near-equal travel distances
-    pos = [curved.position_at_time(t * 0.5, speed=2.0) for t in range(9)]
-    steps = [a.dist(b) for a, b in zip(pos, pos[1:])]
-    assert all(abs(s - 1.0) < 0.06 for s in steps), steps
+    # arc-length lookup itself is exact (constant-speed kernel) ...
+    raw = [curved.position_at_distance(d) for d in (0, 2, 4, 6, 8)]
+    raw_steps = [a.dist(b) for a, b in zip(raw, raw[1:])]
+    assert all(abs(s - 2.0) < 0.08 for s in raw_steps[:3]) and raw_steps[-1] > 1.8  # chord < arc on the bend, by geometry
+    # ... while the motion profile is realistic: starts from rest, brakes to a stop
+    prof = curved.motion(2.0, "pedestrian", "stop")
+    assert prof.speeds[0] == 0.0 and prof.speeds[-1] == 0.0
+    assert prof.total_time > curved.length / 2.0  # ramps + curve slowdown take longer
+    assert min(prof.speeds[len(prof.speeds)//3: 2*len(prof.speeds)//3]) < 2.0  # slows for the bend
     # closed loop returns to its start and has no seam jump
     loop = Path([(2.0, 2.0), (13.0, 2.0), (13.0, 11.0), (2.0, 11.0)], "smooth", closed=True)
-    p0 = loop.position_at_time(0, speed=1.2)
-    p_end = loop.position_at_time(loop.length / 1.2, speed=1.2, mode="loop")
+    p0 = loop.position_at_time(0, speed=1.2, category="robot")
+    lp = loop.motion(1.2, "robot", "loop")
+    p_end = loop.position_at_time(lp.total_time, speed=1.2, mode="loop", category="robot")
     assert p0.dist(p_end) < 0.05
+    assert min(lp.speeds) > 0  # a circulating loop never stops
     # smoothness: heading changes gradually through the corner (no 90-degree kink)
     import math as _m2
     corner = Path([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)], "smooth")

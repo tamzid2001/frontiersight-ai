@@ -346,9 +346,13 @@ function labInv(px,py,W,H){return [Math.round(px/W*LAB.w*10)/10, Math.round((H-p
 
 // ---- curved paths: Catmull-Rom with arc-length parameterisation (mirror of engine/curves.py) ----
 const CR_PER=24;
-function crPoint(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;return [
- .5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
- .5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)];}
+function crPoint(p0,p1,p2,p3,t){ // centripetal Catmull-Rom (Barry-Goldman) — mirror of engine/curves.py
+ const knot=(pa,pb,t0)=>t0+Math.pow(Math.max(Math.hypot(pb[0]-pa[0],pb[1]-pa[1]),1e-4),0.5);
+ const t1=knot(p0,p1,0),t2=knot(p1,p2,t1),t3=knot(p2,p3,t2),tt=t1+t*(t2-t1);
+ const L=(pa,pb,ta,tb,x)=>{const k=tb===ta?0:(x-ta)/(tb-ta);return [pa[0]+(pb[0]-pa[0])*k,pa[1]+(pb[1]-pa[1])*k];};
+ const a1=L(p0,p1,0,t1,tt),a2=L(p1,p2,t1,t2,tt),a3=L(p2,p3,t2,t3,tt);
+ const b1=L(a1,a2,0,t2,tt),b2=L(a2,a3,t1,t3,tt);
+ return L(b1,b2,t1,t2,tt);}
 function resolvePath(o){const key=JSON.stringify([o.waypoints,o.curve,o.mode]);
  if(o._res&&o._res.key===key)return o._res;
  const wps=o.waypoints, closed=o.mode==="loop"; let pts=[];
@@ -365,6 +369,60 @@ function resolvePath(o){const key=JSON.stringify([o.waypoints,o.curve,o.mode]);
  }
  const cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
  const res={key,pts,cum,total:cum[cum.length-1]||0};o._res=res;return res;}
+
+const DYN={forklift:{a:0.7,lat:0.6,turn:1.3},vehicle:{a:1.6,lat:1.1,turn:3.2},cyclist:{a:1.2,lat:1.4,turn:1.2},
+ pedestrian:{a:1.3,lat:1.6,turn:0.25},robot:{a:1.0,lat:1.0,turn:0.5},shelf:{a:0,lat:0,turn:0},object:{a:1.0,lat:1.0,turn:0.8}};
+function pathCurvatures(pts){const out=new Array(pts.length).fill(0);
+ for(let i=1;i<pts.length-1;i++){const[a,b,c]=[pts[i-1],pts[i],pts[i+1]];
+  const ab=Math.hypot(b[0]-a[0],b[1]-a[1]),bc=Math.hypot(c[0]-b[0],c[1]-b[1]),ca=Math.hypot(a[0]-c[0],a[1]-c[1]);
+  const area2=Math.abs((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]));
+  if(ab*bc*ca<1e-12||area2<1e-12)continue;const r=(ab*bc*ca)/(2*area2);out[i]=r>0?1/r:0;}
+ if(out.length>2){out[0]=out[1];out[out.length-1]=out[out.length-2];}return out;}
+function getProfile(o){const r=resolvePath(o);
+ const key=r.key+"|"+o.speed+"|"+o.category+"|"+o.mode;
+ if(o._prof&&o._prof.key===key)return o._prof;
+ const dyn=DYN[o.category]||DYN.object,a=Math.max(dyn.a,1e-3),pts=r.pts,cum=r.cum,n=pts.length;
+ const ks=pathCurvatures(pts);
+ let v=ks.map(k=>k>1e-6?Math.min(o.speed,Math.sqrt(dyn.lat/k)):o.speed);
+ if(n>=2&&r.total>0){
+  if(o.mode==="loop"){
+   for(let pass=0;pass<2;pass++){
+    for(let i=0;i<n;i++){const jj=(i+1)%n;const ds=jj>i?cum[jj]-cum[i]:r.total-cum[i]+cum[jj];
+     if(ds>0)v[jj]=Math.min(v[jj],Math.sqrt(v[i]*v[i]+2*a*ds));}
+    for(let i=n-1;i>=0;i--){const jj=(i+1)%n;const ds=jj>i?cum[jj]-cum[i]:r.total-cum[i]+cum[jj];
+     if(ds>0)v[i]=Math.min(v[i],Math.sqrt(v[jj]*v[jj]+2*a*ds));}}
+  }else{
+   v[0]=0;if(o.mode==="stop"||o.mode==="pingpong")v[n-1]=0;
+   for(let i=n-2;i>=0;i--){const ds=cum[i+1]-cum[i];if(ds>0)v[i]=Math.min(v[i],Math.sqrt(v[i+1]*v[i+1]+2*a*ds));}
+   for(let i=0;i<n-1;i++){const ds=cum[i+1]-cum[i];if(ds>0)v[i+1]=Math.min(v[i+1],Math.sqrt(v[i]*v[i]+2*a*ds));}
+  }}
+ const times=[0];
+ for(let i=0;i<n-1;i++){const ds=cum[i+1]-cum[i],avg=(v[i]+v[i+1])/2;
+  times.push(times[i]+(avg>1e-6?ds/avg:0));}
+ const prof={key,times,speeds:v,total:times.length?times[times.length-1]:(o.speed?r.total/o.speed:0)};
+ o._prof=prof;return prof;}
+function profPosition(o,lt){const r=resolvePath(o),P=getProfile(o);
+ if(!P.times.length||P.total<=0)return o.waypoints[0];
+ if(o.mode==="loop")lt=lt%P.total;
+ else if(o.mode==="pingpong"){const m=lt%(2*P.total);lt=m>P.total?2*P.total-m:m;}
+ else lt=Math.min(lt,P.total);
+ let lo=0,hi=P.times.length-1;while(lo<hi){const mid=(lo+hi)>>1;if(P.times[mid]<lt)lo=mid+1;else hi=mid;}
+ const i=Math.min(Math.max(lo-1,0),P.times.length-2),span=P.times[i+1]-P.times[i];
+ const k=span>0?(lt-P.times[i])/span:0,s=r.cum[i]+(r.cum[i+1]-r.cum[i])*k;
+ return pathPosAtDistance(o,s);}
+function minTurnRadius(o){const ks=pathCurvatures(resolvePath(o).pts);
+ const kmax=Math.max(0,...ks);return kmax>1e-9?1/kmax:Infinity;}
+function realismWarnings(o){const out=[];if(!o.waypoints.length)return out;
+ const dyn=DYN[o.category]||DYN.object,r=minTurnRadius(o);
+ if(dyn.turn&&isFinite(r)&&r<dyn.turn)out.push(`${o.id}: tightest turn ${r.toFixed(2)} m is below the ${o.category} limit ${dyn.turn} m — widen the curve`);
+ const pts=resolvePath(o).pts;
+ if(pts.some(q=>q[0]<-0.05||q[0]>16.05||q[1]<-0.05||q[1]>14.05))out.push(`${o.id}: path leaves the stage bounds`);
+ for(const s of state.lab.objects){if(s.category!=="shelf"||!s.waypoints.length)continue;
+  const sp=s.waypoints[0];
+  if(pts.some(q=>Math.hypot(q[0]-sp[0],q[1]-sp[1])<s.radius+(o.radius||0)*0.6))
+   out.push(`${o.id}: path passes through the footprint of ${s.id}`);}
+ return out;}
+
 function pathPosAtDistance(o,d){const r=resolvePath(o);if(r.pts.length<2||r.total===0)return r.pts[0]||null;
  d=Math.min(Math.max(d,0),r.total);let lo=0,hi=r.cum.length-1;
  while(lo<hi){const mid=(lo+hi)>>1;if(r.cum[mid]<d)lo=mid+1;else hi=mid;}
@@ -372,14 +430,12 @@ function pathPosAtDistance(o,d){const r=resolvePath(o);if(r.pts.length<2||r.tota
  return [r.pts[i-1][0]+(r.pts[i][0]-r.pts[i-1][0])*k, r.pts[i-1][1]+(r.pts[i][1]-r.pts[i-1][1])*k];}
 
 function pathLen(o){return resolvePath(o).total;}
-function pathDur(o){return o.speed>0?pathLen(o)/o.speed:0;}
+function pathDur(o){return o.speed>0?getProfile(o).total:0;}
 function labDuration(){return Math.min(20,Math.max(4,...state.lab.objects.map(o=>o.delay+pathDur(o))));}
 function posOnPath(o,t){if(!o.waypoints.length)return null;
- let lt=Math.max(0,t-o.delay);const r=resolvePath(o);
- if(o.waypoints.length===1||o.speed<=0||lt===0||r.total===0)return o.waypoints[0];
- const D=r.total/o.speed;
- if(lt>=D){if(o.mode==="loop")lt=lt%D;else if(o.mode==="pingpong"){const m=lt%(2*D);lt=m>D?2*D-m:m;}else lt=D;}
- return pathPosAtDistance(o,o.speed*lt);}
+ if(o.waypoints.length===1||o.speed<=0)return o.waypoints[0];
+ const lt=Math.max(0,t-o.delay);
+ return profPosition(o,lt);}
 function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
  const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
@@ -410,7 +466,9 @@ function labReady(){const el=$("lab-ready");if(!el)return;const os=state.lab.obj
  const moving=os.filter(o=>o.speed>0&&o.waypoints.length>1).length, placed=os.filter(o=>o.waypoints.length).length;
  el.innerHTML=os.length<2?`Add at least <b>2 components</b> to run analysis (${os.length} so far).`
   :`Ready check: <b>${os.length} components</b> · ${placed} placed · ${moving} moving · stage 16×14 m — ${moving?"press Run analysis.":"give a selected component a path (click the stage) to create motion."}`;
- el.style.color=os.length>=2&&moving?"var(--teal)":"var(--amber)";}
+ el.style.color=os.length>=2&&moving?"var(--teal)":"var(--amber)";
+ const warns=os.flatMap(o=>o.speed>0||o.waypoints.length>1?realismWarnings(o):[]);
+ if(warns.length)el.innerHTML+=warns.map(w=>`<br><span style="color:var(--amber)">⚠ ${w}</span>`).join("");}
 document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace")&&$("view-create").classList.contains("on")
  &&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){const o=labObj(state.lab.selected);
  if(o&&o.waypoints.length){o.waypoints.pop();labRenderList();labDraw();}}});
