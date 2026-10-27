@@ -27,15 +27,15 @@
 <script>try{var m=localStorage.getItem("fs-theme")||"system";var r=m==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):m;document.documentElement.dataset.theme=r;}catch(e){document.documentElement.dataset.theme="dark";}</script>
 <link rel="stylesheet" href="app.css">
 <script type="importmap">{"imports":{"three":"/vendor/three.module.min.js","three/addons/":"/vendor/addons/"}}</script></head><body>
-<button type="button" class="skip" id="skip-link">Skip to content</button>
+<a class="skip" id="skip-link" href="#main">Skip to content</a>
 <header>
  <div class="headright">
   <div class="themeseg" role="group" aria-label="Colour theme">
-   <button data-theme-mode="light" title="Light">☀ Light</button>
-   <button data-theme-mode="dark" title="Dark">☾ Dark</button>
-   <button data-theme-mode="system" title="Match operating system">◐ System</button>
+   <button data-theme-mode="light" title="Light theme" aria-label="Light theme" aria-pressed="false">☀</button>
+   <button data-theme-mode="dark" title="Dark theme" aria-label="Dark theme" aria-pressed="false">☾</button>
+   <button data-theme-mode="system" title="Match operating system" aria-label="Match operating system theme" aria-pressed="false">◐</button>
   </div>
-  <span id="plan-badge" class="pill ghost hidden"></span><button id="auth-btn" class="ghostbtn">Sign in</button>
+  <span id="plan-badge" class="pill ghost hidden"></span><span id="clerk-userbtn"></span><button id="auth-btn" class="ghostbtn">Sign in</button>
   <span id="mode" class="pill warn">checking…</span>
  </div>
 </header>
@@ -49,7 +49,7 @@
  </div>
 
  <div class="navlabel">General</div>
- <button data-view="home" class="on">⌂&nbsp; Overview</button>
+ <button data-view="home" class="on" aria-current="page">⌂&nbsp; Overview</button>
  <button data-view="workspace">▦&nbsp; Workspace</button>
  <button data-view="pricing">◈&nbsp; Pricing</button>
  <div class="navlabel">Experiments</div>
@@ -60,7 +60,9 @@
  <button data-view="evidence">▤&nbsp; Evidence &amp; Trace</button>
  <div class="navspacer"></div>
  <button data-view="settings">⚙&nbsp; Settings</button>
+ <button data-view="help">?&nbsp; Help &amp; guides</button>
 </nav>
+<main id="main" tabindex="-1">
 <section id="view-home" class="view on">
  <div class="hero-grid">
   <div class="hero-copy">
@@ -76,11 +78,11 @@
     <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub repository ↗</a></div>
    <p class="dim" id="hero-diag">Loading diagnostics…</p>
    <div class="proofstrip" aria-label="Measured facts about this build">
-    <div><b>42</b><span>tests in CI</span></div>
+    <div><b>84</b><span>tests in CI</span></div>
     <div><b>7</b><span>analytical validation cases</span></div>
-    <div><b>5</b><span>built-in scenarios</span></div>
-    <div><b>9</b><span>agent workflow stages</span></div>
-    <div><b>0</b><span>runtime dependencies</span></div>
+    <div><b>5</b><span>curved-path scenarios</span></div>
+    <div><b>8</b><span>MCP tools exposed</span></div>
+    <div><b>4</b><span>Meta models integrated</span></div>
    </div>
   </div>
   <div class="card demo-card hero-video" id="demo-video">
@@ -102,11 +104,11 @@
   <span class="pill ghost">+ a deterministic engine that answers to physics, not prompts</span>
  </div>
 
- <div class="card wide" id="onboarding"><h3>Get started in three moves</h3>
+ <div class="card wide" id="onboarding"><h2 style="font-size:17px;margin:14px 0 8px">Get started in three moves</h2>
   <p class="ob-row" data-ob="demo"><span class="ob-mark">○</span> Run the warehouse near-miss demo (Studio → Run analysis)</p>
   <p class="ob-row" data-ob="created"><span class="ob-mark">○</span> Build or generate a scene in Create Lab and analyse it</p>
   <p class="ob-row" data-ob="muse"><span class="ob-mark">○</span> Ask Muse Spark to design a scene from a sentence</p>
-  <p class="dim" id="ob-note">Progress is kept in this browser. <a href="#" id="ob-hide">Dismiss</a></p></div>
+  <p class="dim" id="ob-note">Progress is kept in this browser. <button type="button" class="flink" id="ob-hide">Dismiss</button></p></div>
 
  <h2 class="section-title">How it works</h2>
  <div class="grid3 howit">
@@ -127,12 +129,15 @@
 
  <h2 class="section-title">Everything in the workbench</h2>
  <div class="bento">
-  <button type="button" class="card tile" data-goto="create"><div class="howico">✦</div><h3>Create Lab</h3><p>Compose scenes from forklifts, pedestrians, robots and shelves. Click paths, drag waypoints, set speeds — then analyse your own world.</p><span class="tilelink">Build a scene →</span></button>
-  <button type="button" class="card tile" data-goto="create"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><span class="tilelink">Generate with Muse →</span></button>
-  <button type="button" class="card tile" data-goto="studio"><div class="howico">▶</div><h3>Video Studio</h3><p>Frame-synchronised playback with heading-oriented entities, event seeking, occlusion markers and an all-pairs inspector.</p><span class="tilelink">Open the Studio →</span></button>
-  <button type="button" class="card tile" data-goto="counterfactual"><div class="howico">⇄</div><h3>Counterfactual simulator</h3><p>Pick scene, agent and target; brake earlier or harder. Trajectory map, separation chart, Monte-Carlo intervals, per-actor results.</p><span class="tilelink">Run a what-if →</span></button>
-  <button type="button" class="card tile" data-goto="evidence"><div class="howico">▤</div><h3>Evidence &amp; trace</h3><p>Nine auditable agent stages with artifact hashes, then a human-approved, hash-bound evidence packet you can export and replay.</p><span class="tilelink">Inspect evidence →</span></button>
-  <button type="button" class="card tile" data-goto="settings"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><span class="tilelink">Check the connection →</span></button>
+  <article class="card tile"><div class="howico">✦</div><h3>Create Lab</h3><p>Compose scenes from forklifts, pedestrians, robots and shelves. Click paths, drag waypoints, set speeds — then analyse your own world.</p><button type="button" class="tilelink" data-goto="create">Build a scene →</button></article>
+  <article class="card tile"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><button type="button" class="tilelink" data-goto="create">Generate with Muse →</button></article>
+  <article class="card tile"><div class="howico">▶</div><h3>Video Studio</h3><p>Frame-synchronised playback with heading-oriented entities, event seeking, occlusion markers and an all-pairs inspector.</p><button type="button" class="tilelink" data-goto="studio">Open the Studio →</button></article>
+  <article class="card tile"><div class="howico">⇄</div><h3>Counterfactual simulator</h3><p>Pick scene, agent and target; brake earlier or harder. Trajectory map, separation chart, Monte-Carlo intervals, per-actor results.</p><button type="button" class="tilelink" data-goto="counterfactual">Run a what-if →</button></article>
+  <article class="card tile"><div class="howico">▤</div><h3>Evidence & trace</h3><p>Nine auditable agent stages with artifact hashes, then a human-approved, hash-bound evidence packet you can export and replay.</p><button type="button" class="tilelink" data-goto="evidence">Inspect evidence →</button></article>
+  <article class="card tile"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><button type="button" class="tilelink" data-goto="settings">Check the connection →</button></article>
+  <article class="card tile"><div class="howico">🎙</div><h3>Voice dictation</h3><p>Speak your scene instead of typing: Muse Voice Transcribe turns speech into an editable prompt (browser-decoded to studio WAV first), then Muse Spark builds it.</p><button type="button" class="tilelink" data-goto="create">Dictate a scene →</button></article>
+  <article class="card tile"><div class="howico">✦</div><h3>Custom objects by Muse</h3><p>Describe any object — Muse Spark designs a buildable version, Muse Image renders it, and it becomes a real component in 2D and 3D, saved to your profile.</p><button type="button" class="tilelink" data-goto="create">Create an object →</button></article>
+  <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>The deterministic engine is an MCP server (HTTP + stdio): eight tools any agent can call for measured analysis and counterfactuals — no credits spent, no approvals bypassed.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
  </div>
 
  <div class="card wide"><h3>Architecture</h3>
@@ -199,15 +204,15 @@
 
 <section id="view-workspace" class="view">
  <h2>Experiment workspace</h2>
- <div class="row" style="margin-bottom:12px"><input id="ws-search" type="text" placeholder="Filter scenarios… (e.g. occlusion, warehouse)" style="flex:1" aria-label="Filter scenarios"></div>
+ <div class="row" style="margin-bottom:12px">
+   <input id="ws-search" type="text" placeholder="Search scenarios &amp; workspaces… (e.g. occlusion, forklift, my scene)" style="flex:2" aria-label="Search scenarios and workspaces">
+   <select id="ws-lib-kind" aria-label="Filter by type" style="flex:1">
+    <option value="">Everything</option><option value="scenario">Built-in scenarios</option>
+    <option value="lab">My Lab scenes</option><option value="frames">My SAM frame sets</option></select>
+ </div>
  <div class="card wide" id="workspace-lib"><h3>My workspaces</h3>
   <p class="dim">Saved Create Lab scenes and SAM frame sets — yours, searchable, reopenable, updatable.
   <span id="ws-storage-note">Stored in this browser; sign in to keep them on the server too.</span></p>
-  <div class="row">
-   <input id="ws-lib-search" type="text" placeholder="Search workspaces…" aria-label="Search workspaces" style="flex:2">
-   <select id="ws-lib-kind" aria-label="Filter by kind" style="flex:1">
-    <option value="">All kinds</option><option value="lab">Create Lab scenes</option><option value="frames">SAM frame sets</option></select>
-  </div>
   <div id="workspace-list"><p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p></div>
  </div>
  <div id="scenario-list" class="grid3"></div>
@@ -216,13 +221,13 @@
 
 <section id="view-studio" class="view">
  <div class="row"><h2>Video intelligence studio</h2>
-  <select id="scenario-select"></select>
+  <select id="scenario-select" aria-label="Scenario"></select>
   <span class="pill ghost">SYNTHETIC FIXTURE REPLAY — canvas-rendered from stored fixture tracks, ground truth held separately</span></div>
  <div class="studio">
   <div class="card stagecard">
    <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
     <button id="studio-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
-    <button id="studio-view-3d" class="ghostbtn" aria-pressed="false">3D view (beta)</button>
+    <button id="studio-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
     <span class="dim">Same tracks, same clock — 3D is a visualisation; analysis stays planar.</span></div>
    <canvas id="stage" width="880" height="560" role="img" aria-label="Scene stage: tracked entities moving along their observed paths"></canvas>
    <div id="studio-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the scenario tracks"></div>
@@ -247,7 +252,7 @@
   the full analysis on them. Detections are image-space — results stay in pixels unless you declare a scale in Create Lab terms.</p>
   <div class="studio">
    <div>
-    <input type="file" id="sam-file" accept="video/*,image/*">
+    <input type="file" id="sam-file" accept="video/*,image/*" aria-label="Upload image or video for segmentation">
     <video id="sam-video" controls playsinline style="width:100%;display:none;border-radius:12px"></video>
     <img id="sam-img" style="width:100%;display:none;border-radius:12px" alt="Uploaded still for segmentation">
     <canvas id="sam-canvas" width="880" height="520" role="img" aria-label="SAM segmentation overlay canvas"></canvas>
@@ -269,7 +274,8 @@
   </div>
  </div>
  <div class="card wide" style="margin-top:14px"><h2>Motion &amp; geometry inspector</h2>
- <div class="card wide"><div id="inspector-body" class="dim">Run analysis in the Studio, then inspect measured tracks, coordinate frames, and uncertainty here.</div></div>
+ <div id="inspector-body" class="dim">Run analysis in the Studio, then inspect measured tracks, coordinate frames, and uncertainty here.</div>
+ </div>
 </section>
 
 <section id="view-create" class="view"><h2>Create Lab — build a scene, set the paths, run the proof</h2>
@@ -283,7 +289,7 @@
     <span id="lab-saved-badge" class="pill warn">unsaved</span></div>
    <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
     <button id="lab-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
-    <button id="lab-view-3d" class="ghostbtn" aria-pressed="false">3D view (beta)</button>
+    <button id="lab-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
     <span class="dim">3D visualises the same 2D scene model — heights are illustrative, physics stays planar. Drag waypoints in 2D; click the 3D ground to add them.</span></div>
    <canvas id="lab-canvas" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
    <div id="lab-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the Create Lab scene"></div>
@@ -298,19 +304,39 @@
     <button id="lab-save-ws" class="ghostbtn">Save workspace</button>
     <button id="lab-update-ws" class="ghostbtn hidden">Update opened workspace</button>
     <button id="lab-share" class="ghostbtn">Copy share link</button>
-    <label class="ghostbtn" style="cursor:pointer">Import JSON<input id="lab-import" type="file" accept="application/json" hidden></label>
+    <button type="button" class="ghostbtn" id="lab-import-btn">Import JSON</button><input id="lab-import" type="file" accept="application/json" hidden>
     <span id="lab-status" role="status" class="dim"></span>
    </div>
   </div>
   <aside class="card"><h3>✦ Generate with Muse Spark</h3>
    <textarea id="lab-prompt" rows="3" maxlength="4000" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
    <p class="dim" style="margin:2px 0 8px"><span id="lab-prompt-count">0</span> / 4000 characters</p>
+   <div class="row">
+    <button id="mic-btn" type="button">🎙 Speak instead</button>
+    <select id="voice-lang" aria-label="Dictation language" style="max-width:190px">
+     <option value="">Auto-detect language</option><option>English</option><option>Spanish</option>
+     <option>Hindi</option><option>French</option><option>German</option><option>Portuguese</option>
+     <option>Japanese</option><option>Korean</option><option>Mandarin Chinese</option></select>
+    <span id="voice-src" class="pill ghost hidden"></span>
+    <button id="voice-fallback" type="button" class="ghostbtn hidden">Use browser speech instead</button>
+   </div>
+   <p id="mic-status" class="dim" role="status">Or dictate it: press the mic, speak your scene, press Stop.
+   Audio goes to Meta only when you press Stop — nothing is recorded or stored here — and the transcript
+   lands in the box above for you to edit before generating.</p>
    <div class="row"><button id="lab-generate">Generate scene</button>
     <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
     <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>
    <p id="lab-gen-status" role="status" class="dim">Muse proposes the scene; you edit every waypoint before anything is analysed. Offline, a labelled keyword template is used instead — never passed off as a model call.</p>
+   <h3>✦ Create object with Muse</h3>
+   <p class="dim">Describe any object — Muse Spark designs a buildable version (footprint, palette,
+   construction parts) and Muse Image renders a reference. It becomes a real component below and is
+   saved to your profile (server when signed in, this browser as guest).</p>
+   <input id="obj-desc" type="text" placeholder="e.g. a yellow scissor lift with a platform basket" aria-label="Describe a new object" style="width:100%">
+   <div class="row"><button id="obj-gen">Generate object</button>
+   <span id="obj-status" class="dim" role="status"></span></div>
+   <div id="obj-preview"></div>
    <h3>Components</h3>
-   <div class="row"><select id="lab-new-cat">
+   <div class="row"><select id="lab-new-cat" aria-label="Component type">
      <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
      <option value="robot">Robot</option><option value="vehicle">Vehicle</option>
      <option value="cyclist">Cyclist</option><option value="shelf">Shelf (static)</option></select>
@@ -328,9 +354,6 @@
   </aside>
  </div>
 </section>
-
-
-</div>
 <section id="view-counterfactual" class="view"><h2>Counterfactual simulator</h2>
  <p class="dim">Pick the scene, the agent that intervenes, and who it must avoid. Change anything — scene, agent,
  target, timing, braking — and the deterministic simulation reruns on the server. The map shows where bodies
@@ -352,7 +375,12 @@
  <div class="studio">
   <div class="card stagecard">
    <h3 style="margin-top:0">Trajectory map — top-down</h3>
+   <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
+    <button id="cf-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
+    <button id="cf-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
+    <span class="dim">Synced with Create Lab &amp; Studio: same scene, same clock, same entities.</span></div>
    <canvas id="cf-map" width="880" height="520" role="img" aria-label="Counterfactual trajectory map, top-down"></canvas>
+   <div id="cf-3d" class="hidden" style="height:520px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the counterfactual comparison"></div>
    <div class="transport"><button id="cf-play">▶ Play comparison</button>
     <input id="cf-scrub" type="range" aria-label="Comparison time scrubber" min="0" max="6" step="0.05" value="0"><span id="cf-clock" class="mono">t = 0.00s</span></div>
    <p class="dim">Dashed slate = agent's original path · teal = counterfactual · thin lines = other actors ·
@@ -399,7 +427,9 @@
  safely falls back to the waitlist and no card can be collected.</p>
  <div class="row" style="margin:14px 0"><span>Monthly</span>
   <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Switch to annual <span class="dim">(2 months free)</span></button></div>
- <div class="grid3">
+ <div id="clerk-pricing" class="hidden" style="margin-bottom:14px"></div>
+ <p id="team-quote-row" class="dim hidden">Building for a team? <button type="button" id="quote-open-2" class="flink">Request a Team / Enterprise quote</button> — shared org workspace, audit log, SSO scoped in contract.</p>
+ <div class="grid3" id="plan-cards">
   <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Forever free · no card required</p>
    <ul><li>✓ All 5 built-in scenarios</li><li>✓ Create Lab + prompt-to-scene</li><li>✓ Deterministic analysis &amp; counterfactuals</li>
    <li>✓ Evidence export with recorded human approval</li><li>✓ 10 server-saved scenes · Monte-Carlo ≤ 200</li></ul>
@@ -420,7 +450,7 @@
 
  <div class="card wide"><h3>Compare plans</h3>
   <div style="overflow-x:auto"><table class="pairtable compare">
-   <tr><th>Capability</th><th>Explorer</th><th>Researcher</th><th>Team</th></tr>
+   <tr><th scope="col">Capability</th><th scope="col">Explorer</th><th scope="col">Researcher</th><th scope="col">Team</th></tr>
    <tr><td>Built-in scenarios &amp; Create Lab</td><td>✓</td><td>✓</td><td>✓</td></tr>
    <tr><td>Deterministic analysis &amp; counterfactuals</td><td>✓</td><td>✓</td><td>✓</td></tr>
    <tr><td>Meta calls</td><td>Host key, fair use</td><td>Your own key (BYOK)</td><td>Your own key (BYOK)</td></tr>
@@ -454,6 +484,10 @@
 
 <section id="view-auth" class="view"><h2 id="auth-title">Sign in</h2>
  <div class="card wide" id="auth-card">
+  <div id="clerk-block">
+   <p id="clerk-note" class="dim">Checking sign-in providers…</p>
+   <div id="clerk-signin"></div>
+  </div>
   <div id="auth-signedout">
    <p>Create a free Explorer account to save scenes on the server, or sign in. Passwords are
    PBKDF2-hashed server-side; sessions last 30 days. <span class="dim">Demo-deployment note: the public
@@ -463,17 +497,17 @@
    <div class="row" role="tablist" aria-label="Account">
     <button id="tab-signup" class="ghostbtn" aria-selected="true">Create account</button>
     <button id="tab-signin" class="ghostbtn" aria-selected="false">Sign in</button></div>
-   <div id="form-signup">
-    <label>Full name<input id="su-name" type="text" placeholder="Ada Lovelace" style="width:100%"></label>
-    <label>Email<input id="su-email" type="email" placeholder="ada@example.com" style="width:100%"></label>
-    <label>Password (8+ characters)<input id="su-password" type="password" placeholder="••••••••" style="width:100%"></label>
-    <button id="auth-signup">Create free account</button>
-   </div>
-   <div id="form-signin" class="hidden">
-    <label>Email<input id="si-email" type="email" placeholder="ada@example.com" style="width:100%"></label>
-    <label>Password<input id="si-password" type="password" placeholder="••••••••" style="width:100%"></label>
-    <button id="auth-signin">Sign in</button>
-   </div>
+   <form id="form-signup" autocomplete="on">
+    <label>Full name<input id="su-name" name="name" type="text" autocomplete="name" placeholder="Ada Lovelace" style="width:100%"></label>
+    <label>Email<input id="su-email" name="email" type="email" autocomplete="email" placeholder="ada@example.com" style="width:100%"></label>
+    <label>Password (8+ characters)<input id="su-password" name="password" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%"></label>
+    <button id="auth-signup" type="submit">Create free account</button>
+   </form>
+   <form id="form-signin" class="hidden" autocomplete="on">
+    <label>Email<input id="si-email" name="email" type="email" autocomplete="email" placeholder="ada@example.com" style="width:100%"></label>
+    <label>Password<input id="si-password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%"></label>
+    <button id="auth-signin" type="submit">Sign in</button>
+   </form>
    <div class="row" style="margin-top:10px"><button id="auth-guest" class="ghostbtn">Continue as guest (device-local scenes only)</button></div>
    <p id="auth-status" role="status" class="dim"></p>
   </div>
@@ -552,6 +586,123 @@
  <p>Material changes will be dated here. Questions or requests: open an issue on the GitHub repository.</p>
 </section>
 
+
+<section id="view-help" class="view legal"><h2>Help &amp; guides</h2>
+ <p class="sub">Everything FrontierSight does, how to drive it, and what to do when something
+ looks wrong. Search this page, or jump to a topic.</p>
+ <input id="help-search" type="text" placeholder="Search help… (e.g. curved path, 402, workspace, MCP)" aria-label="Search help">
+ <div class="row" style="margin:12px 0">
+  <button class="ghostbtn" data-help-jump="help-start">Getting started</button>
+  <button class="ghostbtn" data-help-jump="help-create">Create Lab &amp; paths</button>
+  <button class="ghostbtn" data-help-jump="help-analysis">Analysis explained</button>
+  <button class="ghostbtn" data-help-jump="help-accounts">Accounts &amp; plans</button>
+  <button class="ghostbtn" data-help-jump="help-mcp">API &amp; MCP</button>
+  <button class="ghostbtn" data-help-jump="help-trouble">Troubleshooting</button>
+  <button class="ghostbtn" data-help-jump="help-contact">Contact &amp; support</button>
+ </div>
+
+ <div class="card wide help-block" id="help-start"><h3>Getting started (2 minutes)</h3>
+  <ol>
+   <li><b>Watch or run the demo.</b> Overview → <i>Run the warehouse near-miss demo</i>, or open the
+   Video Studio and press <b>Run analysis</b>. Events appear on the right; click one and the player seeks to it.</li>
+   <li><b>Make your own world.</b> Create Lab loads with a near-miss template. Drag waypoints, change
+   speeds, then <b>Run analysis</b>. Or describe a scene in words and let Muse Spark design it.</li>
+   <li><b>Ask “what if?”.</b> In Counterfactual, pick the agent that should have braked, drag the
+   intervention sliders or a preset, and read the per-actor results — including when braking helps
+   one actor and hurts another (that happens, and the tool shows it rather than hiding it).</li>
+  </ol>
+  <p class="dim">No account or key is needed for any of this. Live Meta features light up automatically
+  when the deployment has a key configured (see the badge in the top bar).</p></div>
+
+ <div class="card wide help-block" id="help-create"><h3>Create Lab &amp; path editing</h3>
+  <ul>
+   <li><b>Add a component</b> (forklift, pedestrian, robot, vehicle, cyclist, static shelf) — it appears
+   on the stage selected. Click the stage to lay its path; choose <i>straight lines</i> or
+   <i>smooth curve</i> per component (curves are Catmull-Rom splines driven at constant,
+   physically-limited speed — objects slow for tight turns and brake to a stop, just like the analysis assumes).</li>
+   <li><b>Click any path</b> to select its component. Then: click <b>near the line</b> to insert a point
+   exactly there, click <b>empty stage</b> to append, <b>drag points</b> to reshape,
+   <b>Shift-drag a path</b> to move it whole, <b>right-click or double-click a point</b> to delete it,
+   <b>Delete/Backspace</b> removes the last point. Hovering a path shows a pointer — paths are meant to be grabbed.</li>
+   <li><b>Path modes:</b> <i>stop</i> (ends and holds), <i>loop</i> (patrol), <i>ping-pong</i> (back and forth).
+   Amber warnings flag turns tighter than the vehicle can physically make, paths leaving the stage,
+   or routes through a shelf — fix them by widening the curve.</li>
+   <li><b>2D/3D:</b> both views edit and preview the same scene on the same clock; 3D adds orbit and
+   ground-click waypoint placement (drag points in 2D). Your per-section view choice is remembered.</li>
+   <li><b>Generate with Muse:</b> describe the scene (up to 4,000 characters). Muse returns components,
+   curved paths and speeds that are schema-validated and then scored by the engine (interaction quality,
+   shelf collisions, turn warnings) — a poor first draft is retried once with the exact issues fed back.
+   The scene is auto-labelled; press <b>Save workspace</b> to keep it. It also appears in the
+   Video Studio dropdown under <i>My workspaces</i>.</li>
+   <li><b>Workspaces:</b> save labs and SAM frame sets, then search, open, update, rename or delete them
+   from Workspace (⋯ menu on each card). Guests keep them in this browser; signed-in users sync to the server.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-analysis"><h3>Analysis explained (honestly)</h3>
+  <ul>
+   <li><b>Measured</b> numbers are sampled along the actual (curved) trajectories at 50 ms —
+   closest distance, contact, when it happened. <b>Predicted</b> CPA/TTC is a constant-velocity
+   extrapolation shown next to it. An LLM never produces these numbers.</li>
+   <li><b>Calibration rule:</b> without a declared scale, results stay in <b>pixels</b> and the tool
+   refuses metric claims rather than inventing metres. Create Lab scenes are in metres by construction.</li>
+   <li><b>Counterfactuals</b> replay paths with a braking agent (path-following simulation +
+   Monte-Carlo intervals). They are conditional predictions under listed assumptions —
+   <b>not safety certifications</b>, and every evidence packet says so.</li>
+   <li><b>Evidence export</b> requires a named human's approval of that exact run (Evidence view).
+   The approval is recorded inside the exported packet; the hash chain makes tampering detectable.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-accounts"><h3>Accounts, plans &amp; billing</h3>
+  <ul>
+   <li><b>Sign in</b> with Clerk (when configured on the deployment) or email/password. Guests can use
+   everything in Explorer; signing in adds server-saved workspaces.</li>
+   <li><b>Explorer (free):</b> all built-in scenarios, Create Lab, prompt-to-scene, deterministic
+   analysis, evidence export, 10 server-saved scenes, Monte-Carlo up to 200 runs.</li>
+   <li><b>Researcher ($19/mo via Clerk/Stripe when enabled):</b> your own Meta API key (BYOK, encrypted),
+   SAM 3.1 video-mode tracking, unlimited server scenes, Monte-Carlo up to 2,000, priority support.</li>
+   <li><b>Team (custom):</b> shared org workspace and roles, org audit log, onboarding; SSO/SAML, VPC
+   and SLA are scoped in the contract (Pricing → Request a quote).</li>
+   <li>Seeing <b>402</b>? You hit a plan gate — the message names the limit and the plan that removes it.
+   Seeing <b>BLOCKED_CREDENTIALS</b>? The deployment has no Meta key configured; fixture/demo mode still works fully.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-mcp"><h3>API &amp; MCP</h3>
+  <p>The deterministic engine is exposed two ways:</p>
+  <ul>
+   <li><b>REST:</b> the same endpoints the UI uses (see Settings for the live <code>/api/me</code>,
+   scenarios, analysis, counterfactual, SAM and billing surfaces).</li>
+   <li><b>MCP server:</b> <code>POST /api/mcp</code> — connect Claude Code in one line:
+   <code>claude mcp add --transport http frontiersight https://frontiersight-ai.vercel.app/api/mcp</code>,
+   or run it offline from a clone: <code>python3 scripts/mcp_stdio.py</code>. Eight deterministic
+   tools (scenarios, measured analysis, path-following counterfactuals, curve sampling, scene
+   validation). By design, no MCP tool spends Meta credits or bypasses the human approval gate.
+   Full guide: <code>docs/MCP.md</code> in the repository.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-trouble"><h3>Troubleshooting</h3>
+  <ul>
+   <li><b>Analysis seems stuck:</b> live runs include a Muse call and can take 5–25 s (the button
+   shows an elapsed timer). Past ~95 s the UI aborts with a named error — press Run again.</li>
+   <li><b>“SAM returned zero matches”:</b> a valid result, shown as-is. Try a clearer concept
+   (one short noun phrase, e.g. “forklift”), a sharper frame, or the default example frame.</li>
+   <li><b>Export is locked:</b> evidence downloads unlock only after a named human approves that
+   run in the Evidence view — by design.</li>
+   <li><b>3D won’t open:</b> your browser/GPU declined WebGL; the app returns to 2D with your scene
+   untouched. Nothing depends on 3D.</li>
+   <li><b>My workspace is gone:</b> guest workspaces live in this browser (clearing site data deletes
+   them). Sign in to keep them on the server.</li>
+   <li><b>The timer looks wrong:</b> playback is true delta-time (0.5×/1×/2× are exact); if a scene
+   is longer than the scrub range, open it via Workspace so the range rescales.</li>
+  </ul></div>
+
+ <div class="card wide help-block" id="help-contact"><h3>Contact &amp; support</h3>
+  <p>Signed-in users can open a support request in <b>Settings → Support</b> (paid plans go to the
+  priority queue). Otherwise: email <a href="mailto:hello@quantura.studio">hello@quantura.studio</a>,
+  file an issue on <a href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub</a>,
+  or watch the <a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">3-minute demo</a> again —
+  most “how do I…” questions are answered in it.</p></div>
+</section>
+
 <section id="view-settings" class="view"><h2>System settings</h2>
  <div class="card wide"><h3>Your plan &amp; account</h3><div id="me-card" class="mono dim">Loading account…</div>
  <div class="row"><button id="manage-billing" class="ghostbtn">Manage billing (Stripe portal)</button>
@@ -580,10 +731,11 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
  <p class="dim">Profiles, scenes, runs, theme and preferences live in this browser only.</p>
  <button id="clear-data" class="ghostbtn">Clear all local data &amp; reset</button> <span id="clear-status" class="dim" role="status"></span></div>
 </section>
+</main>
 
 <footer>
  <div class="flinks">
-  <button type="button" class="flink" data-foot="home">Overview</button><a href="/contact.html">Contact us</a><button type="button" class="flink" data-foot="pricing">Pricing</button><button type="button" class="flink" data-foot="terms">Terms of Service</button>
+  <button type="button" class="flink" data-foot="home">Overview</button><a href="/contact.html">Contact us</a><button type="button" class="flink" data-foot="pricing">Pricing</button><button type="button" class="flink" data-foot="help">Help &amp; guides</button><button type="button" class="flink" data-foot="terms">Terms of Service</button>
   <button type="button" class="flink" data-foot="privacy">Privacy Policy</button><a href="https://youtu.be/mYTkPqigoz8" target="_blank" rel="noopener">Demo video ↗</a>
   <a href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub ↗</a>
  </div>
@@ -591,11 +743,11 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
   <span class="dim">Follow Quantura:</span>
   <a href="https://www.youtube.com/@quanturaaimarketforecast" target="_blank" rel="noopener me" aria-label="Quantura on YouTube">
    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4" fill="#ff0033"/><path d="M10 9.2v5.6L15 12z" fill="#fff"/></svg> YouTube</a>
-  <a href="https://quantura.studio" target="_blank" rel="noopener me" aria-label="Quantura Studio website">
+  <a href="https://quantura.studio" target="_blank" rel="noopener me" aria-label="quantura.studio — Quantura Studio website">
    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.7 2.6 4 5.7 4 9s-1.3 6.4-4 9c-2.7-2.6-4-5.7-4-9s1.3-6.4 4-9z"/></svg> quantura.studio</a>
   <a href="https://github.com/tamzid2001" target="_blank" rel="noopener me" aria-label="Quantura on GitHub">
    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.2-.4-1.2.1-2.6 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.6.6.7 1 1.6 1 2.7 0 3.8-2.4 4.7-4.6 4.9.4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> GitHub</a>
-  <a href="mailto:hello@quantura.studio" aria-label="Email Quantura Studio">
+  <a href="mailto:hello@quantura.studio" aria-label="Email hello@quantura.studio">
    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg> hello@quantura.studio</a>
  </div>
  FrontierSight AI <span id="foot-version" class="dim"></span> · Quantura Studio · Meta Global AI Developer Hackathon 2026 · Indie Track · Push the Frontier ·

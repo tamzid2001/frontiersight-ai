@@ -5,6 +5,7 @@
 **From video to verifiable physical-world intelligence.**
 
 [![CI](https://github.com/tamzid2001/frontiersight-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/tamzid2001/frontiersight-ai/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/tamzid2001/frontiersight-ai/branch/main/graph/badge.svg)](https://codecov.io/gh/tamzid2001/frontiersight-ai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](pyproject.toml)
 [![Live demo](https://img.shields.io/badge/live-frontiersight--ai.vercel.app-cyan)](https://frontiersight-ai.vercel.app)

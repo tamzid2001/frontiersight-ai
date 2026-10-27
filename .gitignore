@@ -8,8 +8,10 @@ dist/
 build/
 *.egg-info/
 data/
+coverage.xml
+coverage.lcov
+.coverage
 
 node_modules/
 coverage/
-.coverage
 *.tsbuildinfo

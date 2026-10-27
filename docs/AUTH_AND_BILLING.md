@@ -11,11 +11,16 @@
   marks planned features with ◷, and the waitlist stores entries locally in
   this build. No payment provider is connected and no charge can occur.
 
-## Production path (drop-in, not yet enabled)
-1. **Identity:** Clerk or any OIDC provider in front of the same views; the
-   server verifies the session JWT on every `/api/*` call and replaces the
-   `guest/profile` storage scoping with the verified `user_id`/`org_id`.
-   Env: `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` (server-side only).
+## Clerk (integrated 0.27.0 — see docs/CLERK_SETUP.md)
+1. **Identity:** a dedicated Clerk app (FrontierSight AI) is linked; Billing
+   is enabled with the Researcher plan + feature catalog configured.
+   Frontend mounts Clerk SignIn/UserButton/PricingTable when
+   `CLERK_PUBLISHABLE_KEY` is set; the server verifies Clerk session JWTs
+   against the instance JWKS and syncs them into local sessions
+   (`POST /api/auth/clerk-sync`), and Clerk (Svix) webhooks sync plan
+   state. First-party email/password auth remains the always-available
+   fallback. Remaining owner step: create the webhook endpoint in the
+   Clerk Dashboard and set `CLERK_WEBHOOK_SIGNING_SECRET`.
 2. **Persistence:** Postgres for users/orgs/runs, object storage for media;
    the stateless analysis API already takes full track payloads, so no
    engine changes are needed.

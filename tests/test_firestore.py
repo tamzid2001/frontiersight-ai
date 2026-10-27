@@ -118,7 +118,7 @@ def http_service(signed, monkeypatch):
     from services.api import workspace_http
     import threading
     env,token=signed
-    for k,v in {**env,'AUTH_PROVIDER':'clerk','FIRESTORE_PROJECT_ID':'demo-quantura-web','WORKSPACE_AUDIT_SECRET':secrets.token_hex(32)}.items():monkeypatch.setenv(k,v)
+    for k,v in {**env,'SCENE_STORE':'firestore','FIRESTORE_PROJECT_ID':'demo-quantura-web','WORKSPACE_AUDIT_SECRET':secrets.token_hex(32)}.items():monkeypatch.setenv(k,v)
     workspace_http.database.cache_clear()
     server=ThreadingHTTPServer(('127.0.0.1',0),H)
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -135,11 +135,11 @@ def test_http_clerk_firestore_integration_and_no_ephemeral_sql_fallback(http_ser
         try:
             with urllib.request.urlopen(req,timeout=10) as r:return r.status,json.load(r)
         except urllib.error.HTTPError as error:return error.code,json.load(error)
-    assert call('/api/auth/config')[1]['provider']=='clerk'
+    assert call('/api/auth/config')[1]['firestore_scenes_enabled'] is True
     assert call('/api/me')[1]['authenticated'] is False
     assert call('/api/scenes')[0]==401
     jwt=token(sub='user_http_'+uuid.uuid4().hex)
-    assert call('/api/me',authorization=jwt)[1]['storage']=='firestore'
+    assert call('/api/scene-context',authorization=jwt)[1]['storage']=='firestore'
     status,row=call('/api/scenes',{'name':'HTTP science','payload':{'workspace':{}}},jwt,{'Idempotency-Key':uuid.uuid4().hex})
     assert status==201 and row['version']==1
     assert call('/api/scenes',authorization=jwt)[1]['scenes'][0]['id']==row['id']
@@ -148,7 +148,7 @@ def test_http_clerk_firestore_integration_and_no_ephemeral_sql_fallback(http_ser
     assert call('/api/scenes',authorization=jwt,headers={'X-Workspace-Organization':'org_victim'})[0]==409
     assert call('/api/scenes/update',{'id':row['id'],'name':'Updated','payload':{},'expectedVersion':1},jwt,{'Idempotency-Key':uuid.uuid4().hex})[0]==200
     assert call('/api/scenes/delete',{'id':row['id'],'expectedVersion':2},jwt,{'Idempotency-Key':uuid.uuid4().hex})[0]==200
-    assert call('/api/support',{'message':'hello'},jwt)[0]==503
+    assert call('/api/support',{'message':'hello'},jwt)[0]==401
 
 def test_firestore_rejects_invalid_mutations_and_corrupt_state(database):
     store=make_store(database)
@@ -182,13 +182,13 @@ def test_http_rejects_malformed_bodies_methods_and_dependency_failures(http_serv
     base,token=http_service
     headers={'Authorization':token(sub='user_errors_'+uuid.uuid4().hex),'Idempotency-Key':uuid.uuid4().hex}
     with httpx.Client(timeout=10) as transport:
-        assert transport.get(base+'/api/org',headers=headers).status_code==200
+        assert transport.get(base+'/api/scene-context',headers=headers).status_code==200
         assert transport.get(base+'/api/scenes?limit=not-a-number',headers=headers).status_code==400
         assert transport.get(base+'/api/scenes/update',headers=headers).status_code==405
         assert transport.post(base+'/api/scenes',headers=headers,content='not json').status_code==415
         assert transport.post(base+'/api/scenes',headers={**headers,'Content-Type':'application/json'},content='not json').status_code==400
         assert transport.post(base+'/api/scenes',headers={**headers,'Content-Type':'application/json'},content='x'*310000).status_code==413
-        assert transport.post(base+'/api/org',headers=headers,json={}).status_code==405
+        assert transport.post(base+'/api/scene-context',headers=headers,json={}).status_code==405
         with monkeypatch.context() as patch:
             def unavailable():raise RuntimeError('test-only-provider-details-should-not-leak')
             patch.setattr(workspace_http,'database',unavailable)

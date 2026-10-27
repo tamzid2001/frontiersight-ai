@@ -12,7 +12,7 @@ from services.api.firestore_scenes import Scenes, client
 
 
 def enabled():
-    return os.environ.get("AUTH_PROVIDER") == "clerk"
+    return os.environ.get("SCENE_STORE") == "firestore"
 
 
 @lru_cache(maxsize=1)
@@ -26,15 +26,7 @@ def identity(handler):
 
 def handle(handler, route, method):
     """True means this adapter sent a response; legacy SQL is never a fallback."""
-    if route == "/api/auth/config" and method == "GET":
-        return handler._send(200, {"provider": "clerk" if enabled() else "legacy",
-            "publishableKey": os.environ.get("CLERK_PUBLISHABLE_KEY", "") if enabled() else "",
-            "issuer": os.environ.get("CLERK_ISSUER", "") if enabled() else ""}) or True
-    if enabled() and route in ("/api/auth/signup", "/api/auth/login", "/api/auth/logout",
-        "/api/billing/checkout", "/api/billing/portal", "/api/keys/meta", "/api/support", "/api/waitlist", "/api/sales/quote"):
-        handler._send(503, {"error": "legacy_capability_disabled_in_clerk_mode", "contact": "mailto:support@quantura.ai"})
-        return True
-    supported = ("/api/scenes", "/api/scenes/update", "/api/scenes/delete", "/api/me", "/api/org")
+    supported = ("/api/scenes", "/api/scenes/update", "/api/scenes/delete", "/api/scene-context")
     if not enabled() or route not in supported:
         return False
     try:
@@ -42,24 +34,13 @@ def handle(handler, route, method):
         origin = handler.headers.get("Origin")
         if origin and origin not in parties:
             raise WorkspaceError(403, "request_origin_not_allowed")
-        if route == "/api/me" and not handler.headers.get("Authorization"):
-            from integrations.billing import entitlements
-            handler._send(200, {"authenticated": False, "plan": "explorer", "entitlements": entitlements("explorer"), "billing_configured": False})
-            return True
         actor = identity(handler)
         expected_org = handler.headers.get("X-Workspace-Organization")
         if expected_org is not None and expected_org != (actor.org_id or "personal"):
             raise WorkspaceError(409, "session_workspace_changed")
-        if route == "/api/me" and method == "GET":
-            from integrations.billing import entitlements
-            handler._send(200, {"authenticated": True, "user": {"id": actor.user_id, "name": "Clerk member", "email": ""},
-                "plan": actor.plan, "entitlements": entitlements(actor.plan), "subscription": None,
-                "meta_key": {"configured": False, "last4": None}, "billing_configured": False,
-                "auth_provider": "clerk", "org": actor.org_id, "storage": "firestore"})
-            return True
-        if route == "/api/org" and method == "GET":
-            handler._send(200, {"org": actor.org_id, "role": actor.org_role, "members": [], "shared_scenes": [],
-                "audit_log": [], "note": "Manage invitations and members with the Clerk organization settings control."})
+        if route == "/api/scene-context" and method == "GET":
+            handler._send(200, {"userId": actor.user_id, "orgId": actor.org_id,
+                "orgRole": actor.org_role, "plan": actor.plan, "storage": "firestore"})
             return True
         store = Scenes(database(), actor, os.environ.get("WORKSPACE_AUDIT_SECRET", ""))
         store.consume_request()

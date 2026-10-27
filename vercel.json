@@ -171,7 +171,35 @@
     },
     {
       "source": "/api/auth/config",
-      "destination": "/api/index?ep=auth-config"
+      "destination": "/api/index?ep=authconfig"
+    },
+    {
+      "source": "/api/auth/clerk-sync",
+      "destination": "/api/index?ep=clerksync"
+    },
+    {
+      "source": "/api/webhooks/clerk",
+      "destination": "/api/index?ep=clerkwh"
+    },
+    {
+      "source": "/api/meta/transcribe",
+      "destination": "/api/index?ep=transcribe"
+    },
+    {
+      "source": "/api/meta/object",
+      "destination": "/api/index?ep=genobj"
+    },
+    {
+      "source": "/api/objects",
+      "destination": "/api/index?ep=objects"
+    },
+    {
+      "source": "/api/objects/delete",
+      "destination": "/api/index?ep=objdel"
+    },
+    {
+      "source": "/api/scene-context",
+      "destination": "/api/index?ep=scenecontext"
     },
     {
       "source": "/contact.html",

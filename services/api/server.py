@@ -36,16 +36,11 @@ from integrations import billing as _billing
 from services.api import workspace_http as _workspace
 
 def _auth_user(handler):
-    if _workspace.enabled():
-        actor = _workspace.identity(handler)
-        return {"id": actor.user_id, "name": "Clerk member", "email": "", "clerk_plan": actor.plan}
     auth = handler.headers.get("Authorization", "")
     token = auth.removeprefix("Bearer ").strip() if auth.startswith("Bearer ") else None
     return _store.user_for_token(token)
 
 def _plan_of(user) -> str:
-    if user and "clerk_plan" in user:
-        return user["clerk_plan"]
     return _store.plan_for(user["id"]) if user else "explorer"
 
 def _fernet():
@@ -129,8 +124,10 @@ class H(BaseHTTPRequestHandler):
                 "scenes": "/api/scenes", "scenedel": "/api/scenes/delete", "sceneupd": "/api/scenes/update",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
                 "segment-video": "/api/meta/segment-video", "org": "/api/org", "support": "/api/support", "mcp": "/api/mcp",
+                "scenecontext": "/api/scene-context", "authconfig": "/api/auth/config", "clerksync": "/api/auth/clerk-sync", "clerkwh": "/api/webhooks/clerk",
+                "transcribe": "/api/meta/transcribe", "genobj": "/api/meta/object", "objects": "/api/objects", "objdel": "/api/objects/delete",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
-                "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js", "contact": "/contact.html"}.get(ep, u.path)
+                "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js", "contact": "/contact.html", "contact": "/contact.html"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
         b = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code); self.send_header("Content-Type", ctype)
@@ -164,7 +161,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.25.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.32.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 return self._send(200, _mcp.catalog())
@@ -176,6 +173,14 @@ class H(BaseHTTPRequestHandler):
                 name = parse_qs(urlparse(self.path).query).get("name", [None])[0]
                 if name: return self._send(200, scen.scenario_to_dict(get_scenario(name)))
                 return self._send(200, {"scenarios": [{"id": n, "description": get_scenario(n)["description"]} for n in scen.SCENARIOS]})
+            if route.startswith("/api/auth/config"):
+                from integrations import clerk_auth as _clerk
+                return self._send(200, {
+                    "clerk_enabled": _clerk.enabled(),
+                    "clerk_publishable_key": _clerk.publishable_key() or None,
+                    "clerk_instance": "development" if _clerk.publishable_key().startswith("pk_test_") else ("production" if _clerk.enabled() else None),
+                    "billing_provider": "clerk" if _clerk.enabled() else ("stripe" if _billing.configured() else "none"),
+                    "first_party_auth": True, "firestore_scenes_enabled": _workspace.enabled()})
             if route.startswith("/api/me"):
                 user = _auth_user(self)
                 if not user: return self._send(200, {"authenticated": False, "plan": "explorer",
@@ -201,6 +206,13 @@ class H(BaseHTTPRequestHandler):
                     scenes += [{"id": r["id"], "name": r["name"], "created_at": r["created_at"], "shared": True,
                                 "org": m["org"], "payload": json.loads(r["payload"])} for r in shared]
                 return self._send(200, {"scenes": scenes, "plan": _plan_of(user), "org": m["org"] if m else None})
+            if route.startswith("/api/objects"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                rows = _store.q("SELECT id, name, spec, image, created_at FROM custom_objects WHERE user_id=? ORDER BY created_at DESC", (user["id"],))
+                return self._send(200, {"objects": [{"id": r["id"], "name": r["name"],
+                                                     "spec": json.loads(r["spec"]), "image": r["image"],
+                                                     "created_at": r["created_at"]} for r in rows]})
             if route.startswith("/api/org"):
                 user = _auth_user(self)
                 if not user: return self._send(401, {"error": "sign in required"})
@@ -371,6 +383,66 @@ class H(BaseHTTPRequestHandler):
                     if scene: return self._send(200, {"scene": scene, "source": "OFFLINE_HEURISTIC", "model_call": None})
                     return self._send(202, {"status": "BLOCKED_CREDENTIALS",
                                             "detail": "Meta API not configured and no offline template matched. Try mentioning a warehouse near-miss, a road crossing, or a robot cell — or add MODEL_API_KEY."})
+            if route.startswith("/api/auth/clerk-sync"):
+                from integrations import clerk_auth as _clerk
+                if not _clerk.enabled():
+                    return self._send(503, {"error": "Clerk is not configured on this deployment", "code": "CLERK_NOT_CONFIGURED"})
+                auth = self.headers.get("Authorization", "")
+                if not auth.startswith("Bearer "):
+                    return self._send(401, {"error": "Clerk session token required (Authorization: Bearer)"})
+                try: claims = _clerk.verify_session_token(auth.removeprefix("Bearer ").strip())
+                except Exception as e: return self._send(401, {"error": f"clerk token rejected: {e}"})
+                allowed = [x.strip() for x in os.environ.get("CLERK_AUTHORIZED_PARTIES", os.environ.get("APP_BASE_URL", "https://frontiersight-ai.vercel.app")).split(",") if x.strip()]
+                if claims.get("azp") not in allowed:
+                    return self._send(401, {"error": "invalid Clerk session origin"})
+                try:
+                    profile = _clerk.verified_profile(claims["sub"])
+                    user = _store.provision_clerk_user(claims["sub"], profile["email"], profile["name"])
+                except ValueError:
+                    return self._send(409, {"error": "account linking requires owner verification"})
+                except Exception:
+                    return self._send(503, {"error": "verified Clerk profile unavailable"})
+                _store.audit(user["id"], "clerk_sync")
+                return self._send(200, {"token": _store.new_session(user["id"]),
+                                        "user": {"id": user["id"], "name": user["name"], "email": user["email"]},
+                                        "plan": _plan_of(user), "clerk_user_id": claims["sub"]})
+            if route.startswith("/api/webhooks/clerk"):
+                from integrations import clerk_auth as _clerk
+                raw = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+                try: event = _clerk.verify_svix(raw, dict(self.headers))
+                except RuntimeError as e: return self._send(503, {"error": str(e), "code": "WEBHOOK_NOT_CONFIGURED"})
+                except Exception as e: return self._send(400, {"error": f"webhook rejected: {e}"})
+                etype = event.get("type", ""); data = event.get("data") or {}
+                if etype in ("user.created", "user.updated"):
+                    emails = data.get("email_addresses") or [{}]
+                    email = (emails[0].get("email_address") if emails else "") or ""
+                    nm = " ".join(x for x in [data.get("first_name"), data.get("last_name")] if x)
+                    if data.get("id"): _store.provision_clerk_user(data["id"], email, nm)
+                elif etype == "user.deleted":
+                    if data.get("id"):
+                        _store.q("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE clerk_id=?)", (data["id"],))
+                        _store.q("DELETE FROM users WHERE clerk_id=?", (data["id"],))
+                elif etype.startswith("subscription") or etype.startswith("subscriptionItem") or etype.startswith("paymentAttempt"):
+                    payer = data.get("payer") or {}
+                    items = data.get("items") or []
+                    slug = ((items[0].get("plan") or {}).get("slug")) if items else None
+                    status_raw = str(data.get("status", "")).lower()
+                    status = {"active": "active", "trialing": "trialing", "past_due": "past_due",
+                              "canceled": "canceled", "ended": "canceled", "expired": "canceled",
+                              "abandoned": "canceled", "incomplete": "past_due"}.get(status_raw)
+                    if etype in ("subscriptionItem.canceled", "subscriptionItem.ended",
+                                 "subscriptionItem.expired", "subscriptionItem.abandoned"):
+                        status = "canceled"
+                    clerk_uid = payer.get("user_id")
+                    if clerk_uid and slug and status:
+                        u = _store.one("SELECT id FROM users WHERE clerk_id=?", (clerk_uid,))
+                        if u:
+                            _store.q("INSERT OR REPLACE INTO subscriptions(user_id, stripe_customer_id, stripe_sub_id, price_id, status, updated_at) VALUES(?,?,?,?,?,?)",
+                                     (u["id"], "clerk", data.get("id"), "clerk:" + slug, status, __import__("time").time()))
+                            _store.audit(u["id"], "clerk_subscription_" + status, slug)
+                    elif payer.get("organization_id"):
+                        _store.audit(None, "clerk_org_subscription", f"{payer.get('organization_id')}:{slug}:{status or etype}")
+                return self._send(200, {"received": True, "type": etype})
             if route.startswith("/api/auth/signup"):
                 email = str(body.get("email", "")).strip().lower()
                 name = str(body.get("name", "")).strip()
@@ -380,8 +452,11 @@ class H(BaseHTTPRequestHandler):
                 if _store.one("SELECT id FROM users WHERE email=?", (email,)):
                     return self._send(409, {"error": "an account with this email already exists — sign in"})
                 pw_hash, pw_salt = _store.hash_password(password)
-                _store.q("INSERT INTO users(email, name, pw_hash, pw_salt, created_at) VALUES(?,?,?,?,?)",
-                         (email, name, pw_hash, pw_salt, __import__("time").time()))
+                try:
+                    _store.q("INSERT INTO users(email, name, pw_hash, pw_salt, created_at) VALUES(?,?,?,?,?)",
+                             (email, name, pw_hash, pw_salt, __import__("time").time()))
+                except Exception:
+                    return self._send(409, {"error": "an account with this email already exists — sign in"})
                 user = dict(_store.one("SELECT * FROM users WHERE email=?", (email,)))
                 _store.audit(user["id"], "signup")
                 return self._send(201, {"token": _store.new_session(user["id"]),
@@ -389,7 +464,7 @@ class H(BaseHTTPRequestHandler):
             if route.startswith("/api/auth/login"):
                 email = str(body.get("email", "")).strip().lower()
                 row = _store.one("SELECT * FROM users WHERE email=?", (email,))
-                if not row or not _store.verify_password(str(body.get("password", "")), row["pw_hash"], row["pw_salt"]):
+                if not row or row["clerk_id"] or not _store.verify_password(str(body.get("password", "")), row["pw_hash"], row["pw_salt"]):
                     return self._send(401, {"error": "invalid email or password"})
                 user = dict(row)
                 return self._send(200, {"token": _store.new_session(user["id"]),
@@ -499,6 +574,68 @@ class H(BaseHTTPRequestHandler):
                           __import__("time").time(), _m["org"] if _m else None))
                 _store.audit(user["id"], "scene_saved", sid, org=_m["org"] if _m else "")
                 return self._send(201, {"id": sid, "plan": plan, "limit": limit})
+            if route.startswith("/api/meta/object"):
+                from integrations.meta import spark as _spark, image as _img
+                desc = str(body.get("description", "")).strip()
+                if not desc: return self._send(400, {"error": "describe the object first"})
+                try:
+                    spec, meta = _spark.design_custom_object(desc)
+                    source = "MODEL_DERIVED"
+                except BlockedCredentials:
+                    spec, meta, source = _spark.procedural_object(desc), None, "OFFLINE_PROCEDURAL"
+                image_data = None; image_note = None
+                if source == "MODEL_DERIVED":
+                    try:
+                        img = _img.generate_illustration(
+                            f"Clean isolated product render of {desc} ({spec['name']}), three-quarter view, "
+                            "plain dark studio background, photorealistic, no people, no text, no watermark")
+                        row = (img.get("data") or [{}])[0]
+                        if row.get("b64_json"): image_data = "data:image/webp;base64," + row["b64_json"]
+                        elif row.get("url"): image_data = row["url"]
+                    except Exception as e:
+                        image_note = f"Reference image unavailable ({str(e)[:140]}); the object still works as a vector/3D build."
+                return self._send(200, {"spec": spec, "image_data_url": image_data,
+                                        "source": source, "model_call": meta, "image_note": image_note})
+            if route.startswith("/api/objects/delete"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required"})
+                _store.q("DELETE FROM custom_objects WHERE id=? AND user_id=?", (str(body.get("id", "")), user["id"]))
+                return self._send(200, {"ok": True})
+            if route.startswith("/api/objects"):
+                user = _auth_user(self)
+                if not user: return self._send(401, {"error": "sign in required to sync objects to your profile"})
+                plan = _plan_of(user)
+                from integrations.meta.spark import validate_custom_object as _voc
+                spec = _voc(body.get("spec") or {})
+                count = _store.one("SELECT COUNT(*) AS c FROM custom_objects WHERE user_id=?", (user["id"],))["c"]
+                if plan == "explorer" and count >= 12:
+                    raise _billing.PaymentRequired("custom_objects (limit 12)", plan)
+                import uuid as _uuid
+                oid = "obj-" + _uuid.uuid4().hex[:12]
+                img = body.get("image")
+                if img is not None and len(str(img)) > 400_000:
+                    return self._send(400, {"error": "image thumbnail too large (max ~300 KB) — resize before saving"})
+                _store.q("INSERT INTO custom_objects(id, user_id, name, spec, image, created_at) VALUES(?,?,?,?,?,?)",
+                         (oid, user["id"], spec["name"], json.dumps(spec),
+                          str(img) if img else None, __import__("time").time()))
+                _store.audit(user["id"], "object_created", spec["name"])
+                return self._send(201, {"id": oid, "spec": spec})
+            if route.startswith("/api/meta/transcribe"):
+                import base64 as _b64
+                from integrations.meta import voice as _voice
+                raw = str(body.get("audio_data_url", ""))
+                if "," not in raw: return self._send(400, {"error": "audio_data_url must be a base64 data URL of a WAV file"})
+                try: wav = _b64.b64decode(raw.split(",", 1)[1], validate=True)
+                except Exception: return self._send(400, {"error": "audio_data_url is not valid base64"})
+                bias = body.get("language_bias") or None
+                if bias is not None and not (isinstance(bias, list) and 1 <= len(bias) <= 3
+                                              and all(isinstance(x, str) for x in bias)):
+                    return self._send(400, {"error": "language_bias must be a list of 1-3 language names"})
+                try:
+                    out = _voice.transcribe_wav(wav, str(body.get("mode", "PUSH_TO_TALK")), bias)
+                except BlockedCredentials as e:
+                    return self._send(202, {"status": "BLOCKED_CREDENTIALS", "detail": str(e)})
+                return self._send(200, out)
             if route.startswith("/api/meta/segment-video"):
                 user = _auth_user(self)
                 plan = _plan_of(user)

@@ -70,8 +70,14 @@ function showView(v){
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
   if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
- if(v==="create"&&typeof labDraw==="function")labDraw();
- if(v==="counterfactual"&&state.data){populateCfScene();populateCfAgents();if(state.cfData){drawCfMap();drawCfChart();}}}
+ if(v==="create"){if(typeof labDraw==="function")labDraw();
+   if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
+ if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
+ if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
+ if(v==="auth"||v==="pricing")initClerk();
+ if(v==="workspace")loadScenarioCounts();
+ if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
+   if(!changed&&state.cfData){drawCfMap();drawCfChart();}});}}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 function goto(v){showView(v);}
 
@@ -85,10 +91,7 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
  catch(e){$("scenario-list").innerHTML='<div class="card wide"><h3>Could not load scenarios</h3><p class="dim">The API is unreachable. Check <code>/api/health</code>, then reload. Nothing has been simulated or hidden.</p><button onclick="location.reload()">Reload</button></div>';return;}
  state.scenarioList=d.scenarios; populateCfScene(); populateStudioWorkspaces();
  $("scenario-list").innerHTML=d.scenarios.map(s=>`<div class="card scenario-card" data-search="${(s.id+" "+s.description).toLowerCase()}" data-card="${s.id}"><h3>${s.id}</h3><p class="dim">${s.description}</p><p class="dim counts" data-counts="${s.id}">loading counts…</p><button onclick="pick('${s.id}')">Open in Studio →</button></div>`).join("");
- d.scenarios.forEach(async s=>{try{const f=await(await fetch("/api/scenarios?name="+s.id)).json();
-  const el=document.querySelector(`[data-counts="${s.id}"]`);const n=f.tracks.length;
-  if(el){const smooth=Object.values(f.ground_truth||{}).filter(g=>g.curve==="smooth").length;
-   el.textContent=`${n} objects · ${n*(n-1)/2} analysed pairs · ${f.calibration.metres_per_pixel?"calibrated (m)":"pixel space"}${smooth?` · ${smooth} curved path${smooth>1?"s":""}`:""}`;}}catch(e){}});
+ state._countsPending=d.scenarios;
  const v=await(await fetch("/api/validate")).json();
  $("validation-list").innerHTML=v.cases.map(c=>`<li>${c.passed?"✓":"✗"} <b>${c.case}</b> — <span class="dim">${c.detail}</span></li>`).join("");
  renderMyScenes();
@@ -105,13 +108,13 @@ function renderMyScenes(){const host=$("scenario-list");if(!host)return;
  host.appendChild(div);
  div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
  div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem(sceneStoreKey(),JSON.stringify(mine));div.remove();renderMyScenes();});}
-function resetRunState(){state.run=null;state.cfData=null;state.highlight=null;state.cfAgentId=null;
+function resetRunState(){state.run=null;state.cfData=null;state.cfDataKey=null;state.cfT=0;state.highlight=null;state.cfAgentId=null;
  state.approvals={};const ev=$("events");if(ev)ev.innerHTML='<li class="dim">Run analysis to detect events.</li>';
  const tr=$("trace");if(tr)tr.innerHTML='<li class="dim">Run analysis to populate the trace.</li>';
  if(typeof syncApprovalUI==="function")syncApprovalUI();}
 window.pick=async id=>{let d;try{d=await(await fetch("/api/scenarios?name="+id)).json();}
  catch(e){toast("Could not load scenario "+id+" — check the API and try again.","err");return;}
- resetRunState();state.data=d;state.scenario=id;state.t=0;
+ resetRunState();state.data=d;state.scenario=id;state.t=0;state.dataUpdatedAt=Date.now();
  $("scenario-select").value=id;renderObjects();draw();populateCfScene();goto("studio");};
 function populateStudioWorkspaces(){const sel=$("scenario-select");if(!sel)return;
  const cur=sel.value;
@@ -135,6 +138,7 @@ async function loadWorkspaceIntoStudio(w){
  if(!tracks&&w.objects)tracks=await objectsToTracks(w.objects);
  if(!tracks||!tracks.length){toast("That workspace has no analysable tracks yet.","warn");return;}
  resetRunState();
+ state.dataUpdatedAt=Date.now();
  state.data={id:"ws-"+w.id,description:`Your workspace "${w.name}"`,kind:"USER_UPLOADED",
   calibration:{metres_per_pixel:null,frame:tracks[0].space==="world"?"Create Lab stage (metres)":"image (pixels)"},
   disclaimer:"User workspace. Metric claims only when tracks are in world space.",
@@ -144,7 +148,7 @@ async function loadWorkspaceIntoStudio(w){
  renderObjects();draw();populateCfScene();goto("studio");
  toast(`Workspace "${w.name}" loaded in the Studio — press Run analysis.`);}
 state.studioView="2d";
-async function setStudioView(v){state.studioView=v;
+async function setStudioView(v){state.studioView=v;localStorage.setItem("fs-view-studio",v);
  $("studio-view-2d").setAttribute("aria-pressed",String(v==="2d"));
  $("studio-view-3d").setAttribute("aria-pressed",String(v==="3d"));
  $("stage").classList.toggle("hidden",v==="3d");
@@ -157,6 +161,7 @@ async function setStudioView(v){state.studioView=v;
      let mx=16,my=14;state.data.tracks.forEach(tr=>tr.points.forEach(p=>{mx=Math.max(mx,p[1]);my=Math.max(my,p[2]);}));
      return [Math.ceil(mx*1.08),Math.ceil(my*1.08)];},
     pos:(item,t)=>{const p=posAt(item._tr,t);return p?[p[1],p[2]]:null;}};
+   hooks.onContextLost=()=>{toast("3D context was lost (GPU) — returned to 2D playback; nothing was lost.","warn");setStudioView("2d");};
    mod.showStudio3D($("studio-3d"),hooks);
    window.__studio3dSync=(tracks,t)=>mod.syncStudio3D(tracks,t);
    mod.syncStudio3D(state.data?state.data.tracks:[],state.t,true);
@@ -217,7 +222,9 @@ $("analyze").onclick=async()=>{
   const seek=()=>{state.t=+el.dataset.t;draw();};el.onclick=seek;
   el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();seek();}};});
  $("analyze-status").textContent=`Run ${r.run.run_id} · ${r.run.mode} · ${r.run.stages.filter(s=>s.status==="completed").length}/${r.run.stages.length} stages completed`;
- recordRun({scenario:state.scenario,mode:r.run.mode,run:r.run.run_id,events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length}); obDone("demo");
+ recordRun({scenario:state.scenario,mode:r.run.mode,run:r.run.run_id,events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length});
+ syncApprovalUI();
+ if(state.scenario==="warehouse-near-miss")obDone("demo");
  renderTrace(r.run);renderInspector(r);drawCfFromRun(r.run);};
 function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s.status}"><b>${s.name}</b> · ${s.status} · <span class="dim">${s.attribution}${s.artifact?" · artifact "+s.artifact:""}${s.retries?" · retries "+s.retries:""}</span><br><span class="dim mono">${JSON.stringify(s.detail).slice(0,320)}</span></li>`).join("");}
 function renderInspector(r){const sc=r.scenario;const mpp=sc.calibration.metres_per_pixel;
@@ -253,7 +260,8 @@ $("cf-scene").onchange=async()=>{const v=$("cf-scene").value;if(!v||v==="__curre
  const ss=$("scenario-select");if(ss)ss.value=v;
  renderObjects();draw();populateCfAgents();runCf();};
 document.querySelectorAll(".cf-preset").forEach(b=>b.onclick=()=>{$("sr").value=b.dataset.sr;$("it").value=b.dataset.it;$("cf-decel").value=b.dataset.dec;
- $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";runCf();});
+ $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";
+ ["sr","it","cf-decel"].forEach(id=>paintRange($(id)));runCf();});
 function normalizeCf(r){if(r.results)return r;
  const out={agent_id:r.agent_id||$("cf-agent").value,focus_other:null,results:{},monte_carlo:r.monte_carlo,manifest_hash:r.manifest_hash};
  const radii={};(state.data?state.data.tracks:[]).forEach(t=>radii[t.object_id]=t.radius);
@@ -265,7 +273,31 @@ function normalizeCf(r){if(r.results)return r;
    radius_sum:(radii[out.agent_id]||0)+(radii[oid]||0)};
   if(!out.focus_other||v.original_d_min<out.results[out.focus_other].original.d_min)out.focus_other=oid;}
  return out;}
+function currentSceneKey(){if(!state.data)return "none";
+ return (state.scenario||state.data.id||"")+"|"+state.data.tracks.map(t=>t.object_id+":"+t.points.length).join(",");}
+function cfParamKey(){return currentSceneKey()+"|rev="+(state.labRevision||0)+"|sr="+$("sr").value+"|it="+$("it").value+"|dec="+$("cf-decel").value
+ +"|agent="+($("cf-agent").value||"")+"|target="+($("cf-target").value||"");}
+let _cfSyncTimer=null;
+function syncCounterfactual(){populateCfScene();populateCfAgents();
+ clearTimeout(_cfSyncTimer);
+ _cfSyncTimer=setTimeout(()=>{const key=cfParamKey();
+  if(state.cfDataKey===key)return;         // already showing exactly this scene+params
+  runCf();},220);}
+async function syncLabToCfIfNewer(){
+ if(!(state.labUpdatedAt> (state.dataUpdatedAt||0)) || state.lab.objects.length<2) return false;
+ const tracks=await objectsToTracks(state.lab.objects);
+ if(!tracks.length) return false;
+ resetRunState();
+ state.data={id:"lab-current",description:"Current Create Lab scene",kind:"USER_UPLOADED",
+  calibration:{metres_per_pixel:null,frame:"Create Lab stage (metres)"},
+  disclaimer:"Current Create Lab scene, sampled server-side.",tracks,ground_truth:{}};
+ state.scenario="lab-current";state.dataUpdatedAt=Date.now();
+ renderObjects();draw();
+ return true;}
+let _cfSeq=0;
 async function runCf(){if(!state.data){$("cf-results").textContent="Load or create a scene first.";return;}
+ const _seq=++_cfSeq;
+ const _keyAtStart=cfParamKey();
  const custom=state.data.kind==="USER_UPLOADED";
  const body=custom?{tracks:state.data.tracks,agent_id:$("cf-agent").value||state.data.tracks[0].object_id,
    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,braking_decel:+$("cf-decel").value}
@@ -276,7 +308,8 @@ async function runCf(){if(!state.data){$("cf-results").textContent="Load or crea
   {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();}
  catch(e){$("cf-results").textContent="Simulation failed: API unreachable.";return;}
  if(r.error){$("cf-results").textContent="Simulation failed: "+r.error;return;}
- r=normalizeCf(r);state.cfData=r;state.cfT=0;
+ if(_seq!==_cfSeq)return; // a newer run superseded this response
+ r=normalizeCf(r);state.cfData=r;state.cfDataKey=_keyAtStart;state.cfT=0;
  const focus=r.focus_other,fr=r.results[focus];
  $("cf-results").innerHTML=`agent <b>${r.agent_id}</b> · focus pair vs <b>${focus}</b><br>`+
   Object.entries(r.results).map(([oid,v])=>`${oid}: d_min ${v.original.d_min} m → <b>${v.counterfactual.d_min} m</b> (Δ ${v.delta_d_min>=0?"+":""}${v.delta_d_min}) ${v.counterfactual.contact?"· ⚠ still contact":"· contact avoided"}`).join("<br>")+
@@ -289,7 +322,8 @@ function cfBounds(r){let xs=[],ys=[];for(const v of Object.values(r.results)){
 function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy)*0.92;
  return (x,y)=>[W/2-(b.x0+b.x1)/2*s+x*s, H/2+(b.y0+b.y1)/2*s-y*s];}
 function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t)<Math.abs(best[0]-t))best=p;}return best;}
-function drawCfMap(){const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
+function drawCfMap(){if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
+ const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
  const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other;
@@ -315,7 +349,7 @@ function drawCfMap(){const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x
  x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
  x.fillText(r.agent_id+" (counterfactual)",a2+13,b2+4);x.fillText("◇ closest approach "+cpa[5].toFixed(2)+" m",cx+12,cy-10);
  $("cf-clock").textContent="t = "+state.cfT.toFixed(2)+"s";$("cf-scrub").value=state.cfT;}
-function drawCfFromRun(run){ if(state.data&&$("cf-scene")){ populateCfScene(); if(state.cfData)runCf(); } }
+function drawCfFromRun(run){ if(state.data&&$("cf-scene")) syncCounterfactual(); }
 function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);const f=r.results[r.focus_other];if(!f)return;
@@ -334,6 +368,31 @@ function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;con
 $("cf-run").onclick=()=>runCf();
 [["sr","sr-val",v=>v+"%"],["it","it-val",v=>(+v).toFixed(2)+"s"],["cf-decel","dec-val",v=>v+" m/s\u00b2"]].forEach(([id,lbl,f])=>{
  const el=$(id);if(!el)return;el.addEventListener("input",()=>{$(lbl).textContent=f(el.value);clearTimeout(window._cfDeb);window._cfDeb=setTimeout(runCf,300);});});
+state.cfView="2d";
+async function setCfView(v){state.cfView=v;localStorage.setItem("fs-view-cf",v);
+ $("cf-view-2d").setAttribute("aria-pressed",String(v==="2d"));
+ $("cf-view-3d").setAttribute("aria-pressed",String(v==="3d"));
+ $("cf-map").classList.toggle("hidden",v==="3d");
+ $("cf-3d").classList.toggle("hidden",v!=="3d");
+ if(v==="3d"){
+  try{
+   if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
+   const mod=window.__lab3dMod;
+   const meta={};(state.data?state.data.tracks:[]).forEach(tr=>meta[tr.object_id]={category:tr.category,radius:tr.radius});
+   const hooks={extent:()=>{if(!state.cfData)return [16,14];
+     let mx=1,my=1;Object.values(state.cfData.results).forEach(r=>{
+      r.trajectories.counterfactual.forEach(p=>{mx=Math.max(mx,p[1],p[3]);my=Math.max(my,p[2],p[4]);});});
+     return [Math.max(8,Math.ceil(mx*1.15)),Math.max(8,Math.ceil(my*1.15))];}};
+   hooks.onContextLost=()=>{toast("3D context was lost (GPU) — returned to the 2D map; the simulation is unchanged.","warn");setCfView("2d");};
+   mod.showCf3D($("cf-3d"),hooks);
+   window.__cf3dSync=(cf,t)=>{const m2={};(state.data?state.data.tracks:[]).forEach(tr=>m2[tr.object_id]={category:tr.category,radius:tr.radius});
+    mod.syncCf3D(cf,m2,t);};
+   if(state.cfData)mod.syncCf3D(state.cfData,meta,state.cfT,true);
+  }catch(e){toast("3D view unavailable (WebGL): "+e.message+" — the 2D map is unaffected.","err");setCfView("2d");}
+ } else if(window.__lab3dMod){window.__lab3dMod.hideCf3D();window.__cf3dSync=null;}
+}
+$("cf-view-2d").onclick=()=>setCfView("2d");
+$("cf-view-3d").onclick=()=>setCfView("3d");
 $("cf-scrub").oninput=e=>{state.cfT=+e.target.value;drawCfMap();drawCfChart();};
 $("cf-play").onclick=()=>{state.cfPlaying=!state.cfPlaying;$("cf-play").textContent=state.cfPlaying?"⏸ Pause":"▶ Play comparison";
  state._cfLast=null;
@@ -388,7 +447,10 @@ $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark�
  const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss"})});
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};
 
-diag();loadScenarios().then(()=>runCf());
+diag();
+const _boot=()=>loadScenarios().then(()=>{ if(state.data) runCf(); });
+if("requestIdleCallback" in window) requestIdleCallback(_boot,{timeout:1200});
+else setTimeout(_boot,250);
 
 // ---- Create Lab ----
 state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
@@ -397,7 +459,8 @@ function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
 const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
-function labAdd(cat,waypoints,speed,radius,delay,mode,curve){
+function touchLab(){state.labUpdatedAt=Date.now();state.labRevision=(state.labRevision||0)+1;}
+function labAdd(cat,waypoints,speed,radius,delay,mode,curve){touchLab();
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
   speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",curve:curve||"straight",waypoints:waypoints||[]};
  if(!o.waypoints.length){const s=LAB_SLOTS[state.lab.objects.length%LAB_SLOTS.length];o.waypoints=[[s[0],s[1]]];o.spawned=true;}
@@ -504,7 +567,8 @@ function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,st
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
  const _labLabels=[];
  for(const o of state.lab.objects){const col=COL[o.category]||"#fff",sel=o.id===state.lab.selected;
-  if(o.waypoints.length>1){x.strokeStyle=col+(sel?"":"88");x.lineWidth=sel?2.5:1.5;x.beginPath();
+  if(o.waypoints.length>1){const hov=o.id===state.labHover;
+   x.strokeStyle=col+(sel||hov?"":"88");x.lineWidth=sel?2.5:hov?2.2:1.5;x.beginPath();
    resolvePath(o).pts.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);i?x.lineTo(a,b):x.moveTo(a,b);});x.stroke();x.lineWidth=1;}
   o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);x.fillStyle=sel?col:"#41506e";
    x.beginPath();x.arc(a,b,sel?6:4.5,0,7);x.fill();x.fillStyle="#dfe7f5";x.font="10px system-ui";x.fillText(String(i+1),a-3,b+3);});
@@ -512,7 +576,8 @@ function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,st
    if(sel){x.strokeStyle=col;x.lineWidth=1.6;x.setLineDash([4,4]);x.beginPath();x.arc(a,b,r+8,0,7);x.stroke();x.setLineDash([]);}
    const ahead=posOnPath(o,state.lab.t+0.35);let hd=state["lhd_"+o.id]||0;
    if(ahead&&(ahead[0]!==pos[0]||ahead[1]!==pos[1])){hd=Math.atan2(-(ahead[1]-pos[1]),ahead[0]-pos[0]);state["lhd_"+o.id]=hd;}
-   drawEntity(x,o.category,a,b,Math.max(10,r),hd,state.lab.t*7);
+   if(o.custom)drawCustom2D(x,o,a,b,Math.max(10,r),hd);
+   else drawEntity(x,o.category,a,b,Math.max(10,r),hd,state.lab.t*7);
    _labLabels.push([`${o.id}${o.speed?` · ${o.speed} m/s`:" · static"}`,a+r+9,b-9,col]);}}
  _labLabels.forEach(L=>labelPill(x,L[0],L[1],L[2],L[3]));
  const live=$("lab-live");if(live){let best=null;
@@ -537,7 +602,7 @@ document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace
 function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
  if(state.labTitle)labSetTitle(state.labTitle,false);
  el.innerHTML=state.lab.objects.length?state.lab.objects.map(o=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${o.id}">
-  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.id}</b> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
+  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.displayName||o.id}</b>${o.custom?' <span class="pill ghost">custom ✦</span>':""} <span class="dim">${o.id}</span> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
   <div class="row labctl">
    <label>Speed m/s<input type="number" step="0.1" min="0" max="8" value="${o.speed}" data-f="speed"></label>
    <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
@@ -552,39 +617,102 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    <button class="ghostbtn" data-act="del">Delete</button></div></div>`).join("")
   :'<p class="dim">No components yet. Add one, select it, then click the stage to lay its path.</p>';
  el.querySelectorAll(".labobj").forEach(card=>{const o=labObj(card.dataset.id);
-  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=(inp.dataset.f==="mode"||inp.dataset.f==="curve")?inp.value:Math.max(0,+inp.value||0);delete o._res;labRenderList();labDraw();});
+  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=(inp.dataset.f==="mode"||inp.dataset.f==="curve")?inp.value:Math.max(0,+inp.value||0);delete o._res;delete o._prof;touchLab();labRenderList();labDraw();});
   card.querySelectorAll("button").forEach(b=>b.onclick=()=>{const a=b.dataset.act;
    if(a==="select"){state.lab.selected=o.id;}
-   if(a==="undo"){o.waypoints.pop();}
-   if(a==="clear"){o.waypoints=[];}
+   if(a==="undo"){o.waypoints.pop();touchLab();}
+   if(a==="clear"){o.waypoints=[];touchLab();}
    if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode,o.curve);labStatus(c.id+" duplicated — drag its waypoints apart.");}
-   if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;}
+   if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;touchLab();}
    labRenderList();labDraw();});});}
-// canvas editing: click adds a waypoint to the selected component; drag moves one
-(()=>{const c=$("lab-canvas");if(!c)return;let drag=null,moved=false;
+// canvas editing: click a path to select & edit it; click near its line to
+// insert a point there; drag points to reshape; shift-drag moves the whole
+// path; right-click a point deletes it. Clicking empty stage appends.
+(()=>{const c=$("lab-canvas");if(!c)return;c.style.cursor="crosshair";
+ let drag=null,moved=false,pathDrag=null;
  const evPos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];};
- c.addEventListener("pointerdown",e=>{try{c.setPointerCapture(e.pointerId);}catch(_){} const[px,py]=evPos(e);moved=false;c._suppressAdd=false;
-  // click any component's live marker to select it (drawn footprint, min 14px)
-  for(const o of state.lab.objects){const pos=posOnPath(o,state.lab.t);if(!pos)continue;
-   const[a,b]=labXY(pos[0],pos[1],c.width,c.height);const r=Math.max(14,o.radius/LAB.w*c.width);
-   if(Math.hypot(a-px,b-py)<r){if(state.lab.selected!==o.id){state.lab.selected=o.id;labRenderList();labDraw();}c._suppressAdd=true;break;}}
-  const o=labObj(state.lab.selected);if(!o)return;
-  o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);if(Math.hypot(a-px,b-py)<12)drag={o,i};});});
- c.addEventListener("dblclick",e=>{const[px,py]=evPos(e);const o=labObj(state.lab.selected);if(!o)return;
-  let best=-1,bd=14;o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);const d=Math.hypot(a-px,b-py);if(d<bd){bd=d;best=i;}});
-  if(best>=0){o.waypoints.splice(best,1);labRenderList();labDraw();labStatus(`Waypoint ${best+1} removed from ${o.id}.`);}});
- c.addEventListener("pointermove",e=>{if(!drag)return;moved=true;const[px,py]=evPos(e);
-  drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);labDraw();});
- c.addEventListener("pointercancel",()=>{drag=null;});
- c.addEventListener("pointerup",e=>{const wasDrag=!!drag;if(drag&&moved){drag=null;labRenderList();labDraw();return;}drag=null;
-  if(wasDrag){labRenderList();labDraw();return;}
-  if(c._suppressAdd){c._suppressAdd=false;return;}
+ const stagePos=e=>{const[px,py]=evPos(e);return labInv(px,py,c.width,c.height);};
+ function hitWaypoint(px,py){let best=null;
+  for(const o of state.lab.objects)o.waypoints.forEach((w,i)=>{
+   const[a,b]=labXY(w[0],w[1],c.width,c.height);const d=Math.hypot(a-px,b-py);
+   if(d<13&&(!best||d<best.d))best={o,i,d};});
+  return best;}
+ function hitPath(sx,sy){let best=null;
+  for(const o of state.lab.objects){if(o.waypoints.length<2)continue;
+   const pts=resolvePath(o).pts;
+   for(let i=1;i<pts.length;i++){const[a,b]=[pts[i-1],pts[i]];
+    const vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-9;
+    const k=Math.min(1,Math.max(0,((sx-a[0])*vx+(sy-a[1])*vy)/L2));
+    const d=Math.hypot(sx-(a[0]+vx*k),sy-(a[1]+vy*k));
+    if(!best||d<best.d)best={o,d};}}
+  return best;}
+ function nearestWpSegment(o,sx,sy){let best={i:0,d:Infinity};
+  for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];
+   const vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-9;
+   const k=Math.min(1,Math.max(0,((sx-a[0])*vx+(sy-a[1])*vy)/L2));
+   const d=Math.hypot(sx-(a[0]+vx*k),sy-(a[1]+vy*k));
+   if(d<best.d)best={i:i-1,d};}
+  return best;}
+ function select(o){if(state.lab.selected!==o.id){state.lab.selected=o.id;labRenderList();labDraw();}}
+ c.addEventListener("pointerdown",e=>{if(e.button!==0)return;
+  try{c.setPointerCapture(e.pointerId);}catch(_){}
+  moved=false;c._suppressAdd=false;const[px,py]=evPos(e),[sx,sy]=stagePos(e);
+  const wh=hitWaypoint(px,py);
+  if(wh){select(wh.o);drag=wh;return;}
+  const ph=hitPath(sx,sy);
+  if(ph&&ph.d<0.45){select(ph.o);c._suppressAdd=true;
+   if(e.shiftKey){pathDrag={o:ph.o,sx,sy,orig:ph.o.waypoints.map(w=>[...w])};}
+   else labStatus(`${ph.o.id} selected — click near its path to insert a point, click empty stage to append, drag points to reshape, Shift-drag to move the whole path.`);
+   return;}});
+ c.addEventListener("pointermove",e=>{const[px,py]=evPos(e),[sx,sy]=stagePos(e);
+  if(drag){moved=true;drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);delete drag.o._res;labDraw();return;}
+  if(pathDrag){moved=true;const dx=sx-pathDrag.sx,dy=sy-pathDrag.sy;
+   pathDrag.o.waypoints=pathDrag.orig.map(w=>[Math.round((w[0]+dx)*10)/10,Math.round((w[1]+dy)*10)/10]);
+   delete pathDrag.o._res;labDraw();return;}
+  const hov=hitPath(sx,sy);const hovId=hov&&hov.d<0.45?hov.o.id:null;
+  c.style.cursor=hovId?"pointer":"crosshair";
+  if(hovId!==state.labHover){state.labHover=hovId;labDraw();}});
+ c.addEventListener("pointercancel",()=>{drag=null;pathDrag=null;});
+ c.addEventListener("pointerup",e=>{if(e.button!==0)return;const wasDrag=!!drag||!!pathDrag;
+  if(drag&&moved){drag=null;touchLab();labRenderList();labDraw();return;}
+  if(pathDrag){pathDrag=null;touchLab();labRenderList();labDraw();return;}
+  drag=null;
+  if(c._suppressAdd){c._suppressAdd=false;labRenderList();labDraw();return;}
   const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
-  const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));labRenderList();labDraw();});})();
-$("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
+  const[sx,sy]=stagePos(e);
+  const seg=o.waypoints.length>1?nearestWpSegment(o,sx,sy):{i:0,d:Infinity};
+  const pt=[sx,sy];
+  if(o.waypoints.length>1&&seg.d<0.4){o.waypoints.splice(seg.i+1,0,pt);
+   labStatus(`Point inserted into ${o.id}'s path (position ${seg.i+2} of ${o.waypoints.length}). Drag it to shape the curve.`);}
+  else o.waypoints.push(pt);
+  delete o._res;touchLab();labRenderList();labDraw();});
+ c.addEventListener("dblclick",e=>{const[px,py]=evPos(e);const wh=hitWaypoint(px,py);
+  if(wh){wh.o.waypoints.splice(wh.i,1);delete wh.o._res;touchLab();labRenderList();labDraw();
+   labStatus(`Waypoint removed from ${wh.o.id}.`);}});
+ c.addEventListener("contextmenu",e=>{e.preventDefault();const[px,py]=evPos(e);
+  const wh=hitWaypoint(px,py);
+  if(wh){select(wh.o);wh.o.waypoints.splice(wh.i,1);delete wh.o._res;touchLab();labRenderList();labDraw();
+   labStatus(`Waypoint removed from ${wh.o.id}.`);}
+  else{const[sx,sy]=stagePos(e);const ph=hitPath(sx,sy);if(ph)select(ph.o);}});
+})();
+function buildPalette(){const sel=$("lab-new-cat");if(!sel)return;const cur=sel.value;
+ sel.innerHTML=["forklift","pedestrian","robot","vehicle","cyclist","shelf"]
+  .map(c=>`<option value="${c}">${c[0].toUpperCase()+c.slice(1)}${c==="shelf"?" (static)":""}</option>`).join("")+
+  (state.customObjects&&state.customObjects.length
+   ?`<optgroup label="My objects">${state.customObjects.map(o=>`<option value="custom:${o.id}">✦ ${o.spec.name}</option>`).join("")}</optgroup>`:"");
+ if([...sel.options].some(o=>o.value===cur))sel.value=cur;}
+function labAddCustom(rec){const spec=rec.spec;
+ const o=labAdd(spec.base_category,null,spec.base_category==="shelf"?0:1.2,spec.radius,0,"stop","straight");
+ o.custom={id:rec.id,spec,image:rec.image||null};o.displayName=spec.name;
+ labRenderList();labDraw();return o;}
+$("lab-add").onclick=()=>{const v=$("lab-new-cat").value;
+ if(v.startsWith("custom:")){const rec=(state.customObjects||[]).find(x=>x.id===v.slice(7));
+  if(rec){const o=labAddCustom(rec);labStatus(`${spec_name(o)} added — click the stage to lay its path.`);return;}}
+ const cat=v;const o=labAdd(cat);
  labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
+function spec_name(o){return o.displayName||o.id;}
 document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
- if(b.dataset.tpl==="near-miss"){labAdd("forklift",[[1,7],[7.5,7],[13,7]],1.6,0.9,0);labAdd("pedestrian",[[8.6,13],[8.0,9],[8.5,5.5],[9.2,1]],1.55,0.45,0,"stop","smooth");}
+ if(b.dataset.tpl==="near-miss"){labAdd("forklift",[[1,7],[7.5,7],[13,7]],1.7,0.9,0);labAdd("pedestrian",[[8.6,13],[8.0,9],[8.5,5.5],[9.2,1]],1.35,0.45,0,"stop","smooth");}
  if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[6,6.8],[10,8],[15,11]],2.4,1.1,0,"stop","smooth");labAdd("cyclist",[[9,13.5],[8.6,8],[9.2,3],[9.5,0.5]],1.9,0.5,0.5,"stop","smooth");labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1,"stop","smooth");}
  if(b.dataset.tpl==="cell"){labAdd("robot",[[2,2],[13,2],[13,11],[2,11]],1.2,0.55,0,"loop","smooth");labAdd("forklift",[[1,12],[14,12]],0.9,0.9,1);labAdd("shelf",[[8,7]],0,1.4,0);labAdd("pedestrian",[[15,1],[10,6],[15,12]],1.1,0.45,2,"stop","smooth");}
  labSetTitle(b.dataset.tpl.replace("-"," ").replace(/\b\w/g,c=>c.toUpperCase())+" template",false);
@@ -592,7 +720,7 @@ document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.obje
  labStatus(`Template "${b.dataset.tpl}" loaded — edit any path, then Run analysis.`);labDraw();});
 function labTitleSafe(){return (state.labTitle||"").replace(/ template$/,"")||"";}
 state.labView="2d";
-async function setLabView(v){state.labView=v;
+async function setLabView(v){state.labView=v;localStorage.setItem("fs-view-lab",v);
  $("lab-view-2d").setAttribute("aria-pressed",String(v==="2d"));
  $("lab-view-3d").setAttribute("aria-pressed",String(v==="3d"));
  $("lab-canvas").classList.toggle("hidden",v==="3d");
@@ -602,6 +730,7 @@ async function setLabView(v){state.labView=v;
    if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
    const mod=window.__lab3dMod;
    mod.showLab3D($("lab-3d"),{resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
+    onContextLost:()=>{toast("3D context was lost (GPU) — returned to the 2D editor; your scene is untouched.","warn");setLabView("2d");},
     onGroundClick:(x,y)=>{const o=labObj(state.lab.selected);
      if(!o){labStatus("Select a component first, then click the ground to add waypoints.");return;}
      o.waypoints.push([Math.round(x*10)/10,Math.round(y*10)/10]);delete o._res;
@@ -635,7 +764,7 @@ async function analyzeCustom(tracks,label){
  try{
   const res=await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,
    body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
-    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})});
+    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:runApproved()})});
   const text=await res.text();
   try{ r=JSON.parse(text); }catch(e){ throw new Error(`server returned HTTP ${res.status} (non-JSON). The analysis likely timed out — press Run analysis again.`); }
   if(!res.ok||r.error) throw new Error(r.error||r.detail||("HTTP "+res.status));
@@ -645,13 +774,20 @@ async function analyzeCustom(tracks,label){
   labStatus("Analysis failed: "+e.message); const as=$("analyze-status"); if(as)as.textContent="Custom analysis failed: "+e.message;
   throw e;
  }finally{ clearTimeout(killer); }
- state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;
- try{const mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem("fs-my-scenes",JSON.stringify(mine.slice(-10)));}catch(e){}
+ state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;state.dataUpdatedAt=Date.now(); syncCounterfactual();
+ syncApprovalUI();
+ try{const k=sceneStoreKey();const mine=JSON.parse(localStorage.getItem(k)||"[]");
+  mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem(k,JSON.stringify(mine.slice(-10)));}catch(e){}
+ recordRun({scenario:r.scenario.id,mode:r.run.mode,run:r.run.run_id,
+  events:(r.run.findings.pairs||[]).filter(p=>p.event).length,pairs:(r.run.findings.pairs||[]).length});
+ obDone("created"); if(typeof loadWorkspaces==="function")loadWorkspaces();
  renderObjects();draw();renderTrace(r.run);renderInspector(r);goto("studio");
  $("analyze-status").textContent=`Custom run ${r.run.run_id} · ${r.run.mode} · ${r.scenario.tracks.length} objects · ${r.run.findings.pairs.length} pairs analysed`;
  const evs=[];(r.run.findings.pairs||[]).forEach(p=>{if(p.event)evs.push({...p.event,pair:p.pair});});
  $("events").innerHTML=evs.length?evs.map(e=>`<li class="ev" data-t="${e.at_time_s||e.t_star_s||0}">⚠ <b>${e.type}</b> ${e.pair.join(" ↔ ")}<br><span class="dim">${e.ttc_s!=null?"TTC "+e.ttc_s+"s":e.d_min!=null?"d_min "+e.d_min+" "+(e.units||""):""}</span></li>`).join(""):'<li class="dim">No proximity events above threshold.</li>';
- document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});
+ document.querySelectorAll(".ev").forEach(el=>{el.tabIndex=0;el.setAttribute("role","button");
+  const seek=()=>{state.t=+el.dataset.t;draw();};el.onclick=seek;
+  el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();seek();}};});
  window.scrollTo({top:0,behavior:"smooth"});
  return r;}
 $("lab-run").onclick=async()=>{let localTracks;
@@ -673,7 +809,8 @@ $("lab-run").onclick=async()=>{let localTracks;
  }catch(e){/* analyzeCustom already surfaced the error */}
  finally{clearInterval(timer);btn.disabled=false;btn.textContent=old;}};
 $("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersight-created-scene",stage_metres:[LAB.w,LAB.h],objects:state.lab.objects},null,2)],{type:"application/json"}),"frontiersight-scene.json");};
-$("lab-import").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{try{
+$("lab-import-btn").onclick=()=>$("lab-import").click();
+$("lab-import").onchange=e=>{const f=e.target.files[0];e.target.value="";if(!f)return;f.text().then(txt=>{try{
  const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
  state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
  labStatus(`Imported ${state.lab.objects.length} component(s).`);labDraw();}catch(err){labStatus("Import failed: "+err.message);}});};
@@ -684,9 +821,10 @@ function labSetTitle(name,saved){state.labTitle=name||"Untitled scene";
 function suggestedName(base){if(base)return base;
  const cats=[...new Set(state.lab.objects.map(o=>o.category))].join(" + ")||"scene";
  return `${cats} · ${state.lab.objects.length} components · ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;}
-function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;
+function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;state.labUpdatedAt=Date.now();
  labSetTitle(scene.name||"",false);
- (scene.objects||[]).forEach(o=>labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
+ (scene.objects||[]).forEach(o=>{const nl=labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight");
+  if(o.custom){nl.custom=o.custom;nl.displayName=o.displayName||o.custom.spec.name;}});
  labStatus(label);labDraw();}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-prompt").addEventListener("input",()=>{$("lab-prompt-count").textContent=$("lab-prompt").value.length;});
@@ -702,10 +840,17 @@ $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
   $("lab-gen-status").textContent=(r.status===400||/characters|required/.test(r.error||""))
    ? "Check your description: "+(r.error||r.detail)
    : "Muse could not produce a valid scene: "+(r.error||r.detail)+" — try a clearer description.";return;}
- labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`); obDone("muse");
+ if(!r.scene||!Array.isArray(r.scene.objects)){$("lab-gen-status").textContent="Generation returned an unexpected shape — nothing was changed. Try again.";return;}
+ labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`);
+ if(r.source==="MODEL_DERIVED")obDone("muse");
  $("lab-ws-name").value=r.scene.name||"";
  const sv=$("lab-save-ws");sv.classList.add("pulse");sv.textContent="Save this scene →";
- $("lab-gen-status").innerHTML+=`<br><b>Auto-labelled:</b> “${r.scene.name}” — it is prefilled below the stage. Press <b>Save workspace</b> to keep it (it will also appear in the Video Studio dropdown under <i>My workspaces</i>).`;
+ const q=r.scene.quality;
+ $("lab-gen-status").innerHTML+=`<br><b>Auto-labelled:</b> “${r.scene.name}” — it is prefilled below the stage. Press <b>Save workspace</b> to keep it (it will also appear in the Video Studio dropdown under <i>My workspaces</i>).`+
+  (q?`<br><b>Path quality (engine-scored):</b> closest surface separation ${q.min_separation_m} m`+
+   (q.has_close_interaction?" — a real interaction to analyse.":" — no close interaction; edit paths closer together.")+
+   (q.issues&&q.issues.length?` Issues: ${q.issues.join("; ")}`:"")+
+   (q.warnings&&q.warnings.length?` Warnings: ${q.warnings.join("; ")}`:""):"");
  toast("Scene generated — name prefilled under the stage. Save it to keep it in your workspaces.");
  $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
 // starter template so the Lab is never an empty, unexplained canvas
@@ -716,8 +861,11 @@ const _mq=matchMedia("(prefers-color-scheme: light)");
 function applyTheme(){const mode=localStorage.getItem("fs-theme")||"system";
  const resolved=mode==="system"?(_mq.matches?"light":"dark"):mode;
  document.documentElement.dataset.theme=resolved;
- document.querySelectorAll("[data-theme-mode]").forEach(b=>b.classList.toggle("on",b.dataset.themeMode===mode));
- if(state&&state.data)draw(); if(state&&state.lab&&state.lab.objects.length&&$("lab-canvas"))labDraw();}
+ document.querySelectorAll("[data-theme-mode]").forEach(b=>{b.classList.toggle("on",b.dataset.themeMode===mode);
+  b.setAttribute("aria-pressed",String(b.dataset.themeMode===mode));});
+ if(state&&state.data)draw(); if(state&&state.lab&&state.lab.objects.length&&$("lab-canvas"))labDraw();
+ if(window.__lab3dMod&&window.__lab3dMod.refreshAll3DThemes)window.__lab3dMod.refreshAll3DThemes();
+ else if(localStorage.getItem("fs-view-lab")==="3d"){import("/three-view.js").then(m=>{window.__lab3dMod=m;}).catch(()=>{});}}
 document.querySelectorAll("[data-theme-mode]").forEach(b=>b.onclick=()=>{localStorage.setItem("fs-theme",b.dataset.themeMode);applyTheme();});
 if(_mq.addEventListener)_mq.addEventListener("change",()=>{if((localStorage.getItem("fs-theme")||"system")==="system")applyTheme();});
 applyTheme();
@@ -730,23 +878,26 @@ function toast(msg, kind="ok"){const host=$("toasts");if(!host)return;const d=do
  setTimeout(()=>{d.style.opacity="0";d.style.transition="opacity .4s";setTimeout(()=>d.remove(),420);},4200);}
 
 // ---- server accounts (first-party auth; Clerk/OIDC can replace the provider) ----
-function sessionToken(){return window.__clerkMode ? (window.Clerk?.session ? "clerk-session" : "") : localStorage.getItem("fs-session")||"";}
 function htmlText(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function serverUser(){if(window.__clerkMode){const user=window.Clerk?.user;return user?{id:user.id+":"+(window.Clerk.organization?.id||"personal"),name:user.fullName||"Member"}:null;}try{return JSON.parse(localStorage.getItem("fs-user")||"null");}catch(e){return null;}}
+function sceneTenantKey(){return state.authConfig?.firestore_scenes_enabled ? (ClerkApp?.user?.id||"guest")+":"+(ClerkApp?.organization?.id||"personal") : null;}
+function hasSceneSession(){return state.authConfig?.firestore_scenes_enabled ? Boolean(ClerkApp?.session) : Boolean(sessionToken());}
+function sessionToken(){return localStorage.getItem("fs-session")||"";}
+function serverUser(){try{return JSON.parse(localStorage.getItem("fs-user")||"null");}catch(e){return null;}}
 function profile(){return serverUser();}
 function sceneStoreKey(){const p=serverUser();return "fs-my-scenes:"+(p?("u"+p.id):"guest");}
 function runsKey(){const p=serverUser();return "fs-runs:"+(p?("u"+p.id):"guest");}
 const uncertainSceneWrites=new Map();
-async function api(path, opts={}){const tok=window.__clerkMode ? await window.Clerk?.session?.getToken() : sessionToken();
- const identityAtStart=serverUser()?.id;
- const signature=path+String(opts.body||"");
- if(window.__clerkMode&&path.startsWith("/api/scenes")&&opts.method){
-  if(!uncertainSceneWrites.has(signature))uncertainSceneWrites.set(signature,crypto.randomUUID());
-  opts={...opts,headers:{...(opts.headers||{}),"Idempotency-Key":uncertainSceneWrites.get(signature)},signal:AbortSignal.timeout(20000)};
- }
- const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json",...(tok?{"Authorization":"Bearer "+tok}:{}),...(window.__clerkMode?{"X-Workspace-Organization":window.Clerk.organization?.id||"personal"}:{}),...(opts.headers||{})}});
+async function api(path, opts={}){
+ const sceneRequest=path.startsWith("/api/scenes")||path.startsWith("/api/scene-context");
+ if(sceneRequest)await initClerk();
+ const cloud=sceneRequest&&state.authConfig?.firestore_scenes_enabled;
+ const tok=cloud?await ClerkApp?.session?.getToken():sessionToken();
+ const scope=sceneTenantKey(), signature=path+String(opts.body||"");
+ if(cloud&&opts.method){if(!uncertainSceneWrites.has(signature))uncertainSceneWrites.set(signature,crypto.randomUUID());
+ opts={...opts,headers:{...(opts.headers||{}),"Idempotency-Key":uncertainSceneWrites.get(signature)},signal:AbortSignal.timeout(20000)};}
+ const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json",...(tok?{"Authorization":"Bearer "+tok}:{}),...(cloud?{"X-Workspace-Organization":ClerkApp?.organization?.id||"personal"}:{}),...(opts.headers||{})}});
  let body={};try{body=await r.json();}catch(e){}
- if(window.__clerkMode&&identityAtStart!==serverUser()?.id)throw new Error("Workspace changed during request; refresh before continuing.");
+ if(cloud&&scope!==sceneTenantKey())throw new Error("Workspace changed; refresh before continuing.");
  if(r.ok)uncertainSceneWrites.delete(signature);
  if(uncertainSceneWrites.size>100)uncertainSceneWrites.delete(uncertainSceneWrites.keys().next().value);
  return {status:r.status, body};}
@@ -773,11 +924,19 @@ async function refreshMe(){const {body}=await api("/api/me");state.me=body;
  return body;}
 function refreshAuthUI(){refreshMe();}
 $("auth-btn").onclick=()=>goto("auth");
-$("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form-signin").classList.add("hidden");};
-$("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");};
-async function afterAuth(out, msg){localStorage.setItem("fs-session",out.body.token);
+$("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form-signin").classList.add("hidden");
+ $("tab-signup").setAttribute("aria-selected","true");$("tab-signin").setAttribute("aria-selected","false");};
+$("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");
+ $("tab-signin").setAttribute("aria-selected","true");$("tab-signup").setAttribute("aria-selected","false");};
+async function afterAuth(out, msg){state.openWorkspace=null;state.samCaptures=[];
+ localStorage.setItem("fs-auth-provider", "local");
+ localStorage.setItem("fs-session",out.body.token);
  localStorage.setItem("fs-user",JSON.stringify(out.body.user));
  await refreshMe();renderMyScenes();toast(msg);goto("workspace");}
+// Enter-key submission already clicks the (submit) button natively; the form
+// listener only prevents the page reload — it must not click again (double signup).
+$("form-signup").addEventListener("submit",e=>e.preventDefault());
+$("form-signin").addEventListener("submit",e=>e.preventDefault());
 $("auth-signup").onclick=async()=>{const out=await api("/api/auth/signup",{method:"POST",
  body:JSON.stringify({name:$("su-name").value.trim(),email:$("su-email").value.trim(),password:$("su-password").value})});
  if(out.status!==201){$("auth-status").textContent=out.body.error||"Sign-up failed.";return;}
@@ -810,7 +969,9 @@ $("byok-delete").onclick=async()=>{const out=await api("/api/keys/meta",{method:
 // ---- run history ----
 function recordRun(rec){try{const k=runsKey();const arr=JSON.parse(localStorage.getItem(k)||"[]");
  arr.unshift({when:Date.now(),...rec});localStorage.setItem(k,JSON.stringify(arr.slice(0,20)));}catch(e){} renderRuns();}
-function renderRuns(){const host=$("scenario-list");if(!host||$("runs-card"))return;let runs=[];
+function renderRuns(){const host=$("scenario-list");if(!host)return;
+ const old=$("runs-card");if(old)old.remove();
+ let runs=[];
  try{runs=JSON.parse(localStorage.getItem(runsKey())||"[]");}catch(e){}
  if(!runs.length)return;const div=document.createElement("div");div.className="card wide";div.id="runs-card";
  div.innerHTML=`<h3>Recent runs</h3>`+runs.slice(0,8).map(r=>`<p><b>${r.scenario}</b> <span class="dim">${new Date(r.when).toLocaleString()} · ${r.mode} · ${r.pairs} pairs · ${r.events} event(s) · run ${r.run}</span></p>`).join("");
@@ -819,6 +980,11 @@ function renderRuns(){const host=$("scenario-list");if(!host||$("runs-card"))ret
 // ---- onboarding checklist ----
 function obDone(k){try{const o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");o[k]=true;localStorage.setItem("fs-onboard",JSON.stringify(o));}catch(e){}renderOnboard();}
 function renderOnboard(){let o={};try{o=JSON.parse(localStorage.getItem("fs-onboard")||"{}");}catch(e){}
+ try{const runs=JSON.parse(localStorage.getItem(runsKey())||"[]");
+  if(runs.some(r=>r.scenario==="warehouse-near-miss"))o.demo=true;
+  if(runs.some(r=>/^(created-|ws-|lab-current|sam-)/.test(r.scenario||"")))o.created=true;
+  if((state.workspaces||[]).length)o.created=o.created||false;
+ }catch(e){}
  document.querySelectorAll(".ob-row").forEach(r=>{const done=!!o[r.dataset.ob];r.classList.toggle("done",done);
   const mark=r.querySelector(".ob-mark");if(mark)mark.textContent=done?"✓":"○";});
  const card=$("onboarding");if(card&&o.demo&&o.created&&o.muse)$("ob-note").innerHTML="All three done — you have used the full loop. <a href='#' id='ob-hide'>Dismiss</a>";
@@ -849,7 +1015,9 @@ document.querySelectorAll(".waitlist-btn").forEach(b=>b.onclick=async()=>{
  const out=await api("/api/waitlist",{method:"POST",body:JSON.stringify({email,plan:b.dataset.plan})});
  toast(out.status===201?`Waitlist joined for ${b.dataset.plan} as ${email}. No payment taken — billing is not enabled on this deployment.`
    :"Waitlist failed: "+(out.body.error||"unknown"),"warn");});
-$("quote-open").onclick=()=>{$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});};
+function openQuote(){$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});}
+$("quote-open").onclick=openQuote;
+$("quote-open-2").onclick=openQuote;
 $("quote-send").onclick=async()=>{const out=await api("/api/sales/quote",{method:"POST",
  body:JSON.stringify({company:$("q-company").value.trim(),email:$("q-email").value.trim(),
   seats:$("q-seats").value.trim(),needs:$("q-needs").value.trim()})});
@@ -882,7 +1050,8 @@ document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.
 // ---- SAM Vision panel (Studio) ----
 state.samCaptures=[];
 function samStatus(m){const e=$("sam-status");if(e)e.textContent=m;}
-$("sam-file").onchange=e=>{const f=e.target.files[0];if(!f)return;state.samSource="upload";state.samCaptures=[];$("sam-count").textContent="0";
+$("sam-file").onchange=e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+ if(f.size<=60*1024*1024&&(f.type.startsWith("video/")||f.type.startsWith("image/"))){state.samSource="upload";state.samCaptures=[];$("sam-count").textContent="0";}
  if(f.size>60*1024*1024){samStatus("File exceeds the 60 MB browser-preview bound.");e.target.value="";return;}
  const url=URL.createObjectURL(f),v=$("sam-video"),im=$("sam-img");
  if(f.type.startsWith("video/")){im.style.display="none";v.style.display="block";v.src=url;samStatus("Video loaded locally — pause on a moment, then Segment. Loading it uploads nothing.");}
@@ -945,7 +1114,8 @@ $("sam-build").onclick=async()=>{if(state.samCaptures.length<2){samStatus("Segme
 state.playSpeed=1; state._playLast=null;
 document.querySelectorAll(".speedseg button").forEach(b=>b.onclick=()=>{
  state.playSpeed=+b.dataset.speed;
- document.querySelectorAll(".speedseg button").forEach(x=>{x.classList.toggle("on",x===b);x.setAttribute("aria-pressed",String(x===b));});});
+ document.querySelectorAll(".speedseg button").forEach(x=>{x.classList.toggle("on",x===b);
+  x.setAttribute("aria-pressed",String(x===b));});});
 $("play").onclick=()=>{state.playing=!state.playing;$("play").textContent=state.playing?"⏸ Pause":"▶ Play";
  state._playLast=null;
  if(state.playing){const step=(ts)=>{if(!state.playing)return;
@@ -962,8 +1132,21 @@ $("cf-export").onclick=()=>{if(!state.cfData){$("cf-results").textContent="Run a
  toast("Counterfactual result exported (JSON).");};
 
 // ---- workspace search + live counts ----
-$("ws-search").oninput=e=>{const q=e.target.value.toLowerCase();
- document.querySelectorAll(".scenario-card").forEach(c=>{c.style.display=c.dataset.search.includes(q)?"":"none";});};
+let _countsLoaded=false;
+async function loadScenarioCounts(){if(_countsLoaded||!state._countsPending)return;_countsLoaded=true;
+ for(const s of state._countsPending){try{const f=await(await fetch("/api/scenarios?name="+s.id)).json();
+  const el=document.querySelector(`[data-counts="${s.id}"]`);const n=f.tracks.length;
+  if(el){const smooth=Object.values(f.ground_truth||{}).filter(g=>g.curve==="smooth").length;
+   el.textContent=`${n} objects · ${n*(n-1)/2} analysed pairs · ${f.calibration.metres_per_pixel?"calibrated (m)":"pixel space"}${smooth?` · ${smooth} curved path${smooth>1?"s":""}`:""}`;}}catch(e){}}}
+function applyUnifiedFilter(){const q=($("ws-search").value||"").toLowerCase();
+ const kind=$("ws-lib-kind").value;
+ document.querySelectorAll(".scenario-card").forEach(c=>{
+  c.style.display=(!kind||kind==="scenario")&&c.dataset.search.includes(q)?"":"none";});
+ document.querySelectorAll(".ws-card").forEach(c=>{
+  c.style.display=(!kind||c.dataset.kind===kind)&&c.dataset.search.includes(q)?"":"none";});
+ const sc=$("scenario-list");if(sc)sc.style.display=(!kind||kind==="scenario")?"":"none";}
+$("ws-search").addEventListener("input",applyUnifiedFilter);
+$("ws-lib-kind").addEventListener("change",applyUnifiedFilter);
 
 // ---- settings: version + clear local data ----
 (async()=>{try{const h=await(await fetch("/api/health")).json();
@@ -973,7 +1156,7 @@ $("clear-data").onclick=()=>{const keys=Object.keys(localStorage).filter(k=>k.st
  $("clear-status").textContent=`Removed ${keys.length} local item(s). Reloading…`;
  toast("Local data cleared — profiles, scenes, runs and preferences on this device are gone.","warn");
  setTimeout(()=>location.reload(),900);};
-$("lab-clear-all").onclick=()=>{state.lab.objects=[];state.lab.selected=null;labRenderList();labDraw();
+$("lab-clear-all").onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.openWorkspace=null;touchLab();labRenderList();labDraw();
  labStatus("All components cleared. Add components or load a template to start again.");};
 
 // ---- global error surface (throttled; errors become visible, never silent) ----
@@ -984,9 +1167,8 @@ window.addEventListener("error",e=>{const now=Date.now();if(now-_lastErr<5000)re
  toast("Something went wrong in the interface: "+(e.message||"unknown error")+" — the deterministic API is unaffected; reload if it persists.","err");});
 
 const _skipEl=$("skip-link");
-if(_skipEl)_skipEl.onclick=()=>{showView("home");
- const el=document.querySelector("#view-home h1");
- if(el){el.setAttribute("tabindex","-1");el.focus();el.scrollIntoView({behavior:"smooth",block:"start"});}};
+if(_skipEl)_skipEl.addEventListener("click",()=>{const m=$("main");
+ if(m)requestAnimationFrame(()=>m.focus({preventScroll:false}));});
 
 // ---- support + organisation (Settings) ----
 $("sup-send").onclick=async()=>{const out=await api("/api/support",{method:"POST",
@@ -1024,7 +1206,7 @@ const _siBtn=$("auth-signin");if(_siBtn){const _si=_siBtn.onclick;
  _siBtn.onclick=async()=>{await _si();if($("auth-status").textContent)markInvalid(["si-email","si-password"],true);};}
 
 // ---- Workspaces: saved labs + SAM frame sets (search · open · update · delete) ----
-function wsKey(){const u=(typeof serverUser==="function")?serverUser():null;return "fs-workspaces:"+(u?("u"+u.id):"guest");}
+function wsKey(){if(sceneTenantKey())return "fs-workspaces:"+sceneTenantKey();const u=(typeof serverUser==="function")?serverUser():null;return "fs-workspaces:"+(u?("u"+u.id):"guest");}
 function wsLocalList(){try{return JSON.parse(localStorage.getItem(wsKey())||"[]");}catch(e){return[];}}
 function wsLocalSave(list){try{localStorage.setItem(wsKey(),JSON.stringify(list.slice(0,40)));return true;}
  catch(e){toast("Browser storage is full — delete a workspace or sign in to save on the server.","err");return false;}}
@@ -1036,55 +1218,85 @@ function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
   objects:w.objects||(s.payload&&s.payload.objects)||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
   captures:w.captures||null, image:w.image||null};}
 async function loadWorkspaces(){
+ await initClerk();
  let list=wsLocalList().map(wsNormalizeLocal);
  // legacy analysed scenes become workspaces (read-compat, deduped by id)
  try{const legacy=JSON.parse(localStorage.getItem((typeof sceneStoreKey==="function"?sceneStoreKey():"fs-my-scenes"))||"[]");
   for(const m of legacy) if(!list.some(w=>w.id===m.id))
    list.push({key:"legacy:"+m.id, server:false, legacy:true, id:m.id, name:m.id, kind:"lab", updated:m.when, tracks:m.tracks, objects:null});}catch(e){}
- if(sessionToken()){try{const out=await api("/api/scenes");
+ if(hasSceneSession()){try{const out=await api("/api/scenes");
    if(out.status===200){const srv=out.body.scenes.map(wsNormalizeServer);
     const note=$("ws-storage-note");if(note)note.textContent="Synced with your account on the server (plus anything kept only in this browser).";
     list=srv.concat(list.filter(w=>!srv.some(s=>s.name===w.name)));}}catch(e){}}
  state.workspaces=list.sort((a,b)=>(b.updated||0)-(a.updated||0));
  renderWorkspaces(); populateStudioWorkspaces();}
 function renderWorkspaces(){const host=$("workspace-list");if(!host)return;
- const q=($("ws-lib-search").value||"").toLowerCase(), kind=$("ws-lib-kind").value;
- const mine=state.workspaces.filter(w=>(!kind||w.kind===kind)&&(!q||(w.name+" "+w.kind).toLowerCase().includes(q)));
  if(!state.workspaces.length){host.innerHTML='<p class="dim">Nothing saved yet — build a scene in Create Lab, or segment frames in the Studio, then save.</p>';return;}
- if(!mine.length){host.innerHTML='<p class="dim">No workspace matches that search.</p>';return;}
- host.innerHTML=mine.map((w,i)=>`<div class="labobj ws-card" data-key="${w.key}">
-  <b>${w.kind==="frames"?"▣":"✦"} ${htmlText(w.name)}</b>
-  <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
-  <span class="pill ghost">${w.server?"server":"this browser"}</span>
-  <span class="dim">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</span>
-  <div class="row">
+ host.innerHTML=state.workspaces.map(w=>`<article class="card ws-card" data-key="${htmlText(w.key)}" data-kind="${htmlText(w.kind)}"
+   data-search="${htmlText((w.name+" "+w.kind+" "+(w.objects?w.objects.map(o=>o.category).join(" "):"")).toLowerCase())}">
+  <button class="kebab" data-kebab aria-label="Workspace actions" title="Actions">\u22ef</button>
+  <div class="ws-menu hidden" role="menu">
    <button data-ws="open">Open</button>
-   ${w.kind==="lab"?'<button data-ws="update" class="ghostbtn">Update from current Lab</button>':""}
-   ${w.tracks?'<button data-ws="analyse" class="ghostbtn">Analyse tracks</button>':""}
-   ${(w.objects||w.tracks)?'<button data-ws="studio" class="ghostbtn">Open in Studio</button>':""}
-   <button data-ws="rename" class="ghostbtn">Rename</button>
-   <button data-ws="del" class="ghostbtn">Delete</button>
-  </div></div>`).join("");
+   ${(w.objects||w.tracks)?'<button data-ws="studio">Open in Studio</button>':""}
+   ${w.kind==="lab"?'<button data-ws="update">Update from current Lab</button>':""}
+   ${w.tracks?'<button data-ws="analyse">Analyse tracks</button>':""}
+   <button data-ws="rename">Rename</button>
+   <div class="sep"></div>
+   <button data-ws="del" class="danger">Delete</button>
+  </div>
+  <div class="ws-head"><h4>${w.kind==="frames"?"\u25a3":"\u2726"} ${w.name}</h4></div>
+  <div>
+   <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
+   <span class="pill ghost">${w.server?"server":"this browser"}</span>
+  </div>
+  <p class="ws-meta">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</p>
+  <div class="ws-foot"><button data-ws="open">Open</button>
+   <span class="dim">${w.kind==="frames"?"Reopen in the Studio SAM panel":"Reopen in Create Lab"}</span></div>
+ </article>`).join("");
  host.querySelectorAll(".ws-card").forEach(card=>{const w=state.workspaces.find(x=>x.key===card.dataset.key);
-  card.querySelectorAll("button").forEach(b=>b.onclick=async()=>{const a=b.dataset.ws;
+  const menu=card.querySelector(".ws-menu");
+  const kebab=card.querySelector("[data-kebab]");
+  kebab.setAttribute("aria-haspopup","true");kebab.setAttribute("aria-expanded","false");
+  kebab.onclick=e=>{e.stopPropagation();
+   document.querySelectorAll(".ws-menu").forEach(m=>{if(m!==menu)m.classList.add("hidden");});
+   const open=menu.classList.toggle("hidden")===false;
+   kebab.setAttribute("aria-expanded",String(open));
+   if(open)window._lastKebab=kebab;};
+  card.querySelectorAll("button[data-ws]").forEach(b=>b.onclick=async()=>{const a=b.dataset.ws;
+   menu.classList.add("hidden");
    if(a==="open")openWorkspace(w);
-   if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(()=>{});}
-   if(a==="studio"){loadWorkspaceIntoStudio(w);}
+   if(a==="studio")loadWorkspaceIntoStudio(w);
+   if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(e=>toast("Analysis failed: "+e.message,"err"));}
    if(a==="update"){w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
-    await persistWorkspace(w);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
-   if(a==="rename"){const name=prompt("Rename workspace:",w.name);if(!name)return;w.name=name.slice(0,120);w.updated=Date.now();
-    await persistWorkspace(w);loadWorkspaces();}
+    await persistWorkspace(w);labSetTitle(w.name,true);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
+   if(a==="rename"){wsRenameInline(card,w);}
    if(a==="del"){await deleteWorkspace(w);loadWorkspaces();}
-  });});}
+  });});
+ applyUnifiedFilter();}
+function wsRenameInline(card,w){const h4=card.querySelector("h4");if(!h4||card.querySelector(".ws-rename"))return;
+ const input=document.createElement("input");input.type="text";input.className="ws-rename";
+ input.value=w.name;input.setAttribute("aria-label","Rename workspace");
+ h4.replaceWith(input);input.focus();input.select();
+ const commit=async()=>{const name=input.value.trim().slice(0,120)||w.name;
+  w.name=name;w.updated=Date.now();await persistWorkspace(w);loadWorkspaces();};
+ input.addEventListener("keydown",e=>{if(e.key==="Enter")commit();if(e.key==="Escape")loadWorkspaces();});
+ input.addEventListener("blur",commit);}
+document.addEventListener("click",e=>{if(!e.target.closest(".ws-card"))
+ document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){
+ document.querySelectorAll(".ws-menu").forEach(m=>m.classList.add("hidden"));
+ document.querySelectorAll("[data-kebab]").forEach(k=>k.setAttribute("aria-expanded","false"));
+ if(window._lastKebab)window._lastKebab.focus();}});
 async function persistWorkspace(w){
- if(sessionToken()&&!w.legacy){
+ await initClerk();
+ if(hasSceneSession()&&!w.legacy){
   const payload={workspace:{kind:w.kind,objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
-  if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload,expectedVersion:w.version})});
+  if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload,...(state.authConfig?.firestore_scenes_enabled?{expectedVersion:w.version}:{})})});
    if(out.status===200){w.version=out.body.version||w.version;return true;}
-   toast((out.body.error||"Update failed")+". Refresh and review before retrying.","err");return false;}
+   toast((out.body.error||"Update failed")+". Refresh before retrying.","err");return false;}
   const out=await api("/api/scenes",{method:"POST",body:JSON.stringify({name:w.name,payload})});
   if(out.status===201||out.status===200&&out.body.replayed){w.server=true;w.id=out.body.id;w.version=out.body.version;return true;}
-  if(window.__clerkMode){toast((out.body.error||"Server save failed")+". No browser fallback was silently created.","err");return false;}
+  if(state.authConfig?.firestore_scenes_enabled){toast((out.body.error||"Save failed")+". Nothing was silently saved elsewhere.","err");return false;}
   if(out.status===402){toast(out.body.error+" — saving in this browser instead.","warn");}
  }
  const list=wsLocalList().filter(x=>x.id!==w.id);
@@ -1092,7 +1304,7 @@ async function persistWorkspace(w){
   objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null});
  return wsLocalSave(list);}
 async function deleteWorkspace(w){
- if(w.server&&sessionToken()){const out=await api("/api/scenes/delete",{method:"POST",body:JSON.stringify({id:w.id,expectedVersion:w.version})});if(out.status!==200){toast(out.body.error||"Delete failed","err");return false;}}
+ if(w.server&&hasSceneSession()){const out=await api("/api/scenes/delete",{method:"POST",body:JSON.stringify({id:w.id,...(state.authConfig?.firestore_scenes_enabled?{expectedVersion:w.version}:{})})});if(out.status!==200){toast(out.body.error||"Delete failed","err");return false;}}
  wsLocalSave(wsLocalList().filter(x=>x.id!==w.id));
  if(state.openWorkspace&&state.openWorkspace.key===w.key)state.openWorkspace=null;
  toast(`Workspace "${w.name}" deleted.`);}
@@ -1112,8 +1324,7 @@ function openWorkspace(w){state.openWorkspace=w;
   goto("create");
   const uw=$("lab-update-ws");if(uw)uw.classList.remove("hidden");
  }}
-$("ws-lib-search").addEventListener("input",renderWorkspaces);
-$("ws-lib-kind").addEventListener("change",renderWorkspaces);
+
 $("lab-save-ws").onclick=async()=>{if(!state.lab.objects.length){labStatus("Nothing to save yet — add a component first.");return;}
  const name=($("lab-ws-name").value||"").trim()||suggestedName(state.labTitle);
  const w={id:"ws-"+Date.now(),name,kind:"lab",updated:Date.now(),
@@ -1141,30 +1352,286 @@ $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capt
    (d.tools||[]).map(t=>`<code>${t.name}</code>`).join(" · ");
  }catch(e){el.textContent="MCP endpoint unreachable from this browser.";}})();
 
-// Clerk is opt-in; tokens remain inside its SDK, never localStorage.
-(async function initializeClerk(){
- try {
-  const response=await fetch("/api/auth/config",{cache:"no-store"});const config=await response.json();
-  if(config.provider!=="clerk")return;
-  window.__clerkMode=true;localStorage.removeItem("fs-session");localStorage.removeItem("fs-user");
-  const issuer=new URL(config.issuer);
-  if(issuer.protocol!=="https:"||issuer.origin!==config.issuer||!/^pk_(test|live)_/.test(config.publishableKey))throw new Error("Clerk configuration incomplete");
-  const script=document.createElement("script");script.async=true;script.crossOrigin="anonymous";
-  script.setAttribute("data-clerk-publishable-key",config.publishableKey);
-  script.src=issuer.origin+"/npm/@clerk/clerk-js@6.42.0/dist/clerk.browser.js";
-  await new Promise((resolve,reject)=>{script.onload=resolve;script.onerror=reject;document.head.append(script);});
-  await window.Clerk.load();
-  const target=document.createElement("section");target.id="clerk-account-controls";
-  const user=document.createElement("div"),org=document.createElement("div"),signIn=document.createElement("button");
-  signIn.textContent="Sign in with Clerk";signIn.onclick=()=>window.Clerk.openSignIn();
-  target.append(user,org,signIn);$("view-auth").prepend(target);
-  window.Clerk.mountUserButton(user);window.Clerk.mountOrganizationSwitcher(org,{hidePersonal:false});
-  signIn.hidden=Boolean(window.Clerk.user);
-  const old=$("auth-signedout");if(old)old.hidden=true;
-  const settings=document.createElement("button");settings.textContent="Account and organization settings";
-  settings.onclick=()=>window.Clerk.organization?window.Clerk.openOrganizationProfile():window.Clerk.openUserProfile();target.prepend(settings);
-  let previous;
-  window.Clerk.addListener(()=>{signIn.hidden=Boolean(window.Clerk.user);const next=serverUser()?.id;if(next===previous)return;previous=next;
-   state.workspaces=[];state.openWorkspace=null;uncertainSceneWrites.clear();renderWorkspaces();refreshMe();loadWorkspaces();});
- } catch {toast("Clerk account setup is unavailable. Saved cloud workspaces require a valid signed-in session.","err");}
-})();
+
+// ---- Clerk (identity + billing) — config-gated, first-party auth stays the fallback ----
+let ClerkApp = null;
+async function syncClerkSession() {
+  if (!ClerkApp || !ClerkApp.user) return;
+  try {
+    const token = await ClerkApp.session.getToken();
+    if (!token) return;
+    const out = await api("/api/auth/clerk-sync", { method: "POST",
+      headers: { "Authorization": "Bearer " + token },
+      body: JSON.stringify({ email: (ClerkApp.user.primaryEmailAddress || {}).emailAddress || "",
+                             name: ClerkApp.user.fullName || "" }) });
+    if (out.status === 200) {
+      localStorage.setItem("fs-auth-provider", "clerk");
+      localStorage.setItem("fs-session", out.body.token);
+      localStorage.setItem("fs-user", JSON.stringify(out.body.user));
+      await refreshMe(); renderMyScenes();
+    }
+  } catch (e) { /* server sync is best-effort; entitlements refresh on next load */ }
+}
+var _clerkInitPromise;
+function initClerk(){return _clerkInitPromise??=loadClerk();}
+async function loadClerk() {
+  const note = $("clerk-note");
+  let cfg = state.authConfig;
+  try { if (!cfg) { cfg = await (await fetch("/api/auth/config")).json(); state.authConfig = cfg; } }
+  catch (e) { if (note) note.textContent = "Sign-in providers unavailable right now; email/password below still works."; return; }
+  if (!cfg.clerk_enabled) {
+    if (note) note.textContent = "Clerk single sign-on is not configured on this deployment (CLERK_PUBLISHABLE_KEY missing). Email/password accounts below are fully functional.";
+    return;
+  }
+  try {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+      s.async = true; s.crossOrigin = "anonymous";
+      s.setAttribute("data-clerk-publishable-key", cfg.clerk_publishable_key);
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    ClerkApp = window.Clerk;
+    try { await ClerkApp.load({ publishableKey: cfg.clerk_publishable_key }); }
+    catch (e) { await ClerkApp.load(); }
+    if (note) note.innerHTML = `Signed in with <b>Clerk</b> (${cfg.clerk_instance} instance). ` +
+      (ClerkApp.user ? "Manage your account from the avatar menu." : "Use the Clerk form below, or email/password further down.");
+    const btnSlot = $("clerk-userbtn");
+    if (ClerkApp.user && btnSlot && ClerkApp.mountUserButton) {
+      ClerkApp.mountUserButton(btnSlot, {});
+      const ab = $("auth-btn"); if (ab) ab.classList.add("hidden");
+    }
+    const si = $("clerk-signin");
+    if (si && !ClerkApp.user && ClerkApp.mountSignIn) ClerkApp.mountSignIn(si, {});
+    if (ClerkApp.user) await syncClerkSession();
+    let previousTenant=sceneTenantKey();
+    const orgSlot=document.createElement("div");$("clerk-userbtn")?.after(orgSlot);
+    if(ClerkApp.mountOrganizationSwitcher)ClerkApp.mountOrganizationSwitcher(orgSlot,{hidePersonal:false});
+    if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
+      const currentTenant=sceneTenantKey();
+      if(currentTenant!==previousTenant){previousTenant=currentTenant;state.workspaces=[];state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();renderWorkspaces();loadWorkspaces();}
+      if (user) syncClerkSession();
+      else if (localStorage.getItem("fs-auth-provider") === "clerk") {
+   // Only a session that Clerk created may be ended by Clerk signing out.
+   localStorage.removeItem("fs-session"); localStorage.removeItem("fs-user");
+   localStorage.removeItem("fs-auth-provider");
+   state.openWorkspace=null;state.samCaptures=[]; loadCustomObjects(); refreshMe(); }
+    });
+    // Clerk Billing pricing table (plans live in Clerk Dashboard)
+    const tableHost = $("clerk-pricing");
+    if (tableHost && typeof ClerkApp.mountPricingTable === "function") {
+      try {
+        ClerkApp.mountPricingTable(tableHost, {});
+        tableHost.classList.remove("hidden");
+        const cards = $("plan-cards"); if (cards) cards.style.display = "none";
+        const tq = $("team-quote-row"); if (tq) tq.classList.remove("hidden");
+        const det = document.createElement("p"); det.className = "dim";
+        det.textContent = "Checkout and plan management run through Clerk (development instance). Feature comparison below still applies.";
+        tableHost.appendChild(det);
+      } catch (e) {
+        tableHost.innerHTML = `<p class="dim">Clerk Billing could not render here (${(e && e.message) || "billing not enabled"}). ` +
+          `Enable Billing in the Clerk Dashboard and create the plans described in docs/CLERK_SETUP.md — the plans below remain available via Stripe/waitlist.</p>`;
+        tableHost.classList.remove("hidden");
+      }
+    }
+  } catch (e) {
+    if (note) note.textContent = "Clerk could not be loaded (network/CDN). Email/password accounts below remain fully functional.";
+  }
+}
+// ClerkJS loads on first need (auth/pricing view or an explicit billing action),
+// keeping third-party scripts and cookies out of the initial page load.
+
+// ---- help search + jump navigation ----
+$("help-search").addEventListener("input",e=>{const q=e.target.value.toLowerCase();
+ document.querySelectorAll(".help-block").forEach(b=>{
+  b.style.display=!q||b.textContent.toLowerCase().includes(q)?"":"none";});});
+document.querySelectorAll("[data-help-jump]").forEach(b=>b.onclick=()=>{
+ const el=document.getElementById(b.dataset.helpJump);
+ if(el){el.style.display="";el.scrollIntoView({behavior:"smooth",block:"start"});}});
+
+
+// ---- voice dictation: mic -> browser WAV encode -> Muse Voice Transcribe ----
+const voice = { rec: null, chunks: [], stream: null, started: 0, timer: null };
+function micStatus(m) { const e = $("mic-status"); if (e) e.textContent = m; }
+function encodeWavPcm16(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const wstr = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  wstr(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); wstr(8, "WAVE");
+  wstr(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); wstr(36, "data"); v.setUint32(40, samples.length * 2, true);
+  samples.forEach((s, i) => v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(s * 32767))), true));
+  return new Blob([buf], { type: "audio/wav" });
+}
+async function blobToWav24k(blob) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC();
+  const decoded = await ac.decodeAudioData(await blob.arrayBuffer());
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * 24000), 24000);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const rendered = await off.startRendering();
+  ac.close();
+  return encodeWavPcm16(rendered.getChannelData(0), 24000);
+}
+function setTranscript(text, label) {
+  const ta = $("lab-prompt");
+  const cur = ta.value.trim();
+  ta.value = cur ? (cur + (/\s$/.test(ta.value) ? "" : " ") + text) : text;
+  ta.dispatchEvent(new Event("input"));
+  const chip = $("voice-src");
+  chip.textContent = label; chip.classList.remove("hidden");
+  ta.focus();
+}
+async function stopRecording() {
+  if (!voice.rec) return;
+  const rec = voice.rec; voice.rec = null;
+  clearInterval(voice.timer);
+  $("mic-btn").classList.remove("recording"); $("mic-btn").textContent = "🎙 Speak instead";
+  rec.stop();
+}
+$("mic-btn").onclick = async () => {
+  if (voice.rec) { stopRecording(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+    micStatus("This browser cannot record audio. You can still type the scene above.");
+    return;
+  }
+  micStatus("Requesting microphone access…");
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { micStatus("Microphone access was denied. Allow the mic in your browser's site settings, or type the scene above."); return; }
+  voice.stream = stream; voice.chunks = [];
+  const rec = new MediaRecorder(stream);
+  voice.rec = rec; voice.started = Date.now();
+  rec.ondataavailable = e => { if (e.data.size) voice.chunks.push(e.data); };
+  rec.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    const secs = (Date.now() - voice.started) / 1000;
+    micStatus("Transcribing with Muse Voice Transcribe…");
+    try {
+      const raw = new Blob(voice.chunks, { type: rec.mimeType || "audio/webm" });
+      const wav = await blobToWav24k(raw);
+      if (wav.size > 9 * 1024 * 1024) { micStatus("That take is too long for one transcription — keep it under about 2 minutes."); return; }
+      const dataUrl = await new Promise(res => { const fr = new FileReader();
+        fr.onload = () => res(fr.result); fr.readAsDataURL(wav); });
+      const lang = $("voice-lang").value;
+      const resp = await fetch("/api/meta/transcribe", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_data_url: dataUrl, language_bias: lang ? [lang] : null }) });
+      const out = await resp.json();
+      if (resp.status === 200 && !out.transcript) {
+        micStatus("Meta heard no speech in that take — try again a little closer to the microphone, or type the scene.");
+      } else if (resp.status === 200 && out.transcript) {
+        setTranscript(out.transcript, `Heard via Muse Voice Transcribe · ${secs.toFixed(1)}s of audio`);
+        micStatus(`Transcribed by ${out.model} in ${(out.latency_ms / 1000).toFixed(1)}s — edit the text above, then Generate scene.`);
+      } else {
+        micStatus("Transcription did not complete: " + (out.error || out.detail || ("HTTP " + resp.status)) +
+          ("webkitSpeechRecognition" in window || "SpeechRecognition" in window
+            ? " You can try your browser's built-in speech recognition instead (different provider, labelled as such)."
+            : " You can still type the scene above."));
+        if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
+          $("voice-fallback").classList.remove("hidden");
+      }
+    } catch (e) { micStatus("Transcription failed in the browser: " + e.message + " — the typed flow still works."); }
+  };
+  rec.start(250);
+  $("mic-btn").classList.add("recording");
+  const tick = () => { const s = Math.floor((Date.now() - voice.started) / 1000);
+    $("mic-btn").textContent = `■ Stop · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    if (s >= 120) { micStatus("Two-minute cap reached — transcribing what we have."); stopRecording(); } };
+  tick(); voice.timer = setInterval(tick, 500);
+  micStatus("Recording… speak your scene now (for example: “a forklift crosses an aisle while a pedestrian walks the other way”), then press Stop.");
+};
+$("voice-fallback").onclick = () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { micStatus("This browser has no built-in speech recognition either — typing is the way."); return; }
+  const langMap = { "": navigator.language || "en-US", English: "en-US", Spanish: "es-ES", Hindi: "hi-IN",
+    French: "fr-FR", German: "de-DE", Portuguese: "pt-PT", Japanese: "ja-JP", Korean: "ko-KR", "Mandarin Chinese": "zh-CN" };
+  const rec = new SR();
+  rec.lang = langMap[$("voice-lang").value] || "en-US";
+  rec.interimResults = false;
+  micStatus("Listening with your browser's speech recognition (not Meta)…");
+  rec.onresult = e => { const text = e.results[0][0].transcript;
+    setTranscript(text, "Heard via your browser's speech recognition (not Meta)");
+    micStatus("Browser transcription added above — edit it, then Generate scene."); };
+  rec.onerror = e => micStatus("Browser speech recognition error: " + e.error);
+  rec.start();
+};
+
+
+// ---- custom objects: Muse-designed, Muse Image-rendered, saved to your profile ----
+state.customObjects = state.customObjects || [];
+state._sprites = state._sprites || {};
+function objStoreKey(){const u=(typeof serverUser==="function")?serverUser():null;return "fs-custom-objects:"+(u?("u"+u.id):"guest");}
+function drawCustom2D(x,o,cx,cy,r,hd){
+ const spec=o.custom.spec;
+ const img=o.custom.image?getSprite(o.custom.id,o.custom.image):null;
+ x.save();x.translate(cx,cy);x.rotate(hd||0);
+ if(img&&img.complete&&img.naturalWidth){
+  const s=r*2.1;x.beginPath();x.roundRect(-s/2,-s/2,s,s,s*0.22);x.clip();
+  x.drawImage(img,-s/2,-s/2,s,s);x.restore();
+  x.save();x.translate(cx,cy);x.strokeStyle=spec.palette.accent;x.lineWidth=2;
+  x.beginPath();x.roundRect(-s/2,-s/2,s,s,s*0.22);x.stroke();x.restore();return;}
+ // vector fallback: top-view parts from the same recipe the 3D view builds
+ const k=r/(spec.radius||0.8);
+ for(const part of spec.parts){const col=spec.palette[part.color]||part.color||spec.palette.body;
+  x.fillStyle=col;const[px,,pz]=part.pos,[sx,,sz]=part.size;
+  if(part.shape==="box")x.fillRect((px-sx/2)*k,(pz-sz/2)*k,sx*k,sz*k);
+  else{x.beginPath();x.arc(px*k,pz*k,Math.max(sx,sz)/2*k,0,7);x.fill();}}
+ x.restore();}
+function getSprite(id,src){if(!state._sprites[id]){const im=new Image();im.src=src;state._sprites[id]=im;}
+ return state._sprites[id];}
+async function resizeImageForSave(dataUrl,max=256){
+ if(!dataUrl||!dataUrl.startsWith("data:"))return dataUrl;
+ try{const img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=dataUrl;});
+  const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",0.78);}catch(e){return null;}}
+async function loadCustomObjects(){
+ let local=[];try{local=JSON.parse(localStorage.getItem(objStoreKey())||"[]");}catch(e){}
+ let server=[];
+ if(sessionToken()){try{const out=await api("/api/objects");
+   if(out.status===200)server=out.body.objects.map(o=>({id:o.id,name:o.name,spec:o.spec,image:o.image,server:true}));}catch(e){}}
+ const byId=new Map();
+ for(const o of server)byId.set(o.id,o);
+ for(const o of local)if(!byId.has(o.id))byId.set(o.id,o);
+ state.customObjects=[...byId.values()];
+ buildPalette();}
+async function saveCustomObject(rec){
+ if(sessionToken()){
+  const out=await api("/api/objects",{method:"POST",body:JSON.stringify({spec:rec.spec,image:rec.image})});
+  if(out.status===201){rec.id=out.body.id;rec.server=true;}
+  else if(out.status===402){toast(out.body.error+" — saved in this browser instead.","warn");}
+ }
+ if(!rec.server){
+  const list=[rec,...(JSON.parse(localStorage.getItem(objStoreKey())||"[]")).filter(x=>x.id!==rec.id)];
+  try{localStorage.setItem(objStoreKey(),JSON.stringify(list.slice(0,30)));}
+  catch(e){toast("Browser storage is full — this object lives in the scene but was not saved to the library.","err");return rec;}
+ }
+ if(!state.customObjects.some(x=>x.id===rec.id))state.customObjects.unshift(rec);
+ buildPalette();return rec;}
+$("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
+ if(desc.length<3){$("obj-status").textContent="Describe the object first (a few words).";return;}
+ const btn=$("obj-gen");btn.disabled=true;btn.textContent="Designing…";
+ $("obj-status").textContent="Muse Spark is designing the build spec, then Muse Image renders it (10–40s)…";
+ try{
+  const resp=await fetch("/api/meta/object",{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({description:desc})});
+  const out=await resp.json();
+  if(!(resp.status===200&&out.spec)){throw new Error(out.error||out.detail||("HTTP "+resp.status));}
+  const image=await resizeImageForSave(out.image_data_url);
+  const rec={id:"local-"+Date.now(),name:out.spec.name,spec:out.spec,image,server:false};
+  await saveCustomObject(rec);
+  const placed=labAddCustom(rec);
+  $("obj-preview").innerHTML=`<div class="card" style="margin-top:10px">
+   ${image?`<img src="${image}" alt="${out.spec.name} reference render" style="width:100%;border-radius:10px">`:""}
+   <p><b>${out.spec.name}</b> <span class="pill ghost">${out.source==="MODEL_DERIVED"?"Muse Spark + Muse Image":"offline procedural"}</span><br>
+   <span class="dim">${out.spec.description||""} Footprint radius ${out.spec.radius} m · height ${out.spec.height_m} m ·
+   ${out.spec.parts.length} construction parts · saved to ${rec.server?"your server profile":"this browser"} and placed in your scene as <b>${placed.id}</b>.</span></p>
+   ${out.image_note?`<p class="dim">${out.image_note}</p>`:""}</div>`;
+  $("obj-status").textContent="";
+  toast(`“${out.spec.name}” created and saved — it is now in the component palette under My objects.`);
+ }catch(e){$("obj-status").textContent="Could not create that object: "+e.message;}
+ finally{btn.disabled=false;btn.textContent="Generate object";}};
+loadCustomObjects();

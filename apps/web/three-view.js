@@ -8,6 +8,10 @@ const REALC = { forklift: 0xe9a13b, pedestrian: 0xff7847, robot: 0xaebfd2,
   vehicle: 0x4d8dff, cyclist: 0xb07fe8, shelf: 0x8a6f4d, object: 0x9aa7b8 };
 const BASER = { forklift: 0.9, pedestrian: 0.45, robot: 0.55, vehicle: 1.1, cyclist: 0.5, shelf: 1.1, object: 0.6 };
 let C = null;
+const INSTANCES = new Set();
+function disposeObject(root){root.traverse(m=>{
+ if(m.geometry)m.geometry.dispose();
+ if(m.material){(Array.isArray(m.material)?m.material:[m.material]).forEach(mm=>mm.dispose());}});}
 
 let EXTENT = [16, 14];
 const toThree = (x, y) => [x - EXTENT[0] / 2, EXTENT[1] / 2 - y]; // stage (y up) -> three (x, z)
@@ -24,7 +28,27 @@ function wheel(r, x, z) {
   m.rotation.x = Math.PI / 2; m.position.set(x, r, z); return m;
 }
 
+function buildCustom(spec) {
+  const g = new THREE.Group();
+  const pal = spec.palette || {};
+  for (const part of spec.parts || []) {
+    const color = new THREE.Color(pal[part.color] || part.color || pal.body || "#9aa7b8");
+    const [sx, sy, sz] = part.size, [px, py, pz] = part.pos;
+    let m;
+    if (part.shape === "cylinder") m = new THREE.Mesh(new THREE.CylinderGeometry(sx / 2, sx / 2, sy, 20), mat(color.getHex(), 0.6));
+    else if (part.shape === "sphere") m = new THREE.Mesh(new THREE.SphereGeometry(sx / 2, 20, 14), mat(color.getHex(), 0.55));
+    else if (part.shape === "capsule") m = new THREE.Mesh(new THREE.CapsuleGeometry(sx / 2, Math.max(0.05, sy - sx), 6, 14), mat(color.getHex(), 0.6));
+    else if (part.shape === "cone") m = new THREE.Mesh(new THREE.ConeGeometry(sx / 2, sy, 20), mat(color.getHex(), 0.6));
+    else m = box(sx, sy, sz, color.getHex());
+    m.position.set(px, py, pz);
+    g.add(m);
+  }
+  g.userData.noScale = true;
+  return g;
+}
+
 function buildEntity(o) {
+  if (o._lab && o._lab.custom && o._lab.custom.spec) return buildCustom(o._lab.custom.spec);
   const g = new THREE.Group();
   const c = REALC[o.category] || REALC.object;
   if (o.category === "forklift") {
@@ -70,7 +94,7 @@ function buildEntity(o) {
     g.add(box(1.2, 0.7, 0.8, c, 0, 0.45, 0));
   }
   const s = THREE.MathUtils.clamp((o.radius || BASER[o.category] || 0.6) / (BASER[o.category] || 0.6), 0.6, 1.8);
-  if (o.category !== "pedestrian" && o.category !== "cyclist") g.scale.setScalar(s);
+  if (!g.userData.noScale && o.category !== "pedestrian" && o.category !== "cyclist") g.scale.setScalar(s);
   return g;
 }
 
@@ -100,11 +124,21 @@ function create(container, hooks) {
   border.rotation.x = -Math.PI / 2; border.position.y = 0.02; scene.add(border);
 
   const world = new THREE.Group(); scene.add(world);
-  const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, raf: 0 };
+  const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, raf: 0, ground };
+  INSTANCES.add(state);
+  renderer.domElement.addEventListener("webglcontextlost", e=>{e.preventDefault(); state.stop();
+   if(hooks.onContextLost)hooks.onContextLost();});
+  controls.listenToKeyEvents(window);  // arrow keys pan the stage
 
   function rebuild(items) {
-    world.clear(); state.entities.clear();
+    world.children.slice().forEach(ch=>{disposeObject(ch); world.remove(ch);});
+    state.entities.clear();
     for (const o of items) {
+      if (o.lines) for (const ln of o.lines) {
+        const pts = ln.pts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
+        world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.LineBasicMaterial({ color: ln.color, transparent: true, opacity: ln.opacity ?? 0.8 })));
+      }
       if (o.pathPts && o.pathPts.length > 1) {
         const pts = o.pathPts.map(([x, y]) => { const [tx, tz] = toThree(x, y); return new THREE.Vector3(tx, 0.06, tz); });
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
@@ -117,6 +151,7 @@ function create(container, hooks) {
         }
       }
       const ent = buildEntity(o);
+      if (o.opacity !== undefined) ent.traverse(m => { if (m.material) { m.material = m.material.clone(); m.material.transparent = true; m.material.opacity = o.opacity; } });
       world.add(ent); state.entities.set(o.id, ent);
     }
     state.sig = hooks.sig ? hooks.sig() : "";
@@ -212,8 +247,52 @@ export function syncStudio3D(tracks, t, force = false) {
   if (force || sig !== S.sig) { S.rebuild(items); S.sig = sig; }
   S.setTime(items, t);
 }
-export function refreshLab3DTheme() {
-  if (!C) return;
+export function refreshAll3DThemes() {
   const cs = getComputedStyle(document.documentElement);
-  C.scene.background = new THREE.Color(cs.getPropertyValue("--canvas").trim() || "#0a0e1a");
+  const bg = cs.getPropertyValue("--canvas").trim() || "#0a0e1a";
+  const panel = cs.getPropertyValue("--panel2").trim() || "#10141c";
+  for (const s of INSTANCES) {
+    if (s.scene) s.scene.background = new THREE.Color(bg);
+    if (s.ground) s.ground.material.color = new THREE.Color(panel);
+  }
+}
+
+
+// ---- Counterfactual 3D: agent (cf), ghost (original), other actors ----
+let F = null;
+function cfPos(item, t) {
+  const rows = item._rows; if (!rows || !rows.length) return null;
+  let best = rows[0];
+  for (const r of rows) if (Math.abs(r[0] - t) < Math.abs(best[0] - t)) best = r;
+  return item._at === "agent" ? [best[1], best[2]] : [best[3], best[4]];
+}
+export function showCf3D(container, hooks) {
+  const key = hooks.extent ? hooks.extent().join("x") : "16x14";
+  if (F && F._extentKey !== key) { container.innerHTML = ""; F.stop(); F = null; }
+  if (!F) { F = create(container, { ...hooks, pos: cfPos }); F._extentKey = key; }
+  F.start();
+  return F;
+}
+export function hideCf3D() { if (F) F.stop(); }
+export function syncCf3D(cf, meta, t, force = false) {
+  if (!F || !F.visible || !cf) return;
+  const focus = cf.focus_other, fr = cf.results[focus]; if (!fr) return;
+  const agentMeta = meta[cf.agent_id] || { category: "object", radius: 0.6 };
+  const items = [
+    { id: cf.agent_id, category: agentMeta.category, radius: agentMeta.radius, _at: "agent",
+      _rows: fr.trajectories.counterfactual,
+      lines: [{ pts: fr.trajectories.counterfactual.map(r => [r[1], r[2]]), color: 0x2dd4a8, opacity: 0.95 },
+              { pts: fr.trajectories.original.map(r => [r[1], r[2]]), color: 0x8fa0b8, opacity: 0.55 }] },
+    { id: cf.agent_id + "-ghost", category: agentMeta.category, radius: agentMeta.radius, _at: "agent",
+      _rows: fr.trajectories.original, opacity: 0.35, lines: [] },
+  ];
+  for (const [oid, r] of Object.entries(cf.results)) {
+    const m = meta[oid] || { category: "object", radius: 0.5 };
+    items.push({ id: oid, category: m.category, radius: m.radius, _at: "other",
+      _rows: r.trajectories.counterfactual,
+      lines: [{ pts: r.trajectories.counterfactual.map(p => [p[3], p[4]]), color: 0x8fa0b8, opacity: 0.6 }] });
+  }
+  const sig = "cf:" + cf.agent_id + ":" + focus + ":" + Object.keys(cf.results).join(",");
+  if (force || sig !== F.sig) { F.rebuild(items); F.sig = sig; }
+  F.setTime(items, t);
 }

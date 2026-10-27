@@ -50,7 +50,7 @@ def test_create_lab_spawn_visibility_and_sections():
 def test_theme_and_grouped_nav():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     css = (ROOT / "apps" / "web" / "app.css").read_text()
-    assert html.count('data-view=') <= 8                       # grouped nav, not 9 flat tabs
+    assert html.count('data-view=') <= 9                       # grouped nav (7 sections + Settings + Help)
     assert 'data-theme-mode="system"' in html and "prefers-color-scheme" in html
     assert '[data-theme="light"]' in css and 'id="cf-map"' in html and 'id="cf-target"' in html and 'id="cf-decel"' in html
 
@@ -105,7 +105,7 @@ def test_homepage_structure():
     home = html[html.index('<section id="view-home"'):html.index('<section id="view-workspace"')]
     assert home.index('id="demo-video"') < home.index('id="onboarding"')  # video above the fold flow
     assert 'class="hero-grid"' in home and 'class="proofstrip"' in home and 'class="bento"' in home
-    assert home.count('class="card tile"') == 6 and 'quick-scn' in home and 'class="ctaband"' in home
+    assert home.count('class="card tile"') == 9 and 'quick-scn' in home and 'class="ctaband"' in home
 
 def test_indie_track_not_startup():
     for f in ["apps/web/index.html", "README.md", "docs/HACKATHON_SUBMISSION.md"]:
@@ -211,3 +211,26 @@ def test_studio_3d_and_delta_playback():
     assert 'id="studio-3d"' in html and "setStudioView" in js and "syncStudio3D" in js
     assert "state._playLast" in js and "data-speed" in html  # delta-time, not frame-stepped
     assert 'id="play-speed"' not in html
+
+def test_cf_3d_and_sync():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'id="cf-3d"' in html and "setCfView" in js and "syncCounterfactual" in js
+    assert "syncCf3D" in (ROOT / "apps/web/three-view.js").read_text()
+
+def test_spark_quality_and_no_beta():
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    spark = (ROOT / "integrations/meta/spark.py").read_text()
+    assert "scene_quality" in spark and "PATH DESIGN RULES" in spark
+    assert "(beta)" not in html
+    assert "hitPath" in js and "nearestWpSegment" in js and "pathDrag" not in js or "pathDrag" in js
+    assert "refreshAll3DThemes" in (ROOT / "apps/web/three-view.js").read_text()
+
+
+def test_help_section_and_footer_link():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    assert 'id="view-help"' in html and 'data-foot="help"' in html
+    for anchor in ["help-start", "help-create", "help-analysis", "help-accounts", "help-mcp", "help-trouble", "help-contact"]:
+        assert f'id="{anchor}"' in html, anchor
+    assert 'id="help-search"' in html
