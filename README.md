@@ -45,21 +45,20 @@ Five synthetic scenarios with separately-held ground truth ship in
 five-entity warehouse-multi, four-user intersection-crossing) — regenerate
 them with `python3 scripts/generate_fixtures.py`.
 
-## Upload your own scenes (Upload Lab)
+## Create your own scenes (Create Lab)
 
-- **Video**: load a clip locally in the browser, pause on a moment, capture the
-  frame and segment it with SAM 3.1 (one concept per call). Captured boxes are
-  associated across frames into tracks by a deterministic greedy-IoU tracker
-  (`engine/iou_tracking.py`; SAM ids are only stable within one response).
-- **Image**: SAM 3.1 segmentation overlay with boxes, ids and confidences.
-- **Track JSON**: paste tracks you already have; schema-validated with hard
-  bounds (`services/api/server.py: parse_tracks`) — invalid input is rejected
-  with a reason, never repaired into a plausible scene.
-- Custom scenes run the same pipeline: all-pairs proximity analysis, and a
-  multi-object counterfactual where one agent brakes against every other
-  actor (`engine/multi.py`). Declare metres-per-pixel or results stay in
-  pixel space. Uploaded scenes are analysed statelessly and kept only in your
-  browser's local storage; ingest is bounded (12 MB, 120 POST/min/client).
+Build a scene instead of uploading one: add components (forklift, pedestrian,
+robot, vehicle, cyclist, static shelf), click the 16 × 14 m stage to lay each
+component's waypoint path, drag waypoints to edit, set speed / radius / start
+delay per component, preview the motion, then **Run analysis**. Paths are
+sampled at 10 Hz into timestamped tracks (`USER_CREATED`) and run through the
+same all-pairs CPA/TTC + counterfactual pipeline as the built-in scenarios —
+with templates (near-miss, crossing, robot cell), export/import of scene JSON,
+and guardrails that name the offending component instead of failing silently.
+The design rationale, a deep review of the original one-line request, and the
+expert prompt it was expanded into live in `docs/CREATE_LAB_UX_PROMPT.md`.
+(Server-side SAM/custom-track APIs from the Upload Lab era remain available
+and tested; the product surface is now creation-first.)
 
 ## Evidence, not adjectives
 

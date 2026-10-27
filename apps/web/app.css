@@ -23,3 +23,8 @@ ul{padding-left:18px}li{margin:6px 0}.ev{cursor:pointer}.ev:hover{color:var(--cy
 .chk{display:flex;gap:8px;align-items:center;color:var(--ink)}pre{white-space:pre-wrap;word-break:break-word}
 footer{padding:20px 22px;color:var(--dim);border-top:1px solid var(--line)}
 @media(max-width:900px){.grid3,.studio{grid-template-columns:1fr}.hero h1{font-size:32px}}
+
+.labobj{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0;background:var(--panel2)}
+.labobj.sel{border-color:var(--cyan)}
+.labctl label{flex:1;font-size:12px}.labctl input{width:100%;background:#0a0e1a;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:5px}
+textarea{background:#0a0e1a;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:9px;font-family:var(--mono);font-size:12px}

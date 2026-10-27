@@ -105,51 +105,95 @@ $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark�
 
 diag();loadScenarios().then(()=>runCf());
 
-// ---- Upload Lab ----
-state.captures=[]; state.uploadedTracks=null;
-function upStatus(m){$("up-status").textContent=m;}
-$("up-file").onchange=e=>{const f=e.target.files[0];if(!f)return;
- if(f.size>60*1024*1024){upStatus("File exceeds 60 MB browser-preview bound.");e.target.value="";return;}
- const url=URL.createObjectURL(f),v=$("up-video"),im=$("up-img");
- if(f.type.startsWith("video/")){im.style.display="none";v.style.display="block";v.src=url;upStatus(`Video loaded locally (${(f.size/1048576).toFixed(1)} MB). Play, pause on a moment, then Capture & segment. It is not uploaded anywhere by loading it.`);}
- else if(f.type.startsWith("image/")){v.style.display="none";im.style.display="block";im.src=url;upStatus("Image loaded locally. Capture & segment to run SAM 3.1 on it.");}
- else upStatus("Unsupported file type — use a video or image file, or track JSON.");};
-function currentFrameCanvas(){const v=$("up-video"),im=$("up-img"),c=document.createElement("canvas");
- const src=v.style.display!=="none"?(v.videoWidth&&v):(im.naturalWidth&&im);
- if(!src){upStatus("Load and display a video frame or image first.");return null;}
- c.width=src.videoWidth||src.naturalWidth;c.height=src.videoHeight||src.naturalHeight;
- c.getContext("2d").drawImage(src,0,0);return c;}
-$("up-segment").onclick=async()=>{const c=currentFrameCanvas();if(!c)return;
- const dataUrl=c.toDataURL("image/jpeg",0.85);
- if(dataUrl.length>11*1024*1024){upStatus("Frame is too large after encoding (>8 MB). Seek to a simpler frame or lower-resolution source.");return;}
- const t=$("up-video").style.display!=="none"?+$("up-video").currentTime.toFixed(2):0;
- const concepts=[$("up-concept").value.trim(),$("up-concept2").value.trim()].filter(Boolean);
- upStatus("Calling SAM 3.1…");const x=$("up-canvas").getContext("2d");x.drawImage(c,0,0,$("up-canvas").width,$("up-canvas").height);
- for(const concept of concepts){
-  const r=await(await fetch("/api/meta/segment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image_data_url:dataUrl,concept})})).json();
-  if(r.status==="BLOCKED_CREDENTIALS"){upStatus("Meta API not configured on the server (BLOCKED_CREDENTIALS). Fixture scenes still work.");return;}
-  if(r.error||r.status==="MODEL_ERROR"){upStatus("SAM error: "+(r.error||r.detail));return;}
-  const recs=(r.frames&&r.frames[0])?r.frames[0].records:[];
-  state.captures.push({t,concept,records:recs});
-  const sx=$("up-canvas").width/c.width,sy=$("up-canvas").height/c.height;
-  x.strokeStyle=COL[concept]||"#38c6d9";x.lineWidth=2;
-  recs.forEach(rec=>{const b=rec.box;x.strokeRect(b.x1*sx,b.y1*sy,(b.x2-b.x1)*sx,(b.y2-b.y1)*sy);
-   x.fillStyle="#e8edf6";x.fillText(`${concept} #${rec.object_id} ${rec.confidence!=null?rec.confidence.toFixed(2):""}`,b.x1*sx+4,Math.max(12,b.y1*sy-4));});
-  upStatus(`SAM 3.1 (${r.model||"sam-3.1"}): ${recs.length} "${concept}" at t=${t}s · ${r.latency_ms||"?"} ms. Captures: ${state.captures.length}. Capture more moments, then Build tracks.`);}
- $("up-count").textContent=state.captures.length;};
-$("up-tracks").onclick=async()=>{if(!state.captures.length){upStatus("Capture at least one frame first (two moments minimum for motion).");return;}
- const byConcept={};state.captures.forEach(f=>{(byConcept[f.concept]=byConcept[f.concept]||[]).push({t:f.t,records:f.records});});
- let all=[];for(const [concept,frames] of Object.entries(byConcept)){
-  const r=await(await fetch("/api/tracks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({frames,category:concept})})).json();
-  if(r.error){upStatus("Track build failed: "+r.error);return;}
-  all=all.concat(r.tracks.map(t=>({...t,object_id:concept+"-"+t.object_id.split("-").pop(),category:concept})));}
- state.uploadedTracks=all;upStatus(`Built ${all.length} track(s) from ${state.captures.length} captured frame(s). Now Analyse uploaded scene.`);};
-async function analyzeCustom(tracks,label){upStatus&&label&&upStatus("Analysing "+label+"…");
- const scale=parseFloat($("up-scale").value); 
+// ---- Create Lab ----
+state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
+const LAB={w:16,h:14};
+function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
+function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
+function labObj(id){return state.lab.objects.find(o=>o.id===id);}
+function labAdd(cat,waypoints,speed,radius,delay){
+ const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
+  speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,waypoints:waypoints||[]};
+ state.lab.objects.push(o);state.lab.selected=o.id;labRenderList();labDraw();return o;}
+function labClear(){$("lab-canvas").getContext("2d").clearRect(0,0,880,620);}
+function labXY(x,y,W,H){return [x/LAB.w*W, H-(y/LAB.h*H)];}
+function labInv(px,py,W,H){return [Math.round(px/W*LAB.w*10)/10, Math.round((H-py)/H*LAB.h*10)/10];}
+function pathLen(o){let L=0;for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];L+=Math.hypot(b[0]-a[0],b[1]-a[1]);}return L;}
+function pathDur(o){return o.speed>0?pathLen(o)/o.speed:0;}
+function labDuration(){return Math.min(20,Math.max(4,...state.lab.objects.map(o=>o.delay+pathDur(o))));}
+function posOnPath(o,t){if(!o.waypoints.length)return null;
+ const lt=Math.max(0,t-o.delay);if(o.waypoints.length===1||o.speed<=0||lt===0)return o.waypoints[0];
+ let d=o.speed*lt;for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];
+  const seg=Math.hypot(b[0]-a[0],b[1]-a[1]);if(d<=seg){const k=seg?d/seg:0;return [a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k];}d-=seg;}
+ return o.waypoints[o.waypoints.length-1];}
+function labDraw(){const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
+ x.clearRect(0,0,W,H);x.strokeStyle="#1b2434";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
+ for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
+ for(const o of state.lab.objects){const col=COL[o.category]||"#fff",sel=o.id===state.lab.selected;
+  if(o.waypoints.length>1){x.strokeStyle=col+(sel?"":"88");x.lineWidth=sel?2.5:1.5;x.beginPath();
+   o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);i?x.lineTo(a,b):x.moveTo(a,b);});x.stroke();x.lineWidth=1;}
+  o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);x.fillStyle=sel?col:"#41506e";
+   x.beginPath();x.arc(a,b,sel?6:4.5,0,7);x.fill();x.fillStyle="#dfe7f5";x.font="10px system-ui";x.fillText(String(i+1),a-3,b+3);});
+  const pos=posOnPath(o,state.lab.t);if(pos){const[a,b]=labXY(pos[0],pos[1],W,H);const r=o.radius/LAB.w*W;
+   x.strokeStyle=col;x.lineWidth=2.5;x.beginPath();x.arc(a,b,r,0,7);x.stroke();
+   x.fillStyle=col+"2e";x.beginPath();x.arc(a,b,r,0,7);x.fill();
+   x.fillStyle="#e8edf6";x.font="12.5px system-ui";x.fillText(`${o.id}${o.speed?` · ${o.speed} m/s`:" · static"}`,a+r+5,b-5);}}
+ const clk=$("lab-clock");if(clk)clk.textContent="t = "+state.lab.t.toFixed(2)+"s";const sc=$("lab-scrub");if(sc)sc.value=state.lab.t;}
+function computeLabDuration(){const sc=$("lab-scrub");if(sc)sc.max=labDuration();}
+function labRenderList(){const el=$("lab-list");if(!el)return;
+ el.innerHTML=state.lab.objects.length?state.lab.objects.map(o=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${o.id}">
+  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.id}</b> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
+  <div class="row labctl">
+   <label>Speed m/s<input type="number" step="0.1" min="0" max="8" value="${o.speed}" data-f="speed"></label>
+   <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
+   <label>Delay s<input type="number" step="0.25" min="0" max="10" value="${o.delay}" data-f="delay"></label>
+  </div>
+  <div class="row"><button data-act="select">${o.id===state.lab.selected?"Selected ✓":"Select & edit path"}</button>
+   <button class="ghostbtn" data-act="undo">Undo point</button>
+   <button class="ghostbtn" data-act="clear">Clear path</button>
+   <button class="ghostbtn" data-act="del">Delete</button></div></div>`).join("")
+  :'<p class="dim">No components yet. Add one, select it, then click the stage to lay its path.</p>';
+ el.querySelectorAll(".labobj").forEach(card=>{const o=labObj(card.dataset.id);
+  card.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=Math.max(0,+inp.value||0);labRenderList();labDraw();});
+  card.querySelectorAll("button").forEach(b=>b.onclick=()=>{const a=b.dataset.act;
+   if(a==="select"){state.lab.selected=o.id;}
+   if(a==="undo"){o.waypoints.pop();}
+   if(a==="clear"){o.waypoints=[];}
+   if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;}
+   labRenderList();labDraw();});});}
+// canvas editing: click adds a waypoint to the selected component; drag moves one
+(()=>{const c=$("lab-canvas");if(!c)return;let drag=null,moved=false;
+ const evPos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];};
+ c.addEventListener("pointerdown",e=>{const[px,py]=evPos(e);moved=false;
+  const o=labObj(state.lab.selected);if(!o)return;
+  o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],c.width,c.height);if(Math.hypot(a-px,b-py)<12)drag={o,i};});});
+ c.addEventListener("pointermove",e=>{if(!drag)return;moved=true;const[px,py]=evPos(e);
+  drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);labDraw();});
+ c.addEventListener("pointerup",e=>{if(drag&&moved){drag=null;labRenderList();labDraw();return;}drag=null;
+  const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
+  const[px,py]=evPos(e);o.waypoints.push(labInv(px,py,c.width,c.height));labRenderList();labDraw();});})();
+$("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
+ labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
+document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
+ if(b.dataset.tpl==="near-miss"){labAdd("forklift",[[1,7],[7.5,7],[13,7]],1.6,0.9,0);labAdd("pedestrian",[[8.6,13],[8.6,6],[8.6,1]],1.55,0.45,0);}
+ if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[8,7],[15,7]],2.4,1.1,0);labAdd("cyclist",[[9,13.5],[9,7],[9,1]],1.9,0.5,0.5);labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1);}
+ if(b.dataset.tpl==="cell"){labAdd("robot",[[2,2],[13,2],[13,11],[2,11],[2,2]],1.2,0.55,0);labAdd("forklift",[[1,12],[14,12]],0.9,0.9,1);labAdd("shelf",[[8,7]],0,1.4,0);labAdd("pedestrian",[[15,1],[10,6],[15,12]],1.1,0.45,2);}
+ labStatus(`Template "${b.dataset.tpl}" loaded — edit any path, then Run analysis.`);labDraw();});
+$("lab-play").onclick=()=>{state.lab.playing=!state.lab.playing;$("lab-play").textContent=state.lab.playing?"⏸ Pause preview":"▶ Preview motion";
+ if(state.lab.playing){const step=()=>{if(!state.lab.playing)return;state.lab.t+=0.05;if(state.lab.t>labDuration())state.lab.t=0;labDraw();requestAnimationFrame(step);};step();}};
+$("lab-scrub").oninput=e=>{state.lab.t=+e.target.value;labDraw();};
+function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
+ for(const o of state.lab.objects){if(!o.waypoints.length)throw new Error(`${o.id} has no path — click the stage to add waypoints.`);
+  if(o.category!=="shelf"&&o.speed<=0&&o.waypoints.length>1)throw new Error(`${o.id} has a path but speed 0 — set a speed or make it a shelf.`);
+  const pts=[];for(let t=0;t<=T+1e-9;t=Math.round((t+dt)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
+  tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
+ if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");
+ return tracks;}
+async function analyzeCustom(tracks,label){labStatus("Analysing "+label+"…");$("analyze-status").textContent="Running custom analysis…";
  const r=await(await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({id:label||"custom-scene",tracks,metres_per_pixel:isNaN(scale)?null:scale,
+  body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})})).json();
- if(r.error){upStatus("Analysis failed: "+r.error);$("analyze-status").textContent="Custom analysis failed: "+r.error;return;}
+ if(r.error){labStatus("Analysis failed: "+r.error);$("analyze-status").textContent="Custom analysis failed: "+r.error;return;}
  state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;
  try{const mine=JSON.parse(localStorage.getItem("fs-my-scenes")||"[]");mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem("fs-my-scenes",JSON.stringify(mine.slice(-10)));}catch(e){}
  renderObjects();draw();renderTrace(r.run);renderInspector(r);goto("studio");
@@ -157,6 +201,11 @@ async function analyzeCustom(tracks,label){upStatus&&label&&upStatus("Analysing 
  const evs=[];(r.run.findings.pairs||[]).forEach(p=>{if(p.event)evs.push({...p.event,pair:p.pair});});
  $("events").innerHTML=evs.length?evs.map(e=>`<li class="ev" data-t="${e.at_time_s||e.t_star_s||0}">⚠ <b>${e.type}</b> ${e.pair.join(" ↔ ")}<br><span class="dim">${e.ttc_s!=null?"TTC "+e.ttc_s+"s":e.d_min!=null?"d_min "+e.d_min+" "+(e.units||""):""}</span></li>`).join(""):'<li class="dim">No proximity events above threshold.</li>';
  document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});}
-$("up-analyze").onclick=()=>{if(!state.uploadedTracks){upStatus("Build tracks from captures first — or paste track JSON below.");return;}analyzeCustom(state.uploadedTracks,"upload-"+Date.now());};
-$("up-json-btn").onclick=()=>{let tracks;try{tracks=JSON.parse($("up-json").value);}catch(e){upStatus("JSON parse error: "+e.message);return;}
- analyzeCustom(tracks,"json-"+Date.now());};
+$("lab-run").onclick=()=>{try{analyzeCustom(labSampleTracks(),"created-"+Date.now());}catch(e){labStatus(e.message);}};
+$("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersight-created-scene",stage_metres:[LAB.w,LAB.h],objects:state.lab.objects},null,2)],{type:"application/json"}),"frontiersight-scene.json");};
+$("lab-import").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{try{
+ const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
+ state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0));
+ labStatus(`Imported ${state.lab.objects.length} component(s).`);labDraw();}catch(err){labStatus("Import failed: "+err.message);}});};
+// starter template so the Lab is never an empty, unexplained canvas
+if(!state.lab.objects.length){$("lab-add")&&document.querySelector('[data-tpl="near-miss"]').click();}

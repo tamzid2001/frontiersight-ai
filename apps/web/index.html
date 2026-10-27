@@ -10,7 +10,7 @@
  <div class="brand">◉ Frontier<b>Sight</b> <span class="tag">AI</span></div>
  <nav id="tabs">
   <button data-view="home" class="on">Home</button><button data-view="workspace">Workspace</button>
-  <button data-view="upload">Upload Lab</button>
+  <button data-view="create">Create Lab</button>
   <button data-view="studio">Video Studio</button><button data-view="inspector">Motion Inspector</button>
   <button data-view="counterfactual">Counterfactual</button><button data-view="agents">Agent Trace</button>
   <button data-view="evidence">Evidence</button><button data-view="settings">Settings</button>
@@ -64,29 +64,40 @@
  </div>
 </section>
 
-<section id="view-upload" class="view"><h2>Upload Lab — your own scenes</h2>
- <p class="dim">Three ways in: <b>(1)</b> video → play it here, capture frames, segment each with SAM 3.1, and we associate boxes into tracks by IoU;
- <b>(2)</b> a still image → SAM 3.1 segmentation overlay; <b>(3)</b> track JSON you already have. Media is processed in your browser and
- sent only to this server's Meta proxy when you click Segment — never stored. Detections are image-space: declare a scale or results stay in pixels.</p>
+<section id="view-create" class="view"><h2>Create Lab — build a scene, set the paths, run the proof</h2>
+ <p class="dim">Create components, give each one a path and a speed, watch them move, then run the same deterministic
+ analysis and counterfactual pipeline used for the built-in scenarios. The stage is a <b>16 × 14 metre</b> floor plan;
+ positions are metres, so metric claims are valid by construction. Nothing here is pre-baked: tracks are sampled
+ from <em>your</em> paths at 10 Hz when you press Run analysis.</p>
  <div class="studio">
   <div class="card stagecard">
-   <input type="file" id="up-file" accept="video/*,image/*">
-   <video id="up-video" controls playsinline style="width:100%;display:none;border-radius:12px"></video>
-   <img id="up-img" style="width:100%;display:none;border-radius:12px" alt="uploaded still">
-   <canvas id="up-canvas" width="880" height="560"></canvas>
-   <p class="dim">Segmentation overlays and captured frames appear on the canvas. Captured frames: <b id="up-count">0</b></p>
+   <canvas id="lab-canvas" width="880" height="620"></canvas>
+   <div class="transport"><button id="lab-play">▶ Preview motion</button>
+    <input id="lab-scrub" type="range" min="0" max="20" step="0.05" value="0"><span id="lab-clock" class="mono">t = 0.00s</span></div>
+   <p class="dim">Select a component, then <b>click the stage to add waypoints</b>. Drag any waypoint to move it.
+   The marker shows where each component will be at the preview time.</p>
+   <div class="row">
+    <button id="lab-run">Run analysis →</button>
+    <button id="lab-export" class="ghostbtn">Export scene JSON</button>
+    <label class="ghostbtn" style="cursor:pointer">Import JSON<input id="lab-import" type="file" accept="application/json" hidden></label>
+    <span id="lab-status" role="status" class="dim"></span>
+   </div>
   </div>
-  <aside class="card"><h3>Segment &amp; build</h3>
-   <label>Object concept (one noun phrase)<input id="up-concept" value="person" style="width:100%"></label>
-   <label>Second concept (optional)<input id="up-concept2" value="forklift" style="width:100%"></label>
-   <button id="up-segment">Capture frame &amp; segment (SAM 3.1)</button>
-   <button id="up-tracks" class="ghostbtn">Build tracks from captures</button>
-   <label>Scale, metres per pixel (optional — blank = pixel space)<input id="up-scale" type="number" step="0.001" min="0" placeholder="e.g. 0.05" style="width:100%"></label>
-   <button id="up-analyze">Analyse uploaded scene →</button>
-   <p id="up-status" role="status" class="dim"></p>
-   <h3>…or paste track JSON</h3>
-   <textarea id="up-json" rows="7" style="width:100%" placeholder='[{"object_id":"forklift-1","category":"forklift","radius":10,"points":[[0,100,200],[1,160,200]]}, {"object_id":"pedestrian-1","category":"pedestrian","radius":6,"points":[[0,300,80],[1,300,140]]}]'></textarea>
-   <button id="up-json-btn" class="ghostbtn">Analyse JSON tracks</button>
+  <aside class="card"><h3>Components</h3>
+   <div class="row"><select id="lab-new-cat">
+     <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
+     <option value="robot">Robot</option><option value="vehicle">Vehicle</option>
+     <option value="cyclist">Cyclist</option><option value="shelf">Shelf (static)</option></select>
+    <button id="lab-add">+ Add component</button></div>
+   <div class="row"><span class="dim">Template:</span>
+    <button class="ghostbtn" data-tpl="near-miss">Near-miss</button>
+    <button class="ghostbtn" data-tpl="crossing">Crossing</button>
+    <button class="ghostbtn" data-tpl="cell">Robot cell</button></div>
+   <div id="lab-list"></div>
+   <h3>How it flows</h3>
+   <p class="dim">Run analysis samples every path into timestamped tracks, runs all-pairs closest-approach/TTC
+   analysis, proposes a braking counterfactual for the focus pair, and lands you in the Studio with the full
+   agent trace. Pick the counterfactual agent in the Counterfactual screen — it defaults to the first moving component.</p>
   </aside>
  </div>
 </section>

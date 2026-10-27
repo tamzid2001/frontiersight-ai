@@ -31,3 +31,10 @@ def test_index_html_has_favicon_and_meta():
 def test_health_payload_shape():
     from services.api.server import H  # noqa: F401  (import must stay Vercel-compatible)
     assert True
+
+def test_create_lab_replaced_upload_lab():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    assert 'data-view="create"' in html and 'id="view-create"' in html
+    assert 'id="lab-canvas"' in html and "labSampleTracks" in js and "posOnPath" in js
+    assert "Upload Lab" not in html
