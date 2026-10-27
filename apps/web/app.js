@@ -335,30 +335,58 @@ function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
 const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
-function labAdd(cat,waypoints,speed,radius,delay,mode){
+function labAdd(cat,waypoints,speed,radius,delay,mode,curve){
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
-  speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",waypoints:waypoints||[]};
+  speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",curve:curve||"straight",waypoints:waypoints||[]};
  if(!o.waypoints.length){const s=LAB_SLOTS[state.lab.objects.length%LAB_SLOTS.length];o.waypoints=[[s[0],s[1]]];o.spawned=true;}
  state.lab.objects.push(o);state.lab.selected=o.id;labRenderList();labDraw();return o;}
 function labClear(){$("lab-canvas").getContext("2d").clearRect(0,0,880,620);}
 function labXY(x,y,W,H){return [x/LAB.w*W, H-(y/LAB.h*H)];}
 function labInv(px,py,W,H){return [Math.round(px/W*LAB.w*10)/10, Math.round((H-py)/H*LAB.h*10)/10];}
-function pathLen(o){let L=0;for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];L+=Math.hypot(b[0]-a[0],b[1]-a[1]);}return L;}
+
+// ---- curved paths: Catmull-Rom with arc-length parameterisation (mirror of engine/curves.py) ----
+const CR_PER=24;
+function crPoint(p0,p1,p2,p3,t){const t2=t*t,t3=t2*t;return [
+ .5*((2*p1[0])+(-p0[0]+p2[0])*t+(2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2+(-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3),
+ .5*((2*p1[1])+(-p0[1]+p2[1])*t+(2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2+(-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)];}
+function resolvePath(o){const key=JSON.stringify([o.waypoints,o.curve,o.mode]);
+ if(o._res&&o._res.key===key)return o._res;
+ const wps=o.waypoints, closed=o.mode==="loop"; let pts=[];
+ if(wps.length<2){pts=wps.slice();}
+ else if(o.curve==="smooth"){
+  const ext=closed?[wps[wps.length-1],...wps,wps[0],wps[1]]:[wps[0],...wps,wps[wps.length-1]];
+  for(let i=1;i<ext.length-2;i++){for(let k=0;k<CR_PER;k++)pts.push(crPoint(ext[i-1],ext[i],ext[i+1],ext[i+2],k/CR_PER));}
+  pts.push(closed?wps[0]:wps[wps.length-1]);
+ } else {
+  const seq=closed?[...wps,wps[0]]:wps;
+  for(let i=1;i<seq.length;i++){const[a,b]=[seq[i-1],seq[i]];
+   for(let k=0;k<CR_PER;k++){const t=k/CR_PER;pts.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}}
+  pts.push(seq[seq.length-1]);
+ }
+ const cum=[0];for(let i=1;i<pts.length;i++)cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+ const res={key,pts,cum,total:cum[cum.length-1]||0};o._res=res;return res;}
+function pathPosAtDistance(o,d){const r=resolvePath(o);if(r.pts.length<2||r.total===0)return r.pts[0]||null;
+ d=Math.min(Math.max(d,0),r.total);let lo=0,hi=r.cum.length-1;
+ while(lo<hi){const mid=(lo+hi)>>1;if(r.cum[mid]<d)lo=mid+1;else hi=mid;}
+ const i=Math.max(1,lo),seg=r.cum[i]-r.cum[i-1],k=seg>0?(d-r.cum[i-1])/seg:0;
+ return [r.pts[i-1][0]+(r.pts[i][0]-r.pts[i-1][0])*k, r.pts[i-1][1]+(r.pts[i][1]-r.pts[i-1][1])*k];}
+
+function pathLen(o){return resolvePath(o).total;}
 function pathDur(o){return o.speed>0?pathLen(o)/o.speed:0;}
 function labDuration(){return Math.min(20,Math.max(4,...state.lab.objects.map(o=>o.delay+pathDur(o))));}
 function posOnPath(o,t){if(!o.waypoints.length)return null;
- let lt=Math.max(0,t-o.delay);if(o.waypoints.length===1||o.speed<=0||lt===0)return o.waypoints[0];
- const D=pathDur(o);if(D>0&&lt>D){if(o.mode==="loop")lt=lt%D;else if(o.mode==="pingpong"){const m=lt%(2*D);lt=m>D?2*D-m:m;}else lt=D;}
- let d=o.speed*lt;for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];
-  const seg=Math.hypot(b[0]-a[0],b[1]-a[1]);if(d<=seg){const k=seg?d/seg:0;return [a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k];}d-=seg;}
- return o.waypoints[o.waypoints.length-1];}
+ let lt=Math.max(0,t-o.delay);const r=resolvePath(o);
+ if(o.waypoints.length===1||o.speed<=0||lt===0||r.total===0)return o.waypoints[0];
+ const D=r.total/o.speed;
+ if(lt>=D){if(o.mode==="loop")lt=lt%D;else if(o.mode==="pingpong"){const m=lt%(2*D);lt=m>D?2*D-m:m;}else lt=D;}
+ return pathPosAtDistance(o,o.speed*lt);}
 function labDraw(){const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
  const _labLabels=[];
  for(const o of state.lab.objects){const col=COL[o.category]||"#fff",sel=o.id===state.lab.selected;
   if(o.waypoints.length>1){x.strokeStyle=col+(sel?"":"88");x.lineWidth=sel?2.5:1.5;x.beginPath();
-   o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);i?x.lineTo(a,b):x.moveTo(a,b);});x.stroke();x.lineWidth=1;}
+   resolvePath(o).pts.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);i?x.lineTo(a,b):x.moveTo(a,b);});x.stroke();x.lineWidth=1;}
   o.waypoints.forEach((w,i)=>{const[a,b]=labXY(w[0],w[1],W,H);x.fillStyle=sel?col:"#41506e";
    x.beginPath();x.arc(a,b,sel?6:4.5,0,7);x.fill();x.fillStyle="#dfe7f5";x.font="10px system-ui";x.fillText(String(i+1),a-3,b+3);});
   const pos=posOnPath(o,state.lab.t);if(pos){const[a,b]=labXY(pos[0],pos[1],W,H);const r=o.radius/LAB.w*W;
@@ -393,6 +421,7 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
    <label>Delay s<input type="number" step="0.25" min="0" max="10" value="${o.delay}" data-f="delay"></label>
    <label>Path mode<select data-f="mode"><option ${o.mode==="stop"?"selected":""}>stop</option><option ${o.mode==="loop"?"selected":""}>loop</option><option ${o.mode==="pingpong"?"selected":""}>pingpong</option></select></label>
+   <label>Path shape<select data-f="curve"><option value="straight" ${o.curve!=="smooth"?"selected":""}>straight lines</option><option value="smooth" ${o.curve==="smooth"?"selected":""}>smooth curve</option></select></label>
   </div>
   <div class="row"><button data-act="select">${o.id===state.lab.selected?"Selected ✓":"Select & edit path"}</button>
    <button class="ghostbtn" data-act="undo">Undo point</button>
@@ -401,12 +430,12 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    <button class="ghostbtn" data-act="del">Delete</button></div></div>`).join("")
   :'<p class="dim">No components yet. Add one, select it, then click the stage to lay its path.</p>';
  el.querySelectorAll(".labobj").forEach(card=>{const o=labObj(card.dataset.id);
-  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=inp.dataset.f==="mode"?inp.value:Math.max(0,+inp.value||0);labRenderList();labDraw();});
+  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=(inp.dataset.f==="mode"||inp.dataset.f==="curve")?inp.value:Math.max(0,+inp.value||0);delete o._res;labRenderList();labDraw();});
   card.querySelectorAll("button").forEach(b=>b.onclick=()=>{const a=b.dataset.act;
    if(a==="select"){state.lab.selected=o.id;}
    if(a==="undo"){o.waypoints.pop();}
    if(a==="clear"){o.waypoints=[];}
-   if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode);labStatus(c.id+" duplicated — drag its waypoints apart.");}
+   if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode,o.curve);labStatus(c.id+" duplicated — drag its waypoints apart.");}
    if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;}
    labRenderList();labDraw();});});}
 // canvas editing: click adds a waypoint to the selected component; drag moves one
@@ -434,8 +463,8 @@ $("lab-add").onclick=()=>{const cat=$("lab-new-cat").value;const o=labAdd(cat);
  labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
 document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
  if(b.dataset.tpl==="near-miss"){labAdd("forklift",[[1,7],[7.5,7],[13,7]],1.6,0.9,0);labAdd("pedestrian",[[8.6,13],[8.6,6],[8.6,1]],1.55,0.45,0);}
- if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[8,7],[15,7]],2.4,1.1,0);labAdd("cyclist",[[9,13.5],[9,7],[9,1]],1.9,0.5,0.5);labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1);}
- if(b.dataset.tpl==="cell"){labAdd("robot",[[2,2],[13,2],[13,11],[2,11],[2,2]],1.2,0.55,0);labAdd("forklift",[[1,12],[14,12]],0.9,0.9,1);labAdd("shelf",[[8,7]],0,1.4,0);labAdd("pedestrian",[[15,1],[10,6],[15,12]],1.1,0.45,2);}
+ if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[8,7],[15,7]],2.4,1.1,0);labAdd("cyclist",[[9,13.5],[9,7],[9,1]],1.9,0.5,0.5);labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1,"stop","smooth");}
+ if(b.dataset.tpl==="cell"){labAdd("robot",[[2,2],[13,2],[13,11],[2,11]],1.2,0.55,0,"loop","smooth");labAdd("forklift",[[1,12],[14,12]],0.9,0.9,1);labAdd("shelf",[[8,7]],0,1.4,0);labAdd("pedestrian",[[15,1],[10,6],[15,12]],1.1,0.45,2);}
  labStatus(`Template "${b.dataset.tpl}" loaded — edit any path, then Run analysis.`);labDraw();});
 $("lab-play").onclick=()=>{state.lab.playing=!state.lab.playing;$("lab-play").textContent=state.lab.playing?"⏸ Pause preview":"▶ Preview motion";
  if(state.lab.playing){const step=()=>{if(!state.lab.playing)return;state.lab.t+=0.05;if(state.lab.t>labDuration())state.lab.t=0;labDraw();requestAnimationFrame(step);};step();}};
@@ -473,20 +502,31 @@ async function analyzeCustom(tracks,label){
  document.querySelectorAll(".ev").forEach(el=>el.onclick=()=>{state.t=+el.dataset.t;draw();});
  window.scrollTo({top:0,behavior:"smooth"});
  return r;}
-$("lab-run").onclick=async()=>{let tracks;try{tracks=labSampleTracks();}catch(e){labStatus(e.message);return;}
- const btn=$("lab-run"),old=btn.textContent,t0=Date.now();btn.disabled=true;btn.textContent="Analysing… 0s";
- labStatus("Running: deterministic engine + Muse Spark hypothesis (typically 5–25s). Do not press again.");
+$("lab-run").onclick=async()=>{let localTracks;
+ try{localTracks=labSampleTracks();}catch(e){labStatus(e.message);return;}
+ const btn=$("lab-run"),old=btn.textContent,t0=Date.now();btn.disabled=true;btn.textContent="Sampling paths… 0s";
  const timer=setInterval(()=>{btn.textContent=`Analysing… ${Math.round((Date.now()-t0)/1000)}s`;},500);
- try{await analyzeCustom(tracks,"created-"+Date.now());labStatus("Analysis complete — showing Studio. Events are in the right-hand list; click one to seek.");}
- catch(e){/* analyzeCustom already surfaced the error */}
+ try{
+  let tracks=localTracks, sampledBy="browser sampler";
+  try{const r=await fetch("/api/tracks/from-paths",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({objects:state.lab.objects.map(o=>({object_id:o.id,category:o.category,waypoints:o.waypoints,
+     speed:o.speed,radius:o.radius,delay:o.delay,curve:o.curve,mode:o.mode}))})});
+   const out=await r.json();
+   if(r.ok&&out.tracks){tracks=out.tracks;sampledBy="server engine (engine/curves)";}
+   else if(out.error)throw new Error(out.error);
+  }catch(e){labStatus("Server sampling unavailable ("+e.message+") — using the identical browser sampler.");}
+  labStatus("Tracks sampled by "+sampledBy+". Running analysis…");
+  await analyzeCustom(tracks,"created-"+Date.now());
+  labStatus("Analysis complete — showing Studio. Events are in the right-hand list; click one to seek.");
+ }catch(e){/* analyzeCustom already surfaced the error */}
  finally{clearInterval(timer);btn.disabled=false;btn.textContent=old;}};
 $("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersight-created-scene",stage_metres:[LAB.w,LAB.h],objects:state.lab.objects},null,2)],{type:"application/json"}),"frontiersight-scene.json");};
 $("lab-import").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{try{
  const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
- state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop"));
+ state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
  labStatus(`Imported ${state.lab.objects.length} component(s).`);labDraw();}catch(err){labStatus("Import failed: "+err.message);}});};
 function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;
- (scene.objects||[]).forEach(o=>labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop"));
+ (scene.objects||[]).forEach(o=>labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
  labStatus(label);labDraw();}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();

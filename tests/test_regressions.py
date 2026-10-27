@@ -135,3 +135,14 @@ def test_no_undefined_cross_references():
     assert "function resetRunState" in js and "resetRunState();" in js
     for name in ["syncApprovalUI", "runApproved", "download"]:
         assert f"function {name}" in js, name
+
+def test_curved_paths_ui_and_schema():
+    html = (ROOT / "apps" / "web" / "index.html").read_text()
+    js = (ROOT / "apps" / "web" / "app.js").read_text()
+    assert 'data-f="curve"' not in html  # rendered per-card by JS
+    assert "resolvePath" in js and "crPoint" in js and "from-paths" in js
+    from integrations.meta.spark import validate_scene
+    out = validate_scene({"objects": [
+        {"category": "robot", "waypoints": [[2, 2], [13, 2], [13, 11]], "speed": 1.2, "radius": .55, "curve": "smooth", "mode": "loop"},
+        {"category": "shelf", "waypoints": [[8, 7]], "speed": 0, "radius": 1.4}]})
+    assert out["objects"][0]["curve"] == "smooth"

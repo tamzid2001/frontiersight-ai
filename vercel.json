@@ -116,6 +116,10 @@
     {
       "source": "/api/meta/segment-video",
       "destination": "/api/index?ep=segment-video"
+    },
+    {
+      "source": "/api/tracks/from-paths",
+      "destination": "/api/index?ep=from-paths"
     }
   ],
   "functions": {

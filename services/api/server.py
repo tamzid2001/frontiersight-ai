@@ -114,7 +114,7 @@ class H(BaseHTTPRequestHandler):
         return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
-                "tracks": "/api/tracks", "me": "/api/me", "signup": "/api/auth/signup",
+                "tracks": "/api/tracks", "from-paths": "/api/tracks/from-paths", "me": "/api/me", "signup": "/api/auth/signup",
                 "login": "/api/auth/login", "logout": "/api/auth/logout",
                 "checkout": "/api/billing/checkout", "portal": "/api/billing/portal",
                 "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
@@ -139,7 +139,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         route = self._route()
         try:
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.13.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.14.0"})
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
@@ -253,6 +253,19 @@ class H(BaseHTTPRequestHandler):
                                    SimParams(duration=6.0, dt=0.02, braking_decel=float(body.get("braking_decel", 2.5))))
                 r["agent_id"] = agent.object_id
                 return self._send(200, r)
+            if route.startswith("/api/tracks/from-paths"):
+                from engine.curves import sample_tracks
+                objs = body.get("objects", [])
+                if not isinstance(objs, list) or not 1 <= len(objs) <= 24:
+                    return self._send(400, {"error": "objects must be a list of 1..24 path definitions"})
+                for o in objs:
+                    wps = o.get("waypoints", [])
+                    if not 1 <= len(wps) <= 24: return self._send(400, {"error": f"{o.get('category','object')}: need 1..24 waypoints"})
+                    if o.get("curve", "straight") not in ("straight", "smooth"):
+                        return self._send(400, {"error": "curve must be 'straight' or 'smooth'"})
+                tracks = sample_tracks(objs)
+                return self._send(200, {"tracks": [scen.track_to_dict(t) for t in tracks],
+                                        "note": "sampled server-side by engine/curves (Catmull-Rom, arc-length parameterised)"})
             if route.startswith("/api/tracks"):
                 from engine.iou_tracking import build_tracks
                 built = build_tracks(body.get("frames", []), str(body.get("category", "object"))[:32],

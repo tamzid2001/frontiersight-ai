@@ -69,3 +69,42 @@ def test_original_evidence_not_mutated_by_simulation():
     before = scen.track_to_dict(sc["tracks"][0])
     simulate(Vec(0, 0), Vec(1, 0), Vec(9, 0), Vec(-1, 0), 1.0, 50)
     assert scen.track_to_dict(sc["tracks"][0]) == before
+
+def test_curved_paths_arc_length_and_speed():
+    from engine.curves import Path, catmull_rom_sample
+    import math as _m
+    # spline passes through its control points at segment joins
+    pts = [(0.0, 0.0), (5.0, 5.0), (10.0, 0.0)]
+    dense = catmull_rom_sample([Vec(*p) for p in pts], samples_per_segment=24)
+    assert dense[0] == Vec(0, 0) and dense[24] == Vec(5, 5) and dense[-1] == Vec(10, 0)
+    curved = Path(pts, "smooth"); straight = Path(pts, "straight")
+    assert curved.length > straight.length  # the arc over the top is longer than chords... (chords are the straight path)
+    # constant speed: equal time steps -> near-equal travel distances
+    pos = [curved.position_at_time(t * 0.5, speed=2.0) for t in range(9)]
+    steps = [a.dist(b) for a, b in zip(pos, pos[1:])]
+    assert all(abs(s - 1.0) < 0.06 for s in steps), steps
+    # closed loop returns to its start and has no seam jump
+    loop = Path([(2.0, 2.0), (13.0, 2.0), (13.0, 11.0), (2.0, 11.0)], "smooth", closed=True)
+    p0 = loop.position_at_time(0, speed=1.2)
+    p_end = loop.position_at_time(loop.length / 1.2, speed=1.2, mode="loop")
+    assert p0.dist(p_end) < 0.05
+    # smoothness: heading changes gradually through the corner (no 90-degree kink)
+    import math as _m2
+    corner = Path([(0.0, 0.0), (10.0, 0.0), (10.0, 10.0)], "smooth")
+    dense = corner.points
+    def _ang(a, b, c):
+        v1, v2 = (b.x - a.x, b.y - a.y), (c.x - b.x, c.y - b.y)
+        return abs(_m2.degrees(_m2.atan2(v1[0] * v2[1] - v1[1] * v2[0], v1[0] * v2[0] + v1[1] * v2[1])))
+    max_turn = max(_ang(dense[i - 1], dense[i], dense[i + 1]) for i in range(1, len(dense) - 1))
+    assert max_turn < 20, max_turn  # polyline corner would spike ~90 in one step
+    with pytest.raises(ValueError): Path([(0.0, 0.0)], "bezier")
+
+def test_sample_tracks_curved_scene():
+    from engine.curves import sample_tracks
+    tracks = sample_tracks([
+        {"object_id": "robot-1", "category": "robot", "waypoints": [[2, 2], [13, 2], [13, 11], [2, 11]],
+         "speed": 1.2, "radius": 0.55, "delay": 0, "curve": "smooth", "mode": "loop"},
+        {"object_id": "pedestrian-1", "category": "pedestrian", "waypoints": [[15, 1], [8, 7], [15, 12]],
+         "speed": 1.1, "radius": 0.45, "delay": 0, "curve": "smooth", "mode": "stop"}])
+    assert len(tracks) == 2 and all(len(t.points) > 40 for t in tracks)
+    assert tracks[0].points[0][1] == tracks[0].position_at(0)

@@ -101,7 +101,10 @@ def validate_scene(obj: dict) -> dict:
         if not 0.1 <= radius <= 3: raise ModelError(f"object {i}: radius out of range")
         if not 0 <= delay <= 10: raise ModelError(f"object {i}: delay out of range")
         if cat != "shelf" and len(pts) > 1 and speed <= 0: raise ModelError(f"object {i}: moving object needs speed > 0")
+        curve = o.get("curve", "straight")
+        if curve not in ("straight", "smooth"): raise ModelError(f"object {i}: curve must be straight|smooth")
         out.append({"category": cat, "waypoints": pts, "speed": speed, "radius": radius, "delay": delay,
+                    "curve": curve,
                     "mode": o.get("mode") if o.get("mode") in ("stop", "loop", "pingpong") else "stop"})
     return {"name": str(obj.get("name", "muse-generated-scene"))[:64],
             "explanation": str(obj.get("explanation", ""))[:600], "objects": out}
@@ -114,7 +117,7 @@ def generate_scene(description: str) -> tuple[dict, dict]:
               '{"name": str, "explanation": str (one sentence), "objects": [{"category": one of '
               "forklift|pedestrian|robot|vehicle|cyclist|shelf, \"waypoints\": [[x,y],...] (1 point = static, "
               '2+ = path), "speed": number m/s (0 only for shelf), "radius": number m, "delay": number s, '
-              '"mode": "stop"|"loop"|"pingpong"}]}. Use 3-6 objects. Make paths physically plausible on the '
+              '"mode": "stop"|"loop"|"pingpong", "curve": "straight"|"smooth" (smooth = curved path through the waypoints; use it for patrols, turns and approaches)}]}. Use 3-6 objects. Make paths physically plausible on the '
               "stage, include at least one genuinely close interaction worth analysing, and do not claim "
               "any safety conclusion. Scene requested:\n" + description)
     text, meta = _call(prompt)
