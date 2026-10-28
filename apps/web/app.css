@@ -420,3 +420,5 @@ button.tilelink:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
 @media(max-width:900px){header{backdrop-filter:none;background:var(--bg)}}
 
 #auth-card{padding:0;background:transparent;box-shadow:none;border:0}#clerk-note:empty{display:none}
+
+#view-counterfactual .stagecard:has(.scene-size:not(:empty)) #cf-3d{height:clamp(140px,25dvh,280px)!important}

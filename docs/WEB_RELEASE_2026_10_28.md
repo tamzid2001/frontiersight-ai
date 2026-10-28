@@ -68,8 +68,8 @@ See [Scene editing API](SCENE_EDITING_API.md) and [coverage evidence](SCENE_EDIT
 ### Startup work
 
 Create Lab's starter and hidden canvas allocation are deferred until first use.
-The mobile navigation initializes before the application scripts; all three
-scripts use ordered `defer`. Guest workspace discovery no longer initializes
+The mobile navigation initializes before main content is parsed; the editor and
+application scripts use ordered `defer`. Guest workspace discovery no longer initializes
 Clerk on Overview, and hidden Counterfactual simulation is not run on page load.
 The existing Lighthouse budgets are unchanged.
 
@@ -84,3 +84,7 @@ benchmark index/TBT; its score thresholds and throttling remain unchanged.
 The healthy sign-in hint and outer card have been removed at the user's request;
 Clerk's own form remains. Error/retry feedback is retained when authentication
 cannot load.
+
+The example catalog preload now fences its delayed default-scene response, so
+it cannot overwrite a newer shared scene or user selection. Regression tests
+exercise both the race and the untouched initial-load path.

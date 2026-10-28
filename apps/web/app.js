@@ -104,8 +104,10 @@ async function loadScenarios(){let d;try{d=await(await fetch("/api/scenarios")).
  const v=await(await fetch("/api/validate")).json();
  $("validation-list").innerHTML=v.cases.map(c=>`<li>${c.passed?"✓":"✗"} <b>${c.case}</b> — <span class="dim">${c.detail}</span></li>`).join("");
  renderMyScenes();
- state.data=await(await fetch("/api/scenarios?name="+d.scenarios[0].id)).json();state.scenario=d.scenarios[0].id;
- renderObjects();draw();populateCfScene();   // silent preload: user stays on Overview
+ // Catalog loading must not replace a newer explicit scene/view handoff.
+ if(!state.dataUpdatedAt){const initial=await(await fetch("/api/scenarios?name="+d.scenarios[0].id)).json();
+  if(!state.dataUpdatedAt){state.data=initial;state.scenario=d.scenarios[0].id;
+   renderObjects();draw();populateCfScene();}} // silent preload: user stays on their current view
 }
 function renderMyScenes(){const host=$("scenario-list");if(!host)return;
  const old=$("my-scenes-card");if(old)old.remove();const oldRuns=$("runs-card");if(oldRuns)oldRuns.remove();

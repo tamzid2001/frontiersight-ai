@@ -157,3 +157,34 @@ test('legacy counterfactual framing includes complete physical footprints',async
  assert.ok(Math.abs(bounds.x0-.1)<1e-10);assert.equal(bounds.x1,5.4);
  for(const p of [[.1,.1],[5.4,3.4]]){const [x,y]=project(...p);assert.ok(x>=0&&x<=880&&y>=0&&y<=520);}
 });
+
+
+async function scenarioPreloadHarness(){
+ const {readFile}=await import('node:fs/promises'),vm=await import('node:vm');
+ const source=await readFile(new URL('../apps/web/app.js',import.meta.url),'utf8');
+ let resolveInitial,signalRequested;const requested=new Promise(resolve=>signalRequested=resolve),initial=new Promise(resolve=>resolveInitial=resolve);
+ const state={data:null,scenario:null},nodes=new Map(),calls=[];
+ const scope={state,$:id=>{if(!nodes.has(id))nodes.set(id,{});return nodes.get(id);},
+  populateCfScene:()=>{},populateStudioWorkspaces:()=>{},renderMyScenes:()=>{},renderObjects:()=>calls.push('objects'),draw:()=>calls.push('draw'),
+  fetch:async path=>({json:async()=>{
+   if(path==='/api/scenarios')return {scenarios:[{id:'example',description:'Fixture'}]};
+   if(path==='/api/validate')return {cases:[]};
+   signalRequested();return initial;
+  }})};
+ vm.runInNewContext(source.slice(source.indexOf('async function loadScenarios('),source.indexOf('function renderMyScenes(')),scope);
+ return {scope,state,calls,requested,resolveInitial};
+}
+
+test('late example preload cannot replace a newer explicit scene handoff',async()=>{
+ const h=await scenarioPreloadHarness(),loading=h.scope.loadScenarios();await h.requested;
+ const selected={id:'lab-current',stage_metres:[9,8],objects:[{id:'object-1'}]};
+ h.state.data=selected;h.state.scenario='lab-current';h.state.dataUpdatedAt=100;
+ h.resolveInitial({id:'example'});await loading;
+ assert.equal(h.state.data,selected);assert.equal(h.state.scenario,'lab-current');assert.deepEqual(h.calls,[]);
+});
+
+test('example preload still supplies the initial scene when no choice was made',async()=>{
+ const h=await scenarioPreloadHarness(),loading=h.scope.loadScenarios();await h.requested;
+ const example={id:'example'};h.resolveInitial(example);await loading;
+ assert.equal(h.state.data,example);assert.equal(h.state.scenario,'example');assert.deepEqual(h.calls,['objects','draw']);
+});
