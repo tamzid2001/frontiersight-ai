@@ -29,6 +29,7 @@
 <script type="importmap">{"imports":{"three":"/vendor/three.module.min.js","three/addons/":"/vendor/addons/"}}</script></head><body>
 <a class="skip" id="skip-link" href="#main">Skip to content</a>
 <header>
+ <div class="mobile-navigation"><button id="mobile-menu-toggle" type="button" class="ghostbtn" aria-label="Open navigation" aria-controls="mobile-navigation" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><button class="mobile-brand" data-goto="home" type="button">Frontier<span>Sight</span></button></div>
  <div class="headright">
   <div class="themeseg" role="group" aria-label="Colour theme">
    <button data-theme-mode="light" title="Light theme" aria-label="Light theme" aria-pressed="false">☀</button>
@@ -41,6 +42,7 @@
 </header>
 
 
+<span id="desktop-navigation-anchor" hidden></span>
 <nav id="tabs" aria-label="Primary">
  <div class="sidebrand">
   <img class="logomark" src="/logo-mark.svg" alt="FrontierSight AI logo" width="36" height="36">
@@ -62,6 +64,10 @@
  <button data-view="settings">⚙&nbsp; Settings</button>
  <button data-view="help">?&nbsp; Help &amp; guides</button>
 </nav>
+<dialog id="mobile-navigation" class="nav-drawer" aria-labelledby="mobile-navigation-title" closedby="any">
+ <div class="drawer-heading"><h2 id="mobile-navigation-title">Navigation</h2><form method="dialog"><button class="ghostbtn" aria-label="Close navigation" autofocus>✕</button></form></div>
+ <div id="mobile-navigation-slot"></div>
+</dialog>
 <main id="main" tabindex="-1">
 <section id="view-home" class="view on">
  <div class="hero-grid">
@@ -249,7 +255,9 @@
  <div class="card wide" id="sam-panel" style="margin-top:14px"><h3>SAM 3.1 Vision — segment your own image or video frame</h3>
   <p class="dim">Load an image or video (stays in your browser), then segment the current frame with SAM 3.1.
   For video: segment at two or more moments, then build tracks from the boxes (greedy-IoU association) and run
-  the full analysis on them. Detections are image-space — results stay in pixels unless you declare a scale in Create Lab terms.</p>
+  the full analysis on them. A still image can instead become a 2D cutout scene and an illustrative 3D mask extrusion. Detections are image-space — results stay in pixels unless you declare a scale in Create Lab terms.</p>
+  <div class="sam-gallery"><button type="button" id="sam-previous" class="ghostbtn" aria-label="Previous example photograph">← Previous</button><label for="sam-example">Physical AI example<select id="sam-example"><option value="warehouse">Warehouse</option></select></label><button type="button" id="sam-next" class="ghostbtn" aria-label="Next example photograph">Next →</button></div>
+  <p id="sam-photo-credit" class="dim">Photo: <a href="https://unsplash.com/@hdbernd" target="_blank" rel="noopener noreferrer">Bernd Dittrich</a> on <a href="https://unsplash.com/photos/a-forklift-driving-through-a-warehouse-filled-with-pallets-F2C_mSrb6iM" target="_blank" rel="noopener noreferrer">Unsplash</a>.</p>
   <div class="studio">
    <div>
     <input type="file" id="sam-file" accept="video/*,image/*" aria-label="Upload image or video for segmentation">
@@ -257,14 +265,14 @@
     <img id="sam-img" style="width:100%;display:none;border-radius:12px" alt="Uploaded still for segmentation">
     <canvas id="sam-canvas" width="880" height="520" role="img" aria-label="SAM segmentation overlay canvas"></canvas>
     <p class="dim">Captured frames: <b id="sam-count">0</b> · overlays show SAM boxes, stable ids and confidences.
-   The frame below is a <b>default example</b> (illustrative, generated with Muse Image) so you can try
-   segmentation immediately; load your own image or video to replace it.</p>
-   <button id="sam-restore" class="ghostbtn">Restore default frame</button>
+   The gallery contains attributed Unsplash photographs. Choose another example or upload your own image or video. Inference runs only when you press Segment.</p>
+   <button id="sam-restore" class="ghostbtn">Restore example photograph</button>
    </div>
    <aside>
     <label>Concept 1 (one noun phrase)<input id="sam-concept" value="person" style="width:100%"></label>
     <label>Concept 2 (optional)<input id="sam-concept2" value="forklift" style="width:100%"></label>
     <button id="sam-run">Segment current frame (SAM 3.1)</button>
+    <button id="sam-image-scene" type="button" class="ghostbtn" disabled>Build image-based 2D / 3D scene</button>
     <button id="sam-build" class="ghostbtn">Build tracks &amp; analyse captures</button>
    <button id="sam-save-ws" class="ghostbtn">Save frames as workspace</button>
     <p id="sam-status" role="status" class="dim"></p>
@@ -275,6 +283,11 @@
  </div>
  <div class="card wide" style="margin-top:14px"><h2>Motion &amp; geometry inspector</h2>
  <div id="inspector-body" class="dim">Run analysis in the Studio, then inspect measured tracks, coordinate frames, and uncertainty here.</div>
+ </div>
+<div class="card wide image-scene-panel" id="image-scene-panel" hidden>
+  <h2>Scene from your segmented image</h2><p class="dim">The 2D scene uses actual image pixels and decoded SAM masks. The 3D view extrudes those silhouettes with assumed thickness and layer positions; it is not a metric reconstruction or a physical safety model.</p>
+  <div class="row"><label class="chk"><input id="image-scene-background" type="checkbox" checked> Show original photograph for context</label><button id="image-scene-export" type="button" class="ghostbtn">Download scene JSON</button></div>
+  <p id="image-scene-status" role="status"></p><div class="image-scene-views"><section><h3>2D image space</h3><canvas id="image-scene-2d" aria-label="Image-space scene with extracted objects"></canvas></section><section><h3>3D silhouette approximations</h3><div id="image-scene-3d"></div></section></div><fieldset id="image-scene-objects"><legend>Extracted objects</legend></fieldset>
  </div>
 </section>
 
@@ -291,6 +304,7 @@
     <button id="lab-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
     <button id="lab-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
     <span class="dim">3D visualises the same 2D scene model — heights are illustrative, physics stays planar. Drag waypoints in 2D; click the 3D ground to add them.</span></div>
+   <div class="row scenery-options"><label for="scene-environment">Scenery</label><select id="scene-environment"><option value="auto">Match scene objects</option><option value="warehouse">Warehouse</option><option value="road">Street</option><option value="robotics">Robotics workcell</option></select><span class="dim">Visual context only; scenery is not included in collision analysis.</span></div>
    <canvas id="lab-canvas" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
    <div id="lab-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the Create Lab scene"></div>
    <div class="transport"><button id="lab-play">▶ Preview motion</button>
@@ -754,4 +768,4 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
  <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span>
 </footer>
 <div id="toasts" aria-live="polite"></div>
-<script src="app.js"></script></body></html>
+<script src="app.js"></script><script src="mobile-nav.js" defer></script></body></html>

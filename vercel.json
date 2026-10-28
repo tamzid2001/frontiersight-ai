@@ -204,6 +204,34 @@
     {
       "source": "/contact.html",
       "destination": "/api/index?ep=contact"
+    },
+    {
+      "source": "/mobile-nav.js",
+      "destination": "/api/index?ep=mobilenav"
+    },
+    {
+      "source": "/image-scene.mjs",
+      "destination": "/api/index?ep=imageview"
+    },
+    {
+      "source": "/image-scene-core.mjs",
+      "destination": "/api/index?ep=imagecore"
+    },
+    {
+      "source": "/scenery-core.mjs",
+      "destination": "/api/index?ep=scenerycore"
+    },
+    {
+      "source": "/scenery-three.mjs",
+      "destination": "/api/index?ep=scenerythree"
+    },
+    {
+      "source": "/sam-gallery.json",
+      "destination": "/api/index?ep=gallery"
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": "/api/index?ep=asset&file=$1"
     }
   ],
   "functions": {

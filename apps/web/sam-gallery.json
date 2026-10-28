@@ -1,0 +1,53 @@
+[
+  {
+    "id": "warehouse",
+    "title": "Forklift and warehouse pallets",
+    "author": "Bernd Dittrich",
+    "author_url": "https://unsplash.com/@hdbernd",
+    "photo_url": "https://unsplash.com/photos/a-forklift-driving-through-a-warehouse-filled-with-pallets-F2C_mSrb6iM",
+    "concepts": [
+      "forklift",
+      "pallet"
+    ],
+    "src": "/assets/sam-gallery/warehouse.jpg",
+    "source_download_url": "https://images.unsplash.com/photo-1645736315000-6f788915923b?auto=format&fit=max&fm=jpg&w=1280&q=80",
+    "sha256": "7e1e6967074cc274199c1bc4a04efc7c4142a2b4acbb7f2069e6f9e24377e932",
+    "license": "Unsplash License",
+    "license_url": "https://unsplash.com/license",
+    "verified_date": "2026-10-28"
+  },
+  {
+    "id": "factory",
+    "title": "Robot arm on an assembly line",
+    "author": "Homa Appliances",
+    "author_url": "https://unsplash.com/@homaappliances",
+    "photo_url": "https://unsplash.com/photos/blue-industrial-robot-arm-in-factory-sz1CHL7Pky0",
+    "concepts": [
+      "robot arm",
+      "machine"
+    ],
+    "src": "/assets/sam-gallery/factory.jpg",
+    "source_download_url": "https://images.unsplash.com/photo-1716191299980-a6e8827ba10b?auto=format&fit=max&fm=jpg&w=1280&q=80",
+    "sha256": "c70c1786298a1d23ef0847b42824257aac4eda1d78ebeae02a2b0aa594da4334",
+    "license": "Unsplash License",
+    "license_url": "https://unsplash.com/license",
+    "verified_date": "2026-10-28"
+  },
+  {
+    "id": "street",
+    "title": "Street crossing and traffic",
+    "author": "Binh Minh Duong",
+    "author_url": "https://unsplash.com/@dbmbmd",
+    "photo_url": "https://unsplash.com/photos/city-street-with-cars-and-pedestrian-crossing-hBFcT3i22rE",
+    "src": "/assets/sam-gallery/street.jpg",
+    "source_download_url": "https://images.unsplash.com/photo-1772489678302-9e11a75c1c09?auto=format&fit=max&fm=jpg&w=1280&q=80",
+    "sha256": "3e0f7ef9f9fd8196d5c29d9ce429a4feaf5e6bf21b3b9ffd1f7d39e7814ecad2",
+    "license": "Unsplash License",
+    "license_url": "https://unsplash.com/license",
+    "verified_date": "2026-10-28",
+    "concepts": [
+      "person",
+      "car"
+    ]
+  }
+]

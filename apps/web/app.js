@@ -1,5 +1,8 @@
 const $=id=>document.getElementById(id);
 const state={scenario:null,data:null,t:0,playing:false,run:null,cf:null};
+let sceneryPainter=null;
+function paintSceneContext(context,w,h,items){if(sceneryPainter)sceneryPainter(context,w,h,items,window.frontierSceneryChoice||'auto');}
+import('/scenery-core.mjs').then(module=>{sceneryPainter=module.paintScenery2D;draw();labDraw();drawCfMap();}).catch(()=>{});
 
 // ---- Real entity rendering (top-down vector silhouettes, heading-oriented) ----
 // Each kind is drawn in local space pointing +x, scaled by footprint radius px.
@@ -191,7 +194,7 @@ function posAt(track,t){const p=track.points;if(t<=p[0][0])return p[0];if(t>=p[p
  for(let i=1;i<p.length;i++){if(p[i][0]>=t){const[t0,a]=[p[i-1][0],p[i-1]],[t1,b]=[p[i][0],p[i]];const k=(t-t0)/(t1-t0||1);return[0,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];}}return p[p.length-1];}
 function draw(){if(window.__studio3dSync)window.__studio3dSync(state.data?state.data.tracks:[],state.t);
  const c=$("stage");if(!c||!state.data)return;computeWorld();const x=c.getContext("2d"),W=c.width,H=c.height;
- x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=WORLD.x;gx+=2){const[a]=px(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
+ x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.data.tracks);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=WORLD.x;gx+=2){const[a]=px(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  const _labels=[];
  for(const tr of state.data.tracks){const col=COL[tr.category]||"#fff";const hl=!state.highlight||state.highlight===tr.object_id;
   x.strokeStyle=col+(hl?"aa":"2a");x.lineWidth=hl?2:1;x.beginPath();tr.points.forEach(p=>{const[a,b]=px(p[1],p[2],W,H);p===tr.points[0]?x.moveTo(a,b):x.lineTo(a,b);});x.stroke();
@@ -325,7 +328,7 @@ function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t
 function drawCfMap(){if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
  const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
- x.clearRect(0,0,W,H);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+ x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.data?.tracks||[]);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
  const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other;
  for(const [oid,v] of Object.entries(r.results)){
   x.strokeStyle="#8fa0b8";x.lineWidth=1.2;x.beginPath();v.trajectories.original.forEach((p,i)=>{const[a,bb]=xy(p[3],p[4]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();
@@ -563,7 +566,7 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
  return profPosition(o,lt);}
 function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
  const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
- x.clearRect(0,0,W,H);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
+ x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.lab.objects);x.strokeStyle="rgba(34,65,70,.13)";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
  const _labLabels=[];
  for(const o of state.lab.objects){const col=COL[o.category]||"#fff",sel=o.id===state.lab.selected;
@@ -1050,56 +1053,37 @@ document.querySelectorAll(".quick-scn").forEach(b=>b.onclick=()=>pick(b.dataset.
 // ---- SAM Vision panel (Studio) ----
 state.samCaptures=[];
 function samStatus(m){const e=$("sam-status");if(e)e.textContent=m;}
-$("sam-file").onchange=e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
- if(f.size<=60*1024*1024&&(f.type.startsWith("video/")||f.type.startsWith("image/"))){state.samSource="upload";state.samCaptures=[];$("sam-count").textContent="0";}
- if(f.size>60*1024*1024){samStatus("File exceeds the 60 MB browser-preview bound.");e.target.value="";return;}
- const url=URL.createObjectURL(f),v=$("sam-video"),im=$("sam-img");
- if(f.type.startsWith("video/")){im.style.display="none";v.style.display="block";v.src=url;samStatus("Video loaded locally — pause on a moment, then Segment. Loading it uploads nothing.");}
- else if(f.type.startsWith("image/")){v.style.display="none";im.style.display="block";im.src=url;samStatus("Image loaded locally. Segment it with SAM 3.1.");}
- else samStatus("Unsupported type — use a video or image, or build the scene in Create Lab.");};
-state.samSource="default";
+state.samVersion=0;state.samSource="default";state.samGallery=[];state.samGalleryIndex=0;state.samObjectUrl=null;state.samImageScene=null;
+function resetSamSource(){state.samVersion++;state.samAbort?.abort();state.samCaptures=[];state.samLastCaptures=[];state.samLastFrame=null;$("sam-count").textContent="0";$("sam-image-scene").disabled=true;$("image-scene-panel").hidden=true;
+ if(state.samImageModule)state.samImageModule.clearImageScene();state.samImageScene=null;
+ if(state.samObjectUrl){URL.revokeObjectURL(state.samObjectUrl);state.samObjectUrl=null;}}
 const _samDefaultImg=new Image();
-_samDefaultImg.onload=()=>{if(state.samSource!=="default")return;
- const c=$("sam-canvas");if(!c)return;const x=c.getContext("2d");
- const s=Math.min(c.width/_samDefaultImg.naturalWidth,c.height/_samDefaultImg.naturalHeight);
- const w=_samDefaultImg.naturalWidth*s,hh=_samDefaultImg.naturalHeight*s;
- x.clearRect(0,0,c.width,c.height);x.drawImage(_samDefaultImg,(c.width-w)/2,(c.height-hh)/2,w,hh);
- samStatus("Default example frame loaded — press “Segment current frame” to run SAM 3.1 on it, or load your own image/video. Expect labelled boxes with confidences; zero matches is a valid result.");};
-_samDefaultImg.src="/sam-default.jpg";
-$("sam-restore").onclick=()=>{state.samSource="default";state.samCaptures=[];$("sam-count").textContent="0";
- $("sam-video").style.display="none";$("sam-img").style.display="none";
- if(_samDefaultImg.complete)_samDefaultImg.onload();
- samStatus("Default example frame restored. Press Segment to run SAM 3.1 on it.");};
-function samFrame(){if(state.samSource==="default"){
- const c=document.createElement("canvas");c.width=_samDefaultImg.naturalWidth;c.height=_samDefaultImg.naturalHeight;
- c.getContext("2d").drawImage(_samDefaultImg,0,0);return c;}
- const v=$("sam-video"),im=$("sam-img");
- const src=v.style.display!=="none"?(v.videoWidth&&v):(im.naturalWidth&&im);
- if(!src){samStatus("Load an image or video frame first.");return null;}
- const c=document.createElement("canvas");c.width=src.videoWidth||src.naturalWidth;c.height=src.videoHeight||src.naturalHeight;
- c.getContext("2d").drawImage(src,0,0);return c;}
-$("sam-run").onclick=async()=>{const c=samFrame();if(!c)return;
- const dataUrl=c.toDataURL("image/jpeg",0.85);
- if(dataUrl.length>11*1024*1024){samStatus("Encoded frame exceeds the ingest bound — use a lower-resolution source.");return;}
- const t=$("sam-video").style.display!=="none"?+$("sam-video").currentTime.toFixed(2):0;
- const concepts=[$("sam-concept").value.trim(),$("sam-concept2").value.trim()].filter(Boolean);
- const x=$("sam-canvas").getContext("2d");x.drawImage(c,0,0,$("sam-canvas").width,$("sam-canvas").height);
- samStatus("Calling SAM 3.1…");
- for(const concept of concepts){
-  let r;try{r=await(await fetch("/api/meta/segment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image_data_url:dataUrl,concept})})).json();}
-  catch(e){samStatus("Segmentation failed: API unreachable.");return;}
-  if(r.status==="BLOCKED_CREDENTIALS"){samStatus("Meta API is not configured on this server (BLOCKED_CREDENTIALS). Nothing was segmented or claimed.");return;}
-  if(r.error||r.status==="MODEL_ERROR"){samStatus("SAM error: "+(r.error||r.detail));return;}
-  const recs=(r.frames&&r.frames[0])?r.frames[0].records:[];
-  state.samCaptures.push({t,concept,records:recs});
-  const sx=$("sam-canvas").width/c.width,sy=$("sam-canvas").height/c.height;
-  x.strokeStyle=COL[concept]||"#38c6d9";x.lineWidth=2;
-  recs.forEach(rec=>{const b=rec.box;x.strokeRect(b.x1*sx,b.y1*sy,(b.x2-b.x1)*sx,(b.y2-b.y1)*sy);});
-  recs.forEach(rec=>{labelPill(x,`${concept} #${rec.object_id}${rec.confidence!=null?" "+rec.confidence.toFixed(2):""}`,rec.box.x1*sx+4,Math.max(14,rec.box.y1*sy-8),COL[concept]);});
-  $("sam-records").innerHTML=recs.length?recs.map(rec=>`<li><b>${concept} #${rec.object_id}</b> · box [${rec.box.x1},${rec.box.y1}]–[${rec.box.x2},${rec.box.y2}] · confidence ${rec.confidence!=null?rec.confidence.toFixed(3):"n/a"} · source <code>MODEL_DERIVED</code></li>`).join(""):'<li class="dim">SAM returned zero matches for this concept on this frame — a valid result, recorded as-is.</li>';
-  samStatus(`SAM 3.1 (${r.model||"sam-3.1"}): ${recs.length} "${concept}" object(s) at t=${t}s · ${r.latency_ms||"?"} ms · captures so far: ${state.samCaptures.length}.`);
-  obDone("muse");}
- $("sam-count").textContent=state.samCaptures.length;};
+_samDefaultImg.onload=()=>{if(state.samSource!=="default")return;const canvas=$("sam-canvas"),context=canvas.getContext("2d");context.clearRect(0,0,canvas.width,canvas.height);const scale=Math.min(canvas.width/_samDefaultImg.naturalWidth,canvas.height/_samDefaultImg.naturalHeight);context.drawImage(_samDefaultImg,(canvas.width-_samDefaultImg.naturalWidth*scale)/2,(canvas.height-_samDefaultImg.naturalHeight*scale)/2,_samDefaultImg.naturalWidth*scale,_samDefaultImg.naturalHeight*scale);samStatus("Example photograph ready. Segment it, then build an image-based scene. No inference runs until you press Segment.");};
+_samDefaultImg.src="/assets/sam-gallery/warehouse.jpg";
+function showSamExample(index){if(!state.samGallery.length)return;resetSamSource();state.samGalleryIndex=(index+state.samGallery.length)%state.samGallery.length;const item=state.samGallery[state.samGalleryIndex];state.samSource="default";state.samAttribution={author:item.author,authorUrl:item.author_url,photoUrl:item.photo_url,license:item.license,licenseUrl:item.license_url};$("sam-video").pause();$("sam-video").style.display="none";$("sam-img").style.display="none";_samDefaultImg.src=item.src;$("sam-example").value=item.id;
+ $("sam-concept").value=item.concepts[0];$("sam-concept2").value=item.concepts[1]||"";
+ const credit=$("sam-photo-credit");credit.replaceChildren(document.createTextNode("Photo: "));const author=document.createElement("a");author.href=item.author_url;author.textContent=item.author;author.target="_blank";author.rel="noopener noreferrer";const photo=document.createElement("a");photo.href=item.photo_url;photo.textContent="Unsplash";photo.target="_blank";photo.rel="noopener noreferrer";credit.append(author,document.createTextNode(" on "),photo,document.createTextNode(" · "+item.title));}
+fetch("/sam-gallery.json").then(response=>{if(!response.ok)throw Error("gallery unavailable");return response.json();}).then(items=>{state.samGallery=items;$("sam-example").replaceChildren(...items.map(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.title;return option;}));if(state.samSource==="default")showSamExample(0);}).catch(()=>samStatus("Example gallery unavailable. You can still upload an image."));
+$("sam-example").onchange=event=>showSamExample(state.samGallery.findIndex(item=>item.id===event.target.value));$("sam-previous").onclick=()=>showSamExample(state.samGalleryIndex-1);$("sam-next").onclick=()=>showSamExample(state.samGalleryIndex+1);$("sam-restore").onclick=()=>showSamExample(state.samGalleryIndex);
+$("sam-file").onchange=event=>{const file=event.target.files[0];event.target.value="";if(!file)return;const video=file.type.startsWith("video/"),image=/^image\/(jpeg|png|webp)$/.test(file.type);
+ if(!video&&!image){samStatus("Use a JPEG, PNG, WebP image or a browser-supported video.");return;}if(file.size>(video?60:12)*1024*1024){samStatus(video?"Video exceeds the 60 MB local preview limit.":"Image exceeds the 12 MB upload preview limit.");return;}
+ resetSamSource();state.samSource="upload";state.samAttribution=null;state.samObjectUrl=URL.createObjectURL(file);const v=$("sam-video"),im=$("sam-img");$("sam-photo-credit").textContent="Your uploaded media. Only a resized frame is sent when you press Segment.";
+ if(video){im.style.display="none";v.style.display="block";v.src=state.samObjectUrl;samStatus("Video loaded locally. Pause on a frame and segment it.");}
+ else{v.pause();v.style.display="none";im.style.display="block";im.onload=()=>{const frame=samFrame();if(frame){const c=$("sam-canvas");c.getContext("2d").drawImage(frame,0,0,c.width,c.height);}samStatus("Image ready. Segment it, then build a 2D / 3D image scene.");};im.src=state.samObjectUrl;}}
+function samFrame(){let src;if(state.samSource==="default")src=_samDefaultImg.complete&&_samDefaultImg.naturalWidth?_samDefaultImg:null;else{const v=$("sam-video"),im=$("sam-img");src=v.style.display!=="none"&&v.videoWidth?v:im.naturalWidth&&im;}
+ if(!src){samStatus("Wait for your image or paused video frame to finish loading.");return null;}const width=src.videoWidth||src.naturalWidth,height=src.videoHeight||src.naturalHeight,scale=Math.min(1,1440/Math.max(width,height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));canvas.getContext("2d").drawImage(src,0,0,canvas.width,canvas.height);return canvas;}
+$("sam-run").onclick=async()=>{const source=samFrame();if(!source)return;const button=$("sam-run"),version=state.samVersion;button.disabled=true;state.samAbort=new AbortController();const dataUrl=source.toDataURL("image/jpeg",.82);if(dataUrl.length>3_500_000){samStatus("The resized frame is still too large. Use a smaller image.");button.disabled=false;return;}
+ const t=$("sam-video").style.display!=="none"?+$("sam-video").currentTime.toFixed(2):0;const concepts=[...new Set([$("sam-concept").value.trim(),$("sam-concept2").value.trim()].filter(Boolean))];const captures=[];$("sam-image-scene").disabled=true;$("sam-records").replaceChildren();const overlay=$("sam-canvas"),context=overlay.getContext("2d");context.drawImage(source,0,0,overlay.width,overlay.height);
+ try{if(!concepts.length)throw Error("Enter at least one object concept.");for(const concept of concepts){samStatus('Segmenting “'+concept+'”…');const timer=setTimeout(()=>state.samAbort.abort(),55_000);let response;try{response=await fetch("/api/meta/segment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image_data_url:dataUrl,concept}),signal:state.samAbort.signal});}finally{clearTimeout(timer);}const result=await response.json();if(version!==state.samVersion)return;
+  if(!response.ok||result.status==="BLOCKED_CREDENTIALS"||result.status==="MODEL_ERROR")throw Error(result.error||result.detail||"SAM is not configured. No objects were segmented.");
+  const records=result.frames?.find(frame=>frame.frame===0)?.records||[];const capture={t,concept,records};captures.push(capture);state.samCaptures.push(capture);
+  for(const record of records){const box=record.box,sx=overlay.width/box.frame_w,sy=overlay.height/box.frame_h;context.strokeStyle=COL[concept]||"#38c6d9";context.lineWidth=2;context.strokeRect(box.x1*sx,box.y1*sy,(box.x2-box.x1+1)*sx,(box.y2-box.y1+1)*sy);labelPill(context,concept+' #'+record.object_id,box.x1*sx+4,Math.max(14,box.y1*sy-8),COL[concept]);const row=document.createElement("li");row.textContent=concept+' #'+record.object_id+' · '+(record.mask?.decoded?'decoded silhouette':'bounding box only')+' · confidence '+(record.confidence==null?'unavailable':record.confidence.toFixed(3));$("sam-records").append(row);}
+  if(!records.length){const row=document.createElement("li");row.textContent='No matches for “'+concept+'”. Nothing was invented.';$("sam-records").append(row);}}
+  state.samLastFrame=source;state.samLastCaptures=captures;$("sam-image-scene").disabled=!captures.some(capture=>capture.records.length);$("sam-count").textContent=state.samCaptures.length;samStatus(captures.reduce((sum,capture)=>sum+capture.records.length,0)+" detections. Build an image scene to inspect the extracted objects.");
+ }catch(error){samStatus(error.name==="AbortError"?"Segmentation cancelled or timed out.":error.message);}finally{button.disabled=false;}};
+$("sam-image-scene").onclick=async()=>{const button=$("sam-image-scene");button.disabled=true;const version=state.samVersion;try{if(!state.samLastFrame)throw Error("Segment the current image first.");state.samImageModule??=await import("/image-scene.mjs");$("image-scene-panel").hidden=false;const view=await state.samImageModule.buildImageScene(state.samLastFrame,state.samLastCaptures,$("image-scene-3d"),$("image-scene-2d"));if(version!==state.samVersion||!view)return;state.samImageScene=view;view.data.photoAttribution=state.samAttribution;$("image-scene-background").checked=true;$("image-scene-status").textContent=view.data.objects.length+(view.webgl?" image-derived objects. 3D thickness and depth are visual assumptions.":" image-derived objects in 2D. WebGL is unavailable on this device.");const host=$("image-scene-objects");host.replaceChildren();const legend=document.createElement("legend");legend.textContent="Show extracted objects (hide photograph to inspect)";host.append(legend);for(const object of view.data.objects){const label=document.createElement("label"),input=document.createElement("input");input.type="checkbox";input.checked=true;input.onchange=()=>view.setVisible(object.id,input.checked);label.append(input,document.createTextNode(object.label+' #'+object.sourceObjectId+' · '+(object.mask?'SAM silhouette':'box-region approximation')));host.append(label);}$("image-scene-panel").scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});}catch(error){samStatus(error.message);}finally{button.disabled=false;}};
+$("image-scene-background").onchange=event=>state.samImageScene?.setBackground(event.target.checked);
+$("image-scene-export").onclick=()=>{if(!state.samImageScene)return;download(new Blob([JSON.stringify({...state.samImageScene.data,sourceImage:state.samLastFrame.toDataURL('image/jpeg',.82)},null,2)],{type:'application/json'}),'frontiersight-image-scene.json');};
 $("sam-build").onclick=async()=>{if(state.samCaptures.length<2){samStatus("Segment at least two moments of a video first — one frame cannot produce motion.");return;}
  const byConcept={};state.samCaptures.forEach(f=>{(byConcept[f.concept]=byConcept[f.concept]||[]).push({t:f.t,records:f.records});});
  let all=[];for(const [concept,frames] of Object.entries(byConcept)){
@@ -1644,3 +1628,5 @@ $("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
 loadCustomObjects();
 
 $("workspace-more")?.addEventListener("click",loadMoreWorkspaces);
+
+$("scene-environment").onchange=event=>{window.frontierSceneryChoice=event.target.value;draw();labDraw();drawCfMap();};

@@ -17,7 +17,7 @@ from integrations.meta import spark, sam
 from integrations.meta.spark import BlockedCredentials, ModelError
 
 WEB = Path(__file__).resolve().parents[2] / "apps" / "web"
-TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg"}
+TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".json": "application/json", ".mjs": "text/javascript"}
 _cache: dict = {}
 MAX_BODY = 12 * 1024 * 1024          # 12 MB hard ingest bound
 RATE_LIMIT, RATE_WINDOW = 120, 60.0  # POST requests per IP per minute (best-effort, per-instance)
@@ -112,7 +112,10 @@ class H(BaseHTTPRequestHandler):
     def _route(self) -> str:
         u = urlparse(self.path)
         ep = parse_qs(u.query).get("ep", [None])[0]
-        return {"health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
+        if ep == "asset":
+            return "/assets/" + parse_qs(u.query).get("file", [""])[0]
+        return {"mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
+                "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
                 "samdefault": "/sam-default.jpg", "three": "/vendor/three.module.min.js", "orbit": "/vendor/addons/OrbitControls.js", "threeview": "/three-view.js",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
@@ -127,7 +130,7 @@ class H(BaseHTTPRequestHandler):
                 "scenecontext": "/api/scene-context", "authconfig": "/api/auth/config", "clerksync": "/api/auth/clerk-sync", "clerkwh": "/api/webhooks/clerk",
                 "transcribe": "/api/meta/transcribe", "genobj": "/api/meta/object", "objects": "/api/objects", "objdel": "/api/objects/delete",
                 "hypothesis": "/api/meta/hypothesis", "segment": "/api/meta/segment", "scene": "/api/meta/scene",
-                "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js", "contact": "/contact.html", "contact": "/contact.html"}.get(ep, u.path)
+                "validate": "/api/validate", "home": "/", "css": "/app.css", "js": "/app.js", "contact": "/contact.html"}.get(ep, u.path)
     def _send(self, code, body, ctype="application/json"):
         b = body if isinstance(body, bytes) else json.dumps(body).encode()
         self.send_response(code); self.send_header("Content-Type", ctype)

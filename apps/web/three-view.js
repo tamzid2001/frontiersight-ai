@@ -3,6 +3,8 @@
    Lazy-initialised on first open; renders only while visible. */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
+import { sceneryPlan, stagePoint } from './scenery-core.mjs';
+import { buildScenery } from './scenery-three.mjs';
 
 const REALC = { forklift: 0xe9a13b, pedestrian: 0xff7847, robot: 0xaebfd2,
   vehicle: 0x4d8dff, cyclist: 0xb07fe8, shelf: 0x8a6f4d, object: 0x9aa7b8 };
@@ -10,11 +12,10 @@ const BASER = { forklift: 0.9, pedestrian: 0.45, robot: 0.55, vehicle: 1.1, cycl
 let C = null;
 const INSTANCES = new Set();
 function disposeObject(root){root.traverse(m=>{
+ if(m.isInstancedMesh)m.dispose();
  if(m.geometry)m.geometry.dispose();
- if(m.material){(Array.isArray(m.material)?m.material:[m.material]).forEach(mm=>mm.dispose());}});}
+ if(m.material){(Array.isArray(m.material)?m.material:[m.material]).forEach(mm=>{mm.map?.dispose();mm.dispose();});}});}
 
-let EXTENT = [16, 14];
-const toThree = (x, y) => [x - EXTENT[0] / 2, EXTENT[1] / 2 - y]; // stage (y up) -> three (x, z)
 
 function mat(color, rough = 0.65) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.08 });
@@ -113,12 +114,17 @@ function create(container, hooks) {
   scene.add(new THREE.HemisphereLight(0xdfeaff, 0x1a2233, 1.15));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(8, 18, 6); scene.add(sun);
 
-  const _ext = hooks.extent ? hooks.extent() : [16, 14]; EXTENT = _ext;
+  const _ext = hooks.extent ? hooks.extent() : [16, 14];
+  const span = Math.max(..._ext);
+  camera.far = Math.max(200, span * 10); camera.position.set(0, span * 1.05, span * .95); camera.updateProjectionMatrix();
+  const toThree = (x, y) => stagePoint(x, y, _ext);
+  let decoration = null, decorationKind = null;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(_ext[0], _ext[1]),
     new THREE.MeshStandardMaterial({ color: new THREE.Color(cs.getPropertyValue("--panel2").trim() || "#10141c"), roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2; scene.add(ground);
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -.04; scene.add(ground);
   const grid = new THREE.GridHelper(_ext[0], Math.round(_ext[0]), 0x2a3650, 0x232c44);
-  grid.scale.z = _ext[1] / _ext[0]; grid.position.y = 0.01; scene.add(grid);
+  grid.scale.z = _ext[1] / _ext[0]; grid.position.y = 0.01;
+  grid.material.transparent = true; grid.material.opacity = .12; scene.add(grid);
   const border = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(_ext[0], _ext[1])),
     new THREE.LineBasicMaterial({ color: 0x38c6d9 }));
   border.rotation.x = -Math.PI / 2; border.position.y = 0.02; scene.add(border);
@@ -128,9 +134,20 @@ function create(container, hooks) {
   INSTANCES.add(state);
   renderer.domElement.addEventListener("webglcontextlost", e=>{e.preventDefault(); state.stop();
    if(hooks.onContextLost)hooks.onContextLost();});
-  controls.listenToKeyEvents(window);  // arrow keys pan the stage
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.setAttribute("aria-label", "3D scene. Drag to orbit, scroll to zoom; focus this canvas to pan with arrow keys.");
+  controls.listenToKeyEvents(renderer.domElement);
+
+  function updateScenery(items) {
+    const plan = sceneryPlan(items, _ext, globalThis.frontierSceneryChoice || "auto");
+    if (plan.kind === decorationKind) return;
+    if (decoration) { disposeObject(decoration); scene.remove(decoration); }
+    decoration = buildScenery(plan); decorationKind = plan.kind; scene.add(decoration);
+    scene.background = new THREE.Color(plan.sky);
+  }
 
   function rebuild(items) {
+    updateScenery(items);
     world.children.slice().forEach(ch=>{disposeObject(ch); world.remove(ch);});
     state.entities.clear();
     for (const o of items) {
@@ -158,6 +175,7 @@ function create(container, hooks) {
   }
 
   function setTime(items, t) {
+    updateScenery(items);
     for (const o of items) {
       const ent = state.entities.get(o.id); if (!ent) continue;
       const pos = hooks.pos(o, t); if (!pos) { ent.visible = false; continue; }
@@ -186,13 +204,13 @@ function create(container, hooks) {
     ray.setFromCamera(ndc, camera);
     const hit = new THREE.Vector3();
     if (ray.ray.intersectPlane(plane, hit) && hooks.onGroundClick)
-      hooks.onGroundClick(hit.x + EXTENT[0] / 2, EXTENT[1] / 2 - hit.z);
+      hooks.onGroundClick(hit.x + _ext[0] / 2, _ext[1] / 2 - hit.z);
   });
 
-  new ResizeObserver(() => {
+  const resize = new ResizeObserver(() => {
     const w = container.clientWidth; if (!w) return;
     renderer.setSize(w, 560); camera.aspect = w / 560; camera.updateProjectionMatrix();
-  }).observe(container);
+  }); resize.observe(container);
 
   function loop() {
     if (!state.visible) return;
@@ -202,6 +220,8 @@ function create(container, hooks) {
   state.rebuild = rebuild; state.setTime = setTime; state.hooks = hooks;
   state.start = () => { state.visible = true; cancelAnimationFrame(state.raf); loop(); };
   state.stop = () => { state.visible = false; cancelAnimationFrame(state.raf); };
+  state.dispose = () => { state.stop(); resize.disconnect(); controls.dispose();
+    disposeObject(scene); renderer.dispose(); renderer.domElement.remove(); INSTANCES.delete(state); };
   return state;
 }
 
@@ -233,7 +253,7 @@ export function syncLab3D(objects, t, force = false) {
 let S = null;
 export function showStudio3D(container, hooks) {
   const key = hooks.extent ? hooks.extent().join("x") : "16x14";
-  if (S && S._extentKey !== key) { container.innerHTML = ""; S.stop(); S = null; }
+  if (S && S._extentKey !== key) { S.dispose(); S = null; }
   if (!S) { S = create(container, hooks); S._extentKey = key; }
   S.start();
   return S;
@@ -252,7 +272,7 @@ export function refreshAll3DThemes() {
   const bg = cs.getPropertyValue("--canvas").trim() || "#0a0e1a";
   const panel = cs.getPropertyValue("--panel2").trim() || "#10141c";
   for (const s of INSTANCES) {
-    if (s.scene) s.scene.background = new THREE.Color(bg);
+    // Scenery keeps its physically legible daylight palette across UI themes.
     if (s.ground) s.ground.material.color = new THREE.Color(panel);
   }
 }
@@ -268,7 +288,7 @@ function cfPos(item, t) {
 }
 export function showCf3D(container, hooks) {
   const key = hooks.extent ? hooks.extent().join("x") : "16x14";
-  if (F && F._extentKey !== key) { container.innerHTML = ""; F.stop(); F = null; }
+  if (F && F._extentKey !== key) { F.dispose(); F = null; }
   if (!F) { F = create(container, { ...hooks, pos: cfPos }); F._extentKey = key; }
   F.start();
   return F;

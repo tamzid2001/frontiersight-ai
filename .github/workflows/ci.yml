@@ -9,6 +9,12 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "${{ matrix.python-version }}" }
       - run: pip install -e ".[dev]"
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - name: Image geometry and scenery controls (LCOV)
+        run: |
+          mkdir -p coverage
+          node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=70 --test-coverage-functions=90 --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/web-scenes.lcov --test-coverage-include='apps/web/*core.mjs' tests/web-scenes.test.mjs
       - run: python -m pytest -q --cov=engine --cov=agents --cov=integrations --cov=services --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
       - name: Export LCOV
         run: coverage lcov -o coverage.lcov
@@ -19,6 +25,7 @@ jobs:
           path: |
             coverage.xml
             coverage.lcov
+            coverage/web-scenes.lcov
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with: { files: coverage.xml, fail_ci_if_error: false }
