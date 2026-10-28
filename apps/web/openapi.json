@@ -1,0 +1,882 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FrontierSight Workbench API",
+    "version": "0.37.0",
+    "description": "Supported scene editing, canonical playback preparation, analysis/simulation handoff, segmentation and billing availability. This contract does not enumerate every legacy account endpoint. Single-image 3D visualization does not imply measured depth or physical calibration."
+  },
+  "servers": [
+    {
+      "url": "https://frontiersight-ai.vercel.app"
+    }
+  ],
+  "paths": {
+    "/api/scenes/resize": {
+      "post": {
+        "operationId": "resizeScene",
+        "summary": "Scale all paths into a new floor, fit sampled smooth-curve envelopes and keep physical radii and speeds unchanged.",
+        "description": "Pure computation: no saved record, account or billing state is modified. Save the returned scene separately through the authenticated scene-storage API. Anonymous per-client POST rate limits apply.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResizeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Edited scene",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scene, dimensions or position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request exceeds ingestion limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scenes/reposition": {
+      "post": {
+        "operationId": "repositionScene",
+        "summary": "Move one object’s first waypoint toward x/y, translating its complete path. Clamps movement to keep the path and footprint inside the floor.",
+        "description": "Pure computation: no saved record, account or billing state is modified. Save the returned scene separately through the authenticated scene-storage API. Anonymous per-client POST rate limits apply.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepositionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Edited scene",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scene, dimensions or position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request exceeds ingestion limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mcp": {
+      "get": {
+        "operationId": "getMcpCatalog",
+        "summary": "Describe the deterministic MCP tool catalog",
+        "responses": {
+          "200": {
+            "description": "Tool names, descriptions and transport information"
+          }
+        }
+      },
+      "post": {
+        "operationId": "callMcp",
+        "summary": "MCP JSON-RPC transport including resize_scene and reposition_scene",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "jsonrpc",
+                  "method"
+                ],
+                "properties": {
+                  "jsonrpc": {
+                    "type": "string",
+                    "const": "2.0"
+                  },
+                  "id": {
+                    "type": [
+                      "integer",
+                      "string"
+                    ]
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "params": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC response; tool failures have result.isError=true"
+          },
+          "202": {
+            "description": "Notification accepted without response body"
+          },
+          "400": {
+            "description": "Invalid JSON"
+          },
+          "429": {
+            "description": "Rate limit"
+          }
+        }
+      }
+    },
+    "/api/meta/segment": {
+      "post": {
+        "operationId": "segmentImage",
+        "summary": "Segment a user-supplied JPEG or PNG with SAM; return real decoded masks when available",
+        "description": "Model-backed operation; the deployment must have a Meta API key. The public demo uses its host key and applies a separate 30-request/minute model limit per client, in addition to the general POST limit. No match is a successful result with empty frames. A decode budget/failure is explicit (decoded=false); never treat a bounding box as a decoded silhouette. Image-derived extrusion depth remains an assumption, not calibrated geometry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image_data_url"
+                ],
+                "properties": {
+                  "image_data_url": {
+                    "type": "string",
+                    "maxLength": 3500000,
+                    "pattern": "^data:image/(jpeg|png);base64,"
+                  },
+                  "concept": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "default": "person",
+                    "description": "One short noun phrase; send separate requests for different concepts."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completed segmentation, including valid zero matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentationResult"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "BLOCKED_CREDENTIALS; no model run occurred"
+          },
+          "400": {
+            "description": "Invalid image or concept"
+          },
+          "413": {
+            "description": "Ingestion limit exceeded"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          },
+          "502": {
+            "description": "MODEL_ERROR; no completed segmentation result"
+          }
+        }
+      }
+    },
+    "/api/scenes/prepare": {
+      "post": {
+        "operationId": "prepareScene",
+        "summary": "Prepare a complete scene for Studio and Counterfactual playback",
+        "description": "Preserves declared floor, object definitions, custom appearance, path modes and physical radii. Samples bounded 10 Hz tracks over at most 20 seconds, carrying a scene digest. Requires every object to be placed. No saved state or model call.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical USER_UPLOADED scenario including stage_metres, objects, scene_digest and tracks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparedScene"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unplaced scene"
+          },
+          "413": {
+            "description": "Ingestion limit"
+          },
+          "429": {
+            "description": "Rate limit"
+          }
+        }
+      }
+    },
+    "/api/counterfactual-custom": {
+      "post": {
+        "operationId": "simulateCustomScene",
+        "summary": "Simulate a scene while preserving floor, definitions and physical footprints",
+        "description": "Pass a complete scene plus agent_id and optional target_id. Existing tracks-only requests remain supported. A complete scene is resampled on the server; supplied client tracks are not trusted as a substitute. Monte-Carlo limits follow authenticated plan entitlements; MCP is capped at 200. Responses include the input floor, definitions and digest alongside simulation results.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SceneSimulationRequest"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "tracks"
+                    ],
+                    "properties": {
+                      "tracks": {
+                        "type": "array"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Path-following comparison, declared scene context and provenance"
+          },
+          "400": {
+            "description": "Invalid scene, agent, target or parameters"
+          },
+          "402": {
+            "description": "Simulation budget exceeds the current plan"
+          },
+          "429": {
+            "description": "Rate limit"
+          }
+        }
+      }
+    },
+    "/api/analyze-custom": {
+      "post": {
+        "operationId": "analyzeCustomScene",
+        "summary": "Analyze a complete edited scene without losing its floor or definitions",
+        "description": "New clients pass scene. Legacy tracks requests remain supported. Returns run plus the canonical scenario with stage_metres, objects, digest and sampled tracks. Analysis may invoke a configured reasoning provider and consume model credits; this model-backed operation is not an MCP tool.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PrepareRequest"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "tracks"
+                    ],
+                    "properties": {
+                      "tracks": {
+                        "type": "array"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analysis run and canonical scenario"
+          },
+          "400": {
+            "description": "Invalid scene or tracks"
+          },
+          "429": {
+            "description": "Rate limit"
+          }
+        }
+      }
+    },
+    "/api/billing/config": {
+      "get": {
+        "operationId": "getBillingAvailability",
+        "summary": "Public offer and checkout availability without secret values",
+        "responses": {
+          "200": {
+            "description": "USD prices, supported periods and live/test/unavailable checkout mode. Availability does not claim a customer transaction was completed."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EditorObject": {
+        "type": "object",
+        "required": [
+          "waypoints"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "id"
+            ]
+          },
+          {
+            "required": [
+              "object_id"
+            ]
+          }
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "object_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "category": {
+            "type": "string"
+          },
+          "waypoints": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 0,
+            "maxItems": 24
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.5
+          },
+          "speed": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 8
+          },
+          "delay": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "curve": {
+            "type": "string",
+            "enum": [
+              "straight",
+              "smooth"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "stop",
+              "loop",
+              "pingpong"
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "description": "Unique id (or object_id). When both are present they must agree. Coordinates are metres. Appearance and other supplied fields are preserved; derived caches are discarded."
+      },
+      "EditableScene": {
+        "type": "object",
+        "required": [
+          "stage_metres",
+          "objects"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "stage_metres": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": 6,
+              "maximum": 60
+            }
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorObject"
+            },
+            "minItems": 0,
+            "maxItems": 24
+          }
+        },
+        "additionalProperties": true
+      },
+      "ResizeRequest": {
+        "type": "object",
+        "required": [
+          "scene",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "scene": {
+            "$ref": "#/components/schemas/EditableScene"
+          },
+          "width": {
+            "type": "number",
+            "minimum": 6,
+            "maximum": 60
+          },
+          "height": {
+            "type": "number",
+            "minimum": 6,
+            "maximum": 60
+          }
+        }
+      },
+      "RepositionRequest": {
+        "type": "object",
+        "required": [
+          "scene",
+          "object_id",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "scene": {
+            "$ref": "#/components/schemas/EditableScene"
+          },
+          "object_id": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        }
+      },
+      "EditResult": {
+        "type": "object",
+        "required": [
+          "scene",
+          "operation",
+          "source",
+          "persisted"
+        ],
+        "properties": {
+          "scene": {
+            "$ref": "#/components/schemas/EditableScene"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "resize",
+              "reposition"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "const": "DETERMINISTIC"
+          },
+          "persisted": {
+            "type": "boolean",
+            "const": false
+          },
+          "clamped": {
+            "type": "boolean"
+          },
+          "applied_translation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "physical_sizes_preserved": {
+            "type": "boolean"
+          },
+          "speeds_preserved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "SegmentationBox": {
+        "type": "object",
+        "required": [
+          "x1",
+          "y1",
+          "x2",
+          "y2",
+          "frame_w",
+          "frame_h"
+        ],
+        "properties": {
+          "x1": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y1": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "x2": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y2": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "frame_w": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "frame_h": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "SegmentationMask": {
+        "type": "object",
+        "required": [
+          "decoded"
+        ],
+        "properties": {
+          "decoded": {
+            "type": "boolean"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "png_data_url": {
+            "type": "string",
+            "pattern": "^data:image/png;base64,",
+            "description": "Actual decoded binary mask as a white/alpha PNG. Present only when decoding succeeded within budget."
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "SegmentationRecord": {
+        "type": "object",
+        "required": [
+          "object_id",
+          "box"
+        ],
+        "properties": {
+          "object_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "box": {
+            "$ref": "#/components/schemas/SegmentationBox"
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "mask": {
+            "$ref": "#/components/schemas/SegmentationMask"
+          }
+        }
+      },
+      "SegmentationResult": {
+        "type": "object",
+        "required": [
+          "frames",
+          "objects",
+          "diagnostics",
+          "model",
+          "concept"
+        ],
+        "properties": {
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "frame": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "records": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SegmentationRecord"
+                  }
+                }
+              }
+            }
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "model": {
+            "type": "string"
+          },
+          "concept": {
+            "type": "string"
+          },
+          "latency_ms": {
+            "type": "number"
+          }
+        }
+      },
+      "PrepareRequest": {
+        "type": "object",
+        "required": [
+          "scene"
+        ],
+        "properties": {
+          "scene": {
+            "$ref": "#/components/schemas/EditableScene"
+          }
+        }
+      },
+      "PreparedScene": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "stage_metres",
+          "objects",
+          "tracks",
+          "scene_digest"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "const": "USER_UPLOADED"
+          },
+          "stage_metres": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": 6,
+              "maximum": 60
+            }
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorObject"
+            },
+            "minItems": 0,
+            "maxItems": 24
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object_id",
+                "category",
+                "space",
+                "radius",
+                "points"
+              ],
+              "properties": {
+                "object_id": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "space": {
+                  "const": "world"
+                },
+                "radius": {
+                  "type": "number"
+                },
+                "points": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                }
+              }
+            }
+          },
+          "scene_digest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "SceneSimulationRequest": {
+        "type": "object",
+        "required": [
+          "scene",
+          "agent_id"
+        ],
+        "properties": {
+          "scene": {
+            "$ref": "#/components/schemas/EditableScene"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intervention_t": {
+            "type": "number",
+            "default": 1
+          },
+          "speed_reduction_pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 40
+          },
+          "braking_decel": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 6,
+            "default": 2.5
+          },
+          "mc_runs": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 100
+          }
+        }
+      }
+    }
+  }
+}

@@ -82,3 +82,52 @@ test('2D contexts paint all three environments and restore caller drawing state'
   assert.ok(fills>=3);assert.equal(saves,1);assert.equal(restores,1);
  }
 });
+
+// The browser and Python API use these same metre-space edit semantics.
+const {default: editor}=await import('../apps/web/stage-edit-core.js');
+test('resizing rescales every waypoint and does not mutate the source path',()=>{
+ const original=[[2,2],[8,7],[14,12]],copy=structuredClone(original);
+ assert.deepEqual(editor.resizePath(original,[16,14],[8,7],.5),[[1,1],[4,3.5],[7,6]]);
+ assert.deepEqual(original,copy);
+ assert.deepEqual(editor.resizePath([[8,7]],[16,14],[32,28],.5),[[16,14]]);
+});
+test('floor fitting uses the physical footprint and preserves relative path shape',()=>{
+ const fitted=editor.resizePath([[0,0],[16,14]],[16,14],[6,6],1);
+ assert.deepEqual(fitted,[[1,1],[5,5]]);
+ assert.deepEqual(editor.fitPath([], [6,6],1),[]);
+ assert.deepEqual(editor.fitPath([[10,20]],[8,8],1),[[7,7]]);
+ assert.deepEqual(editor.fitPath([[3,3],[3,3]],[6,6],3),[[3,3],[3,3]]);
+});
+test('whole-path translation clamps at boundaries without deforming the path',()=>{
+ const points=[[2,2],[5,4]],moved=editor.translatePath(points,100,-100,[10,8],1);
+ assert.deepEqual(moved.points,[[6,1],[9,3]]);assert.equal(moved.clamped,true);
+ assert.equal(moved.points[1][0]-moved.points[0][0],3);
+ assert.deepEqual(editor.translatePath(points,1,1,[10,8],1),{points:[[3,3],[6,5]],dx:1,dy:1,clamped:false});
+ assert.deepEqual(editor.translatePath([],1,1,[10,8],1).points,[]);
+});
+test('sampled smooth-curve envelopes also constrain dragging and resize fitting',()=>{
+ const points=[[2,2],[4,4]],envelope=[[1,1],[5,5]];
+ assert.equal(editor.translatePath(points,100,0,[6,6],1,envelope).dx,0);
+ const fitted=editor.fitPath(points,[6,6],1,[[0,0],[6,6]]);
+ assert.deepEqual(fitted,[[1+4/3,1+4/3],[1+8/3,1+8/3]]);
+});
+test('pointer coordinates respect CSS canvas sizing, vertical inversion and captured pointers outside the canvas',()=>{
+ const rect={left:100,top:200,width:800,height:400};
+ assert.deepEqual(editor.pointerPoint(500,400,rect,[16,14]),[8,7]);
+ assert.deepEqual(editor.pointerPoint(-500,1000,rect,[16,14]),[0,0]);
+ assert.deepEqual(editor.pointerPoint(1000,0,rect,[16,14]),[16,14]);
+});
+test('non-finite input, impossible footprints and unfittable rigid paths fail explicitly',()=>{
+ for(const stage of [[0,2],[1,NaN],[],[3,4,5]])assert.throws(()=>editor.fitPath([[1,1]],stage));
+ for(const points of [null,[[1]],[[NaN,2]],Array(10001).fill([1,2])])assert.throws(()=>editor.fitPath(points,[6,6]));
+ assert.throws(()=>editor.fitPath([[1,1]],[6,6],4));assert.throws(()=>editor.fitPath([[1,1]],[6,6],-1));
+ assert.throws(()=>editor.translatePath([[0,0],[10,10]],0,0,[6,6],1));
+ assert.throws(()=>editor.translatePath([[1,1]],Infinity,0,[6,6],1));
+ assert.throws(()=>editor.pointerPoint(1,1,{left:0,top:0,width:0,height:2},[6,6]));
+});
+test('the browser bundle exposes the same implementation without Node globals',async()=>{
+ const {readFile}=await import('node:fs/promises');const vm=await import('node:vm');const context={};
+ vm.runInNewContext(await readFile(new URL('../apps/web/stage-edit-core.js',import.meta.url),'utf8'),context);
+ assert.equal(typeof context.FrontierStageEdit.resizePath,'function');
+ assert.equal(context.FrontierStageEdit.resizePath([[8,7]],[16,14],[8,7])[0][0],4);
+});

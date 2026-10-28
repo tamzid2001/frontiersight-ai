@@ -95,7 +95,8 @@ def track_to_dict(tr: Track) -> dict:
 def scenario_to_dict(sc: dict) -> dict:
     return {"id": sc["id"], "description": sc["description"], "kind": sc["kind"],
             "calibration": sc["calibration"], "disclaimer": sc["disclaimer"],
-            "tracks": [track_to_dict(t) for t in sc["tracks"]], "ground_truth": sc["ground_truth"]}
+            "tracks": [track_to_dict(t) for t in sc["tracks"]], "ground_truth": sc["ground_truth"],
+            **{key: sc[key] for key in ("stage_metres", "objects", "scene_digest") if key in sc}}
 
 def export_fixtures(out_dir: str) -> list:
     out = FilePath(out_dir); out.mkdir(parents=True, exist_ok=True); written = []

@@ -363,3 +363,48 @@ button.tilelink:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
 @media(max-width:900px){.labobj .labctl input,.labobj .labctl select{font-size:16px;min-height:44px}}
 
 #view-auth{max-width:640px}#clerk-signin{display:flex;justify-content:center;min-width:0}#auth-card{padding:20px}
+
+.lab-edit-mode button[aria-pressed="true"]{background:var(--cyan);color:var(--accent-ink)}
+#lab-canvas{touch-action:none;-webkit-user-select:none;user-select:none;cursor:grab}#lab-canvas:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+#lab-edit-help{font-size:12px;margin:8px 0}.lab-edit-mode{gap:8px;margin:10px 0}.lab-edit-mode button{min-height:44px;padding:8px 12px}
+.lab-generator-label{margin-top:0!important}
+.studio-heading{align-items:center;gap:10px;margin-bottom:12px}.studio-heading h2{margin:0;font-size:24px}.studio-heading select{max-width:300px;min-width:0;flex:1}
+#view-studio .studio-workbench{align-items:start;grid-template-columns:minmax(0,2.2fr) minmax(260px,1fr)}
+#view-studio .stagecard,#view-studio .studio-inspector{min-width:0;padding:14px}
+.studio-surface{display:flex;align-items:center;justify-content:center;min-width:0}
+#view-studio #stage,#sam-panel #sam-canvas{width:auto;max-width:100%;height:auto;max-height:clamp(220px,42dvh,440px)}
+#view-studio #studio-3d{height:clamp(220px,42dvh,440px)!important}
+#view-studio .transport{gap:8px;flex-wrap:wrap}#view-studio .transport button{padding:8px 12px;min-height:38px}
+#view-studio .speedseg button{padding:7px 9px;min-height:36px}#view-studio .transport #scrub{flex:1 1 140px;min-width:80px}
+.studio-legend{margin-top:10px}.studio-legend summary,.studio-tools>summary{cursor:pointer;font-weight:650;min-height:44px;align-content:center}
+.studio-legend p{font-size:12px;margin:8px 0}.studio-inspector h3{margin:8px 0}.studio-inspector ul{padding-left:18px;margin:8px 0;font-size:13px}
+.studio-inspector{max-height:calc(100dvh - 235px);overflow:auto;scrollbar-gutter:stable}.studio-tools[open]>summary{margin-bottom:12px}
+#sam-panel .studio{align-items:start}#sam-panel video,#sam-panel #sam-img{max-height:340px;object-fit:contain}#sam-panel input[type="file"]{min-width:0;width:100%}
+@media(max-width:1000px){#view-studio .studio-workbench{grid-template-columns:1fr}.studio-inspector{max-height:240px}.studio-heading select{flex-basis:180px;max-width:100%}}
+@media(max-width:600px){.studio-heading h2{font-size:22px}.studio-heading{align-items:stretch}.studio-heading #scenario-select{flex-basis:100%;width:100%}#view-studio .stagecard{padding:10px}#view-studio .transport #scrub{order:4;flex-basis:100%}#view-studio .transport button{min-height:44px}}
+
+/* Keep the comparison map, playback and intervention controls together. */
+#view-counterfactual>h2{margin:0 0 8px;font-size:24px}.cf-intro{margin:0 0 12px}
+.cf-context{padding:12px 14px;margin-bottom:12px}.cf-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.cf-fields label{margin:0;min-width:0}.cf-fields select{width:100%;min-width:0;min-height:40px}
+.cf-presets{gap:6px;flex-wrap:wrap;margin-top:8px}.cf-presets button{min-height:38px;padding:7px 10px;font-size:12px}
+#view-counterfactual .cf-workbench{align-items:start;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:14px}
+#view-counterfactual .stagecard,.cf-inspector{min-width:0;padding:14px}.cf-view-controls{align-items:center;gap:8px;margin:0 0 10px}.cf-view-controls h3{margin:0 auto 0 0}.cf-view-controls button{padding:7px 10px;min-height:38px}
+.cf-surface{display:flex;align-items:center;justify-content:center;min-width:0}#cf-map{width:auto;max-width:100%;height:auto;max-height:clamp(160px,28dvh,300px)}
+#cf-3d{height:clamp(160px,28dvh,300px)!important;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+#view-counterfactual .transport{flex-wrap:wrap;gap:8px;margin:10px 0 0}#view-counterfactual .transport button{padding:8px 10px;min-height:40px}#cf-scrub{min-width:80px;flex:1 1 100px}
+#view-counterfactual .studio-legend>summary,.cf-separation>summary{min-height:36px;align-content:center;cursor:pointer;font-weight:650}.cf-separation p{font-size:12px;margin:8px 0}#cf-chart{width:auto;max-width:100%;height:auto;max-height:200px;margin:auto;display:block}
+.cf-inspector{max-height:calc(100dvh - 350px);overflow:auto;scrollbar-gutter:stable;overscroll-behavior-y:contain}.cf-inspector:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}.cf-inspector h3{margin:0 0 12px}.cf-inspector>label{margin:10px 0}.cf-inspector>button{min-height:44px}#cf-results{font-size:12px;line-height:1.6}
+@media(max-width:1000px){#view-counterfactual .cf-workbench{grid-template-columns:1fr}.cf-inspector{max-height:none;overflow:visible}#cf-map{max-height:clamp(180px,35dvh,340px)}}
+@media(max-width:600px){.cf-fields{grid-template-columns:1fr;gap:8px}.cf-context,.cf-inspector,#view-counterfactual .stagecard{padding:12px}.cf-fields select,.cf-presets button,.cf-view-controls button{min-height:44px}.cf-presets{gap:8px}.cf-presets button{flex:1 1 calc(50% - 8px)}.cf-presets>span{flex-basis:100%}#cf-scrub{order:3;flex-basis:100%}}
+
+.scene-size{font-size:12px;margin:0 0 6px}.scene-size:empty{display:none}
+#view-counterfactual .stagecard:has(.scene-size:not(:empty)) #cf-map{max-height:clamp(140px,25dvh,280px)}
+
+/* Product-focused pricing and a compact, branded Clerk entry point. */
+.pricing-intro{max-width:850px;padding:12px 0}.eyebrow{display:block;color:var(--cyan);font-size:12px;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.pricing-intro h2{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;margin:10px 0}.pricing-intro .sub{line-height:1.65}.billing-switch{gap:12px;margin:20px 0 8px}.billing-switch>span:first-child{font-weight:650}#billing-availability{font-size:13px;max-width:740px}
+.plan{display:flex;flex-direction:column;min-width:0}.plan>ul{flex:1;line-height:1.65}.plan>button{min-height:46px}.plan-footnote{font-size:12px;color:var(--dim);margin:10px 0 0}.pricing-faq details{border-bottom:1px solid var(--line);padding:12px 0}.pricing-faq details:last-child{border-bottom:0}.pricing-faq summary{cursor:pointer;min-height:36px;align-content:center;font-weight:650}.pricing-faq p{max-width:850px;color:var(--dim);line-height:1.65}
+#view-auth{max-width:560px;padding-top:30px}.auth-intro{text-align:center;max-width:460px;margin:0 auto 22px}.auth-intro>img{display:block;margin:0 auto 18px}.auth-intro h2{font-size:clamp(26px,4vw,32px);letter-spacing:-.025em;margin:12px 0}.auth-intro>p{color:var(--dim);font-size:15px;line-height:1.65}.auth-intro .eyebrow{font-size:10px}
+#auth-card{padding:16px;background:var(--panel);box-shadow:0 12px 40px rgb(0 0 0 / .06)}#clerk-note{font-size:13px;text-align:center;margin:0 0 12px}.clerk-auth-root,.clerk-auth-card{width:100%;max-width:420px}.clerk-auth-surface{box-shadow:none;border:0;width:100%;border-radius:12px}.auth-support{font-size:13px;text-align:center;color:var(--dim)}.auth-support a{color:var(--cyan)}
+@media(max-width:600px){.billing-switch{align-items:stretch}.billing-switch button{min-height:44px}#view-auth{padding:22px 14px}.auth-intro{margin-bottom:16px}#auth-card{padding:10px}}
+
+#view-auth{padding-top:20px}.auth-intro>img{width:40px;height:40px;margin-bottom:12px}.auth-intro{margin-bottom:16px}#clerk-signin .clerk-auth-surface{box-shadow:none;border:0;padding:20px}

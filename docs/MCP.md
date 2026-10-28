@@ -31,12 +31,13 @@ claude mcp add frontiersight -- python3 scripts/mcp_stdio.py
 
 | Tool | What it does |
 |---|---|
+| `resize_scene` / `reposition_scene` | Resize metre-space floors/paths or move an object and its path; pure transforms with explicit bounds and no persistence. [Contract and examples](SCENE_EDITING_API.md) |
 | `server_info` | Identity, protocol, honesty labels |
 | `list_scenarios` / `get_scenario` | Built-in scenarios; observations + separately-held ground truth |
 | `analyse_scenario` | Per-pair measured (along-trajectory) + predicted (CPA/TTC) proximity — no LLM |
 | `analyse_tracks` | Same analysis for your tracks; pixel space never fakes metres |
-| `simulate_counterfactual` | Path-following braking simulation (agent slows along its own curved path); anonymous Monte-Carlo cap 200 |
-| `sample_paths` | Waypoints + straight/smooth curves → timestamped tracks (Catmull-Rom, arc-length) |
+| `simulate_counterfactual` | Path-following braking simulation (agent slows along its own curved path); anonymous Monte-Carlo cap 200; accepts a complete edited `scene`, agent and optional target |
+| `sample_paths` | Complete `scene` → floor, object definitions, digest and timestamped tracks. Legacy objects-only input remains supported. |
 | `validate_scene` | Create Lab scene schema validation — rejects, never repairs |
 
 ## Protocol notes

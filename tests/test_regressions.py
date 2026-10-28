@@ -65,7 +65,7 @@ def test_inspector_inside_studio_and_entities():
 def test_pricing_and_auth_are_honest():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     assert 'id="view-pricing"' in html and 'id="view-auth"' in html
-    assert "stripe is not configured" in html.lower()  # honest demo-deployment state
+    assert 'id="billing-availability"' in html  # availability is server-declared, not frozen demo copy
     pricing = html[html.index('id="view-pricing"'):html.index('id="view-auth"')]
     assert "◷" not in pricing and "planned launch" not in pricing.lower()
     assert 'id="clerk-signin"' in html and 'id="sub-btn"' in html
@@ -227,7 +227,7 @@ def test_spark_quality_and_no_beta():
     spark = (ROOT / "integrations/meta/spark.py").read_text()
     assert "scene_quality" in spark and "PATH DESIGN RULES" in spark
     assert "(beta)" not in html
-    assert "hitPath" in js and "nearestWpSegment" in js and "pathDrag" not in js or "pathDrag" in js
+    assert "beginObjectDrag" in js and "moveLabObjectTo" in js and "setLabEditMode" in js
     assert "refreshAll3DThemes" in (ROOT / "apps/web/three-view.js").read_text()
 
 

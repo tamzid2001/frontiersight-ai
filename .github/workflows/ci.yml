@@ -14,10 +14,25 @@ jobs:
       - name: Image geometry and scenery controls (LCOV)
         run: |
           mkdir -p coverage
-          node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=70 --test-coverage-functions=90 --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/web-scenes.lcov --test-coverage-include='apps/web/*core.mjs' tests/web-scenes.test.mjs
+          node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=70 --test-coverage-functions=90 --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/web-scenes.lcov --test-coverage-include='apps/web/*core.mjs' --test-coverage-include='apps/web/*core.js' tests/web-scenes.test.mjs
       - run: python -m pytest -q --cov=engine --cov=agents --cov=integrations --cov=services --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
       - name: Export LCOV
         run: coverage lcov -o coverage.lcov
+      - name: Scene editing and billing contract coverage gate
+        run: |
+          python -m pytest -q tests/test_scene_edit.py tests/test_checkout_contract.py tests/test_billing.py --cov=engine.scene_edit --cov=integrations.billing --cov-branch --cov-fail-under=90 --cov-report=xml:coverage/workbench-release.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          report = ET.parse('coverage/workbench-release.xml').getroot()
+          assert int(report.attrib['lines-covered']) > 0
+          assert float(report.attrib['line-rate']) >= 0.9
+          assert float(report.attrib['branch-rate']) >= 0.7
+          classes = report.findall('.//class')
+          assert len(classes) == 2
+          for source in classes:
+              assert float(source.attrib['line-rate']) >= 0.9
+              assert float(source.attrib['branch-rate']) >= 0.7
+          PY
       - name: Upload coverage artifacts (Cobertura + LCOV)
         uses: actions/upload-artifact@v4
         with:
@@ -26,6 +41,7 @@ jobs:
             coverage.xml
             coverage.lcov
             coverage/web-scenes.lcov
+            coverage/workbench-release.xml
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
         with: { files: coverage.xml, fail_ci_if_error: false }

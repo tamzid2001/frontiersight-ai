@@ -17,7 +17,7 @@ const REAL={forklift:{body:"#e9a13b",dark:"#8a5a16",metal:"#9aa7b8",tyre:"#20262
  shelf:{body:"#8a6f4d",box:"#b08d5f",dark:"#5d4630"}, object:{body:"#9aa7b8",dark:"#5d7186"}};
 function rr(x,a,b,w,h,r){x.beginPath();x.roundRect(a,b,w,h,r);}
 function drawEntity(x,kind,cx,cy,s,heading,phase){
- const C=REAL[kind]||REAL.object; if(s<3)s=3;
+ const C=REAL[kind]||REAL.object; if(s<3)s=3;s/=({forklift:1.5,pedestrian:1.05,robot:1.05,vehicle:1.4,cyclist:1.05,shelf:1.37,object:1}[kind]||1);
  x.save(); x.translate(cx,cy); if(kind!=="shelf")x.rotate(heading||0);
  if(kind==="forklift"){
    x.fillStyle=C.tyre;[[-.62,-.52],[.42,-.52],[-.62,.52],[.42,.52]].forEach(w=>{x.beginPath();x.arc(w[0]*s,w[1]*s,s*.17,0,7);x.fill();});
@@ -72,20 +72,21 @@ const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc
 // tabs
 function showView(v){
  if(["create","studio","counterfactual"].includes(v))loadScenery();
- if(v==="studio")initSamGallery();
+ if(v==="studio"){$("studio-source-pill").textContent=state.data?.kind==="USER_UPLOADED"?"Your scene":"Fixture replay";}
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
   if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
  window.scrollTo(0,0);
- if(v==="studio")draw();
+ if(v==="studio"){draw();syncLabToCfIfNewer().then(()=>{if($("view-studio").classList.contains("on"))draw();}).catch(error=>toast(error.message,"err"));}
  if(v==="create"){if(typeof labDraw==="function")labDraw();
    if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
  if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
- if(v==="auth"||v==="pricing")initClerk();
+ if(v==="auth")initClerk();
+ if(v==="pricing")refreshBillingAvailability();
  if(v==="workspace")loadScenarioCounts();
  if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
-   if(!changed&&state.cfData){drawCfMap();drawCfChart();}});}}
+   if(!changed&&state.cfData){drawCfMap();drawCfChart();}}).catch(error=>{$("cf-results").textContent=error.message;});}}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 function goto(v){showView(v);}
 
@@ -117,18 +118,19 @@ function renderMyScenes(){const host=$("scenario-list");if(!host)return;
  div.querySelectorAll("[data-mine]").forEach(b=>b.onclick=()=>analyzeCustom(mine[+b.dataset.mine].tracks,mine[+b.dataset.mine].id));
  div.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{mine.splice(+b.dataset.del,1);localStorage.setItem(sceneStoreKey(),JSON.stringify(mine));div.remove();renderMyScenes();});}
 function resetRunState(){state.run=null;state.cfData=null;state.cfDataKey=null;state.cfT=0;state.highlight=null;state.cfAgentId=null;
- state.approvals={};const ev=$("events");if(ev)ev.innerHTML='<li class="dim">Run analysis to detect events.</li>';
+ state.cfPlaying=false;_cfSeq++;const cp=$("cf-play");if(cp)cp.textContent="▶ Play comparison";for(const id of ["cf-map","cf-chart"]){const c=$(id);if(c)c.getContext("2d").clearRect(0,0,c.width,c.height);}state.approvals={};const ev=$("events");if(ev)ev.innerHTML='<li class="dim">Run analysis to detect events.</li>';
  const tr=$("trace");if(tr)tr.innerHTML='<li class="dim">Run analysis to populate the trace.</li>';
  if(typeof syncApprovalUI==="function")syncApprovalUI();}
 window.pick=async id=>{let d;try{d=await(await fetch("/api/scenarios?name="+id)).json();}
  catch(e){toast("Could not load scenario "+id+" — check the API and try again.","err");return;}
  resetRunState();state.data=d;state.scenario=id;state.t=0;state.dataUpdatedAt=Date.now();
- $("scenario-select").value=id;renderObjects();draw();populateCfScene();goto("studio");};
+ $("scenario-select").value=id;renderObjects();if(state.studioView==="3d")await setStudioView("3d");draw();populateCfScene();goto("studio");};
 function populateStudioWorkspaces(){const sel=$("scenario-select");if(!sel)return;
  const cur=sel.value;
  const builtins=(state.scenarioList||[]).map(s=>`<option value="${s.id}">${s.id}</option>`).join("");
  const mine=(state.workspaces||[]).filter(w=>w.objects||w.tracks);
  sel.innerHTML=`<optgroup label="Built-in examples">${builtins}</optgroup>`+
+  (state.data?.id==="lab-current"?'<option value="lab-current">Current Create Lab scene</option>':"")+
   (mine.length?`<optgroup label="My workspaces">${mine.map(w=>`<option value="ws:${w.key}">${w.name} (${w.kind==="frames"?"SAM frames":"Lab scene"})</option>`).join("")}</optgroup>`:"");
  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
  else if(state.scenario&&[...sel.options].some(o=>o.value===state.scenario))sel.value=state.scenario;}
@@ -150,7 +152,7 @@ async function loadWorkspaceIntoStudio(w){
  state.data={id:"ws-"+w.id,description:`Your workspace "${w.name}"`,kind:"USER_UPLOADED",
   calibration:{metres_per_pixel:null,frame:tracks[0].space==="world"?"Create Lab stage (metres)":"image (pixels)"},
   disclaimer:"User workspace. Metric claims only when tracks are in world space.",
-  tracks,ground_truth:{}};
+  tracks,objects:w.objects||null,stage_metres:w.stage_metres||null,ground_truth:{}};
  state.scenario=state.data.id;state.t=0;
  const sel=$("scenario-select");if(sel)sel.value="ws:"+w.key;
  renderObjects();draw();populateCfScene();goto("studio");
@@ -165,7 +167,7 @@ async function setStudioView(v){state.studioView=v;localStorage.setItem("fs-view
   try{
    if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
    const mod=window.__lab3dMod;
-   const hooks={extent:()=>{if(!state.data)return [16,14];
+   const hooks={extent:()=>{if(!state.data)return [16,14];if(state.data.stage_metres)return state.data.stage_metres;
      let mx=16,my=14;state.data.tracks.forEach(tr=>tr.points.forEach(p=>{mx=Math.max(mx,p[1]);my=Math.max(my,p[2]);}));
      return [Math.ceil(mx*1.08),Math.ceil(my*1.08)];},
     pos:(item,t)=>{const p=posAt(item._tr,t);return p?[p[1],p[2]]:null;}};
@@ -179,19 +181,26 @@ async function setStudioView(v){state.studioView=v;localStorage.setItem("fs-view
 $("studio-view-2d").onclick=()=>setStudioView("2d");
 $("studio-view-3d").onclick=()=>setStudioView("3d");
 $("scenario-select").onchange=e=>{const v=e.target.value;
+ if(v==="lab-current"){goto("studio");return;}
  if(v.startsWith("ws:")){const w=(state.workspaces||[]).find(x=>x.key===v.slice(3));
   if(w){loadWorkspaceIntoStudio(w);return;}}
  pick(v);};
 
 function renderObjects(){if(!state.data)return;
+ const definitions=new Map((state.data.objects||[]).map(o=>[o.id||o.object_id,o]));
+ state.data.tracks.forEach(tr=>{tr._lab=definitions.get(tr.object_id);});
+ const floor=state.data.stage_metres;
+ if(floor){$("stage").width=880;$("stage").height=Math.round(880*floor[1]/floor[0]);$("stage").setAttribute("aria-label",`Scene stage: ${floor[0]} by ${floor[1]} metre floor, ${state.data.tracks.length} components`);}
+ else{$("stage").width=880;$("stage").height=520;}
+ const context=$("studio-scene-size");if(context)context.textContent=floor?`${floor[0]} × ${floor[1]} m · ${state.data.tracks.length} components`:"";
  const tEnd=Math.max(1,...state.data.tracks.map(t=>t.points.length?t.points[t.points.length-1][0]:0));
  const sc=$("scrub");if(sc)sc.max=tEnd.toFixed(2);state.duration=tEnd;
- $("objects").innerHTML=state.data.tracks.map(t=>`<li class="objrow" data-id="${t.object_id}" title="Click to highlight this track"><b style="color:${COL[t.category]||"#fff"}">●</b> ${t.object_id} · ${t.category} · <span class="dim">${t.source}, ${t.points.length} obs${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");
+ $("objects").innerHTML=state.data.tracks.map(t=>`<li class="objrow" data-id="${htmlText(t.object_id)}" title="Click to highlight this track"><b style="color:${COL[t.category]||"#fff"}">●</b> ${htmlText(t.object_id)} · ${htmlText(t.category)} · <span class="dim">${htmlText(t.source)}, ${t.points.length} obs${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");
  document.querySelectorAll(".objrow").forEach(el=>el.onclick=()=>{state.highlight=state.highlight===el.dataset.id?null:el.dataset.id;draw();});
  populateCfAgents();}
 
 let WORLD={x:15,y:14};
-function computeWorld(){if(!state.data)return WORLD;let mx=1,my=1;
+function computeWorld(){if(!state.data)return WORLD;if(Array.isArray(state.data.stage_metres)){WORLD={x:state.data.stage_metres[0],y:state.data.stage_metres[1]};return WORLD;}let mx=1,my=1;
  state.data.tracks.forEach(t=>t.points.forEach(p=>{mx=Math.max(mx,p[1]);my=Math.max(my,p[2]);}));
  WORLD={x:mx*1.12,y:my*1.12};return WORLD;}
 function px(x,y,W,H){return [x/WORLD.x*W, H-(y/WORLD.y*H)];}
@@ -208,7 +217,7 @@ function draw(){if(!$("view-studio").classList.contains("on"))return;if(window._
   x.globalAlpha=hl?1:0.35;
   if(occ){x.strokeStyle="#f26d7d";x.lineWidth=2.5;x.setLineDash([5,4]);x.beginPath();x.arc(a,b,r+7,0,7);x.stroke();x.setLineDash([]);}
   const hd=headingAt(tr,state.t); if(hd!==null)state["hd_"+tr.object_id]=hd;
-  drawEntity(x,tr.category,a,b,Math.max(9,r),state["hd_"+tr.object_id]||0,state.t*7);
+  if(tr._lab?.custom)drawCustom2D(x,tr._lab,a,b,r,state["hd_"+tr.object_id]||0);else drawEntity(x,tr.category,a,b,r,state["hd_"+tr.object_id]||0,state.t*7);
   _labels.push([`${tr.object_id}${occ?" · OCCLUDED":""}`,a+r+8,b-9,col,hl]);
   x.globalAlpha=1;x.lineWidth=1;}
  _labels.forEach(L=>{x.globalAlpha=L[4]?1:0.4;labelPill(x,L[0],L[1],L[2],L[3]);});x.globalAlpha=1;
@@ -217,7 +226,7 @@ $("scrub").oninput=e=>{state.t=+e.target.value;draw();};
 // (play handler replaced by the speed-aware version below)
 
 $("analyze").onclick=async()=>{
- if(state.data&&state.data.kind==="USER_UPLOADED"){try{await analyzeCustom(state.data.tracks,state.scenario);}catch(e){}return;}
+ if(state.data&&state.data.kind==="USER_UPLOADED"){try{await analyzeCustom(state.data.tracks,state.scenario,state.data.stage_metres,state.data.objects?{id:state.data.id,stage_metres:state.data.stage_metres,objects:state.data.objects}:null);}catch(e){}return;}
  $("analyze-status").textContent="Running bounded agent workflow…";
  let r;try{r=await(await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
   body:JSON.stringify({scenario:state.scenario,speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:$("approve").checked})})).json();}
@@ -253,11 +262,11 @@ function populateCfScene(){const sel=$("cf-scene");if(!sel)return;const cur=sel.
  sel.value=(state.data&&state.data.kind==="USER_UPLOADED")?"__current":(state.scenario||sel.value);}
 function populateCfAgents(){const sel=$("cf-agent"),tg=$("cf-target");if(!sel||!state.data)return;
  const prevA=sel.value,prevT=tg?tg.value:"";
- sel.innerHTML=state.data.tracks.map(t=>`<option value="${t.object_id}">${t.object_id}</option>`).join("");
+ sel.innerHTML=state.data.tracks.map(t=>`<option value="${htmlText(t.object_id)}">${htmlText(t.object_id)}</option>`).join("");
  if(prevA&&state.data.tracks.some(t=>t.object_id===prevA))sel.value=prevA;
  if(state.cfAgentId)sel.value=state.cfAgentId;
  if(tg){const agent=sel.value;tg.innerHTML=`<option value="">All actors (worst case)</option>`+
-  state.data.tracks.filter(t=>t.object_id!==agent).map(t=>`<option value="${t.object_id}">${t.object_id}</option>`).join("");
+  state.data.tracks.filter(t=>t.object_id!==agent).map(t=>`<option value="${htmlText(t.object_id)}">${htmlText(t.object_id)}</option>`).join("");
   if(prevT)tg.value=prevT;}}
 $("cf-agent").onchange=()=>{state.cfAgentId=$("cf-agent").value;populateCfAgents();runCf();};
 $("cf-target").onchange=()=>runCf();
@@ -271,7 +280,7 @@ document.querySelectorAll(".cf-preset").forEach(b=>b.onclick=()=>{$("sr").value=
  $("sr-val").textContent=b.dataset.sr+"%";$("it-val").textContent=(+b.dataset.it).toFixed(2)+"s";$("dec-val").textContent=b.dataset.dec+" m/s²";
  ["sr","it","cf-decel"].forEach(id=>paintRange($(id)));runCf();});
 function normalizeCf(r){if(r.results)return r;
- const out={agent_id:r.agent_id||$("cf-agent").value,focus_other:null,results:{},monte_carlo:r.monte_carlo,manifest_hash:r.manifest_hash};
+ const out={agent_id:r.agent_id||$("cf-agent").value,focus_other:null,results:{},monte_carlo:r.monte_carlo,manifest_hash:r.manifest_hash,stage_metres:r.stage_metres,objects:r.objects,scene_digest:r.scene_digest};
  const radii={};(state.data?state.data.tracks:[]).forEach(t=>radii[t.object_id]=t.radius);
  for(const [oid,v] of Object.entries(r.per_actor||{})){
   out.results[oid]={original:{d_min:v.original_d_min,contact:v.contact_original},
@@ -282,7 +291,7 @@ function normalizeCf(r){if(r.results)return r;
   if(!out.focus_other||v.original_d_min<out.results[out.focus_other].original.d_min)out.focus_other=oid;}
  return out;}
 function currentSceneKey(){if(!state.data)return "none";
- return (state.scenario||state.data.id||"")+"|"+state.data.tracks.map(t=>t.object_id+":"+t.points.length).join(",");}
+ return (state.scenario||state.data.id||"")+"|"+(state.data.scene_digest||JSON.stringify([state.data.stage_metres,state.data.tracks]));}
 function cfParamKey(){return currentSceneKey()+"|rev="+(state.labRevision||0)+"|sr="+$("sr").value+"|it="+$("it").value+"|dec="+$("cf-decel").value
  +"|agent="+($("cf-agent").value||"")+"|target="+($("cf-target").value||"");}
 let _cfSyncTimer=null;
@@ -291,23 +300,34 @@ function syncCounterfactual(){populateCfScene();populateCfAgents();
  _cfSyncTimer=setTimeout(()=>{const key=cfParamKey();
   if(state.cfDataKey===key)return;         // already showing exactly this scene+params
   runCf();},220);}
+function currentLabScene(){return {id:"lab-current",name:state.labTitle||"Current Create Lab scene",stage_metres:[LAB.w,LAB.h],
+ objects:JSON.parse(JSON.stringify(state.lab.objects,(key,value)=>key==="_res"||key==="_prof"?undefined:value))};}
 async function syncLabToCfIfNewer(){
- if(!(state.labUpdatedAt> (state.dataUpdatedAt||0)) || state.lab.objects.length<2) return false;
- const tracks=await objectsToTracks(state.lab.objects);
- if(!tracks.length) return false;
- resetRunState();
- state.data={id:"lab-current",description:"Current Create Lab scene",kind:"USER_UPLOADED",
-  calibration:{metres_per_pixel:null,frame:"Create Lab stage (metres)"},
-  disclaimer:"Current Create Lab scene, sampled server-side.",tracks,ground_truth:{}};
- state.scenario="lab-current";state.dataUpdatedAt=Date.now();
- renderObjects();draw();
- return true;}
+ if(!(state.labUpdatedAt>(state.dataUpdatedAt||0)))return false;
+ const revision=state.labRevision, previousDataAt=state.dataUpdatedAt, scene=currentLabScene();
+ let scenario;
+ if(!scene.objects.length){scenario={...scene,kind:"USER_UPLOADED",tracks:[],calibration:{metres_per_pixel:null,frame:"Create Lab stage (metres)"},ground_truth:{}};}
+ else{
+  const response=await fetch("/api/scenes/prepare",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scene})});
+  const result=await response.json();if(!response.ok)throw Error(result.error||"Scene handoff failed. Place every component before opening playback.");scenario=result;
+ }
+ if(state.labRevision!==revision)return syncLabToCfIfNewer();
+ if(state.dataUpdatedAt!==previousDataAt)return false; // a newer explicit scene selection wins
+ resetRunState();state.playing=false;$("play").textContent="▶ Play";
+ state.data=scenario;state.scenario=scenario.id;state.t=0;state.dataUpdatedAt=Date.now();
+ populateStudioWorkspaces();$("scenario-select").value=state.scenario;
+ $("studio-source-pill").textContent="Your scene";$("studio-source-pill").title="Current Create Lab definitions and server-sampled tracks";
+ renderObjects();populateCfScene();
+ if(state.studioView==="3d")await setStudioView("3d");
+ if(state.cfView==="3d")await setCfView("3d");
+ draw();return true;
+}
 let _cfSeq=0;
-async function runCf(){if(!state.data){$("cf-results").textContent="Load or create a scene first.";return;}
+async function runCf(){if(!state.data||state.data.tracks.length<2){$("cf-results").textContent="Place at least two components for a counterfactual comparison.";return;}
  const _seq=++_cfSeq;
  const _keyAtStart=cfParamKey();
  const custom=state.data.kind==="USER_UPLOADED";
- const body=custom?{tracks:state.data.tracks,agent_id:$("cf-agent").value||state.data.tracks[0].object_id,
+ const body=custom?{...(state.data.objects?{scene:{id:state.data.id,stage_metres:state.data.stage_metres,objects:state.data.objects}}:{tracks:state.data.tracks}),target_id:$("cf-target").value||null,agent_id:$("cf-agent").value||state.data.tracks[0].object_id,
    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,braking_decel:+$("cf-decel").value}
   :{scenario:state.scenario,agent_id:$("cf-agent").value,target_id:$("cf-target").value||null,
    speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,braking_decel:+$("cf-decel").value};
@@ -316,44 +336,47 @@ async function runCf(){if(!state.data){$("cf-results").textContent="Load or crea
   {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();}
  catch(e){$("cf-results").textContent="Simulation failed: API unreachable.";return;}
  if(r.error){$("cf-results").textContent="Simulation failed: "+r.error;return;}
- if(_seq!==_cfSeq)return; // a newer run superseded this response
- r=normalizeCf(r);state.cfData=r;state.cfDataKey=_keyAtStart;state.cfT=0;
+ if(_seq!==_cfSeq||_keyAtStart!==cfParamKey())return; // a newer run superseded this response
+ r=normalizeCf(r);state.cfData=r;state.cfDataKey=_keyAtStart;state.cfT=0;state.cfDuration=Math.max(1,...Object.values(r.results).map(value=>value.trajectories.counterfactual.at(-1)[0]));$("cf-scrub").max=state.cfDuration;
  const focus=r.focus_other,fr=r.results[focus];
- $("cf-results").innerHTML=`agent <b>${r.agent_id}</b> · focus pair vs <b>${focus}</b><br>`+
-  Object.entries(r.results).map(([oid,v])=>`${oid}: d_min ${v.original.d_min} m → <b>${v.counterfactual.d_min} m</b> (Δ ${v.delta_d_min>=0?"+":""}${v.delta_d_min}) ${v.counterfactual.contact?"· ⚠ still contact":"· contact avoided"}`).join("<br>")+
+ $("cf-results").innerHTML=`agent <b>${htmlText(r.agent_id)}</b> · focus pair vs <b>${htmlText(focus)}</b><br>`+
+  Object.entries(r.results).map(([oid,v])=>`${htmlText(oid)}: d_min ${v.original.d_min} m → <b>${v.counterfactual.d_min} m</b> (Δ ${v.delta_d_min>=0?"+":""}${v.delta_d_min}) ${v.counterfactual.contact?"· ⚠ still contact":"· contact avoided"}`).join("<br>")+
   (r.monte_carlo?`<br>Monte Carlo (focus pair, ${r.monte_carlo.runs} runs, seed ${r.monte_carlo.seed}): p05/p50/p95 ${r.monte_carlo.d_min_p05} / ${r.monte_carlo.d_min_p50} / ${r.monte_carlo.d_min_p95} m`:"")+
   `<br><span class="dim">manifest ${(r.manifest_hash||"").slice(0,16)}… · conditional prediction under declared assumptions, not a guarantee</span>`;
  drawCfMap();drawCfChart();}
-function cfBounds(r){let xs=[],ys=[];for(const v of Object.values(r.results)){
+function cfBounds(r){const floor=r.stage_metres||state.data?.stage_metres;if(floor)return {x0:0,x1:floor[0],y0:0,y1:floor[1]};let xs=[],ys=[];for(const v of Object.values(r.results)){
  for(const s of ["original","counterfactual"])v.trajectories[s].forEach(p=>{xs.push(p[1],p[3]);ys.push(p[2],p[4]);});}
  return {x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys)};}
-function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy)*0.92;
+function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy);
  return (x,y)=>[W/2-(b.x0+b.x1)/2*s+x*s, H/2+(b.y0+b.y1)/2*s-y*s];}
 function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t)<Math.abs(best[0]-t))best=p;}return best;}
 function drawCfMap(){if(!$("view-counterfactual").classList.contains("on"))return;if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
- const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
+ const r=state.cfData,c=$("cf-map");if(!r||!c)return;const floor=r.stage_metres||state.data?.stage_metres;if(floor){c.width=880;c.height=Math.round(880*floor[1]/floor[0]);c.setAttribute("aria-label",`Counterfactual trajectory map: ${floor[0]} by ${floor[1]} metre floor`);}else{c.width=880;c.height=520;}const context=$("cf-scene-size");if(context)context.textContent=floor?`${floor[0]} × ${floor[1]} m · ${state.data.tracks.length} components`:"";const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.data?.tracks||[]);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
- const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other;
+ const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other,scale=Math.min(W/(b.x1-b.x0||1),H/(b.y1-b.y0||1));
  for(const [oid,v] of Object.entries(r.results)){
   x.strokeStyle="#8fa0b8";x.lineWidth=1.2;x.beginPath();v.trajectories.original.forEach((p,i)=>{const[a,bb]=xy(p[3],p[4]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();
   const o=trajAt(v.trajectories.counterfactual,state.cfT);const[ox,oy]=xy(o[3],o[4]);
   const oc=(state.data.tracks.find(t=>t.object_id===oid)||{}).category||"object";
-  const onx=trajAt(v.trajectories.counterfactual,Math.min(6,state.cfT+0.3));
-  drawEntity(x,oc,ox,oy,12,Math.atan2(-(onx[4]-o[4]),onx[3]-o[3]),0);
+  const onx=trajAt(v.trajectories.counterfactual,Math.min(state.cfDuration||6,state.cfT+0.3));
+  const definition=(state.data.objects||[]).find(item=>(item.id||item.object_id)===oid),radius=(state.data.tracks.find(t=>t.object_id===oid)?.radius||0)*scale;
+  if(definition?.custom)drawCustom2D(x,definition,ox,oy,Math.max(3,radius),Math.atan2(-(onx[4]-o[4]),onx[3]-o[3]));else drawEntity(x,oc,ox,oy,Math.max(3,radius),Math.atan2(-(onx[4]-o[4]),onx[3]-o[3]),0);
   x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");
   x.font="12px system-ui";x.fillText(oid,ox+10,oy-8);}
- const fv=r.results[focus];
+ const fv=r.results[focus];if(!fv)return;
  x.strokeStyle="#8fa0b8";x.setLineDash([6,5]);x.lineWidth=2;x.beginPath();fv.trajectories.original.forEach((p,i)=>{const[a,bb]=xy(p[1],p[2]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();x.setLineDash([]);
  x.strokeStyle="#2dd4a8";x.lineWidth=3;x.beginPath();fv.trajectories.counterfactual.forEach((p,i)=>{const[a,bb]=xy(p[1],p[2]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();x.lineWidth=1;
  let cpa=fv.trajectories.counterfactual[0];fv.trajectories.counterfactual.forEach(p=>{if(p[5]<cpa[5])cpa=p;});
  const[cx,cy]=xy(cpa[1],cpa[2]);x.strokeStyle="#f2b04a";x.beginPath();x.moveTo(cx-8,cy);x.lineTo(cx,cy-8);x.lineTo(cx+8,cy);x.lineTo(cx,cy+8);x.closePath();x.stroke();
  const go=trajAt(fv.trajectories.original,state.cfT),gc=trajAt(fv.trajectories.counterfactual,state.cfT);
- const gcNext=trajAt(fv.trajectories.counterfactual,Math.min(6,state.cfT+0.3));
+ const gcNext=trajAt(fv.trajectories.counterfactual,Math.min(state.cfDuration||6,state.cfT+0.3));
  const hd=Math.atan2(-(gcNext[2]-gc[2]),gcNext[1]-gc[1]);
  const agentCat=(state.data.tracks.find(t=>t.object_id===r.agent_id)||{}).category||"object";
- let[a1,b1]=xy(go[1],go[2]);x.globalAlpha=.4;drawEntity(x,agentCat,a1,b1,15,hd,0);x.globalAlpha=1;
- let[a2,b2]=xy(gc[1],gc[2]);drawEntity(x,agentCat,a2,b2,17,hd,state.cfT*7);
+ const definition=(state.data.objects||[]).find(item=>(item.id||item.object_id)===r.agent_id),radius=(state.data.tracks.find(t=>t.object_id===r.agent_id)?.radius||0)*scale;
+ const paintAgent=(a,b)=>definition?.custom?drawCustom2D(x,definition,a,b,Math.max(3,radius),hd):drawEntity(x,agentCat,a,b,Math.max(3,radius),hd,state.cfT*7);
+ let[a1,b1]=xy(go[1],go[2]);x.globalAlpha=.4;paintAgent(a1,b1);x.globalAlpha=1;
+ let[a2,b2]=xy(gc[1],gc[2]);paintAgent(a2,b2);
  x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
  x.fillText(r.agent_id+" (counterfactual)",a2+13,b2+4);x.fillText("◇ closest approach "+cpa[5].toFixed(2)+" m",cx+12,cy-10);
  $("cf-clock").textContent="t = "+state.cfT.toFixed(2)+"s";$("cf-scrub").value=state.cfT;}
@@ -366,9 +389,9 @@ function drawCfChart(){const r=state.cfData,c=$("cf-chart");if(!r||!c)return;con
  x.strokeStyle=line;x.beginPath();x.moveTo(44,10);x.lineTo(44,H-30);x.lineTo(W-10,H-30);x.stroke();
  const y0=H-30-f.radius_sum/mx*(H-50);x.fillStyle="#f26d7d33";x.fillRect(44,y0,W-54,H-30-y0);
  x.strokeStyle="#f26d7d";x.setLineDash([4,4]);x.beginPath();x.moveTo(44,y0);x.lineTo(W-10,y0);x.stroke();x.setLineDash([]);
- const plot=(traj,col,width)=>{x.strokeStyle=col;x.lineWidth=width;x.beginPath();traj.forEach((p,i)=>{const X=44+p[0]/6*(W-60),Y=H-30-p[5]/mx*(H-50);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();x.lineWidth=1;};
+ const plot=(traj,col,width)=>{x.strokeStyle=col;x.lineWidth=width;x.beginPath();traj.forEach((p,i)=>{const X=44+p[0]/(state.cfDuration||6)*(W-60),Y=H-30-p[5]/mx*(H-50);i?x.lineTo(X,Y):x.moveTo(X,Y);});x.stroke();x.lineWidth=1;};
  plot(f.trajectories.original,"#8fa0b8",2);plot(f.trajectories.counterfactual,"#2dd4a8",2.5);
- const tx=44+state.cfT/6*(W-60);x.strokeStyle=line;x.beginPath();x.moveTo(tx,10);x.lineTo(tx,H-30);x.stroke();
+ const tx=44+state.cfT/(state.cfDuration||6)*(W-60);x.strokeStyle=line;x.beginPath();x.moveTo(tx,10);x.lineTo(tx,H-30);x.stroke();
  x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--ink");x.font="13px system-ui";
  x.fillText("— original",52,24);x.fillStyle="#2dd4a8";x.fillText("— counterfactual",150,24);
  x.fillStyle="#f26d7d";x.fillText("contact ≤ "+f.radius_sum.toFixed(2)+" m",W-170,y0-6);
@@ -386,16 +409,16 @@ async function setCfView(v){state.cfView=v;localStorage.setItem("fs-view-cf",v);
   try{
    if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
    const mod=window.__lab3dMod;
-   const meta={};(state.data?state.data.tracks:[]).forEach(tr=>meta[tr.object_id]={category:tr.category,radius:tr.radius});
-   const hooks={extent:()=>{if(!state.cfData)return [16,14];
+   const meta={};(state.data?state.data.tracks:[]).forEach(tr=>meta[tr.object_id]={category:tr.category,radius:tr.radius,definition:tr._lab});
+   const hooks={extent:()=>{if(state.data?.stage_metres)return state.data.stage_metres;if(!state.cfData)return [16,14];
      let mx=1,my=1;Object.values(state.cfData.results).forEach(r=>{
       r.trajectories.counterfactual.forEach(p=>{mx=Math.max(mx,p[1],p[3]);my=Math.max(my,p[2],p[4]);});});
      return [Math.max(8,Math.ceil(mx*1.15)),Math.max(8,Math.ceil(my*1.15))];}};
    hooks.onContextLost=()=>{toast("3D context was lost (GPU) — returned to the 2D map; the simulation is unchanged.","warn");setCfView("2d");};
    mod.showCf3D($("cf-3d"),hooks);
-   window.__cf3dSync=(cf,t)=>{const m2={};(state.data?state.data.tracks:[]).forEach(tr=>m2[tr.object_id]={category:tr.category,radius:tr.radius});
+   window.__cf3dSync=(cf,t)=>{const m2={};(state.data?state.data.tracks:[]).forEach(tr=>m2[tr.object_id]={category:tr.category,radius:tr.radius,definition:tr._lab});
     mod.syncCf3D(cf,m2,t);};
-   if(state.cfData)mod.syncCf3D(state.cfData,meta,state.cfT,true);
+   mod.syncCf3D(state.cfData,meta,state.cfT,true);
   }catch(e){toast("3D view unavailable (WebGL): "+e.message+" — the 2D map is unaffected.","err");setCfView("2d");}
  } else if(window.__lab3dMod){window.__lab3dMod.hideCf3D();window.__cf3dSync=null;}
 }
@@ -407,7 +430,7 @@ $("cf-play").onclick=()=>{state.cfPlaying=!state.cfPlaying;$("cf-play").textCont
  if(state.cfPlaying){const step=(ts)=>{if(!state.cfPlaying)return;
    if(state._cfLast==null)state._cfLast=ts;
    const dt=Math.min(0.1,(ts-state._cfLast)/1000);state._cfLast=ts;
-   state.cfT+=dt;if(state.cfT>6)state.cfT=0;drawCfMap();drawCfChart();requestAnimationFrame(step);};
+   state.cfT+=dt;if(state.cfT>(state.cfDuration||6))state.cfT=0;drawCfMap();drawCfChart();requestAnimationFrame(step);};
   requestAnimationFrame(step);}};
 
 // ---- human approval gate (Evidence) ----
@@ -462,16 +485,19 @@ else setTimeout(_boot,250);
 
 // ---- Create Lab ----
 state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
-const LAB={w:parseFloat(localStorage.getItem("fs-stage-w"))||16,h:parseFloat(localStorage.getItem("fs-stage-h"))||14};
+const LAB={w:Math.min(60,Math.max(6,Number(localStorage.getItem("fs-stage-w"))||16)),h:Math.min(60,Math.max(6,Number(localStorage.getItem("fs-stage-h"))||14))};
+const stageEdit=window.FrontierStageEdit;state.labEditMode="move";
 function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
 const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
 function touchLab(){state.labUpdatedAt=Date.now();state.labRevision=(state.labRevision||0)+1;}
-function labAdd(cat,waypoints,speed,radius,delay,mode,curve){touchLab();
+function labAdd(cat,waypoints,speed,radius,delay,mode,curve){if(state.lab.objects.length>=24)throw Error("A scene supports at most 24 components.");touchLab();
  const o={id:labId(cat),category:cat,radius:radius??(cat==="shelf"?1.1:cat==="forklift"||cat==="vehicle"?0.9:0.5),
   speed:speed??(cat==="shelf"?0:1.4),delay:delay??0,mode:mode||"stop",curve:curve||"straight",waypoints:waypoints||[]};
- if(!o.waypoints.length){const s=LAB_SLOTS[state.lab.objects.length%LAB_SLOTS.length];o.waypoints=[[s[0],s[1]]];o.spawned=true;}
+ if(!o.waypoints.length){const s=LAB_SLOTS[state.lab.objects.length%LAB_SLOTS.length];o.waypoints=[[s[0]/16*LAB.w,s[1]/14*LAB.h]];o.spawned=true;}
+ else if(state.loadingTemplate)o.waypoints=o.waypoints.map(p=>[p[0]/16*LAB.w,p[1]/14*LAB.h]);
+ o.waypoints=fitLabPath(o,o.waypoints);
  state.lab.objects.push(o);state.lab.selected=o.id;labRenderList();labDraw();return o;}
 function labClear(){$("lab-canvas").getContext("2d").clearRect(0,0,880,620);}
 function labXY(x,y,W,H){return [x/LAB.w*W, H-(y/LAB.h*H)];}
@@ -569,7 +595,7 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
  if(o.waypoints.length===1||o.speed<=0)return o.waypoints[0];
  const lt=Math.max(0,t-o.delay);
  return profPosition(o,lt);}
-function labDraw(){if(!$("view-create").classList.contains("on"))return;if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
+function labDraw(){const floorCanvas=$("lab-canvas");if(floorCanvas){floorCanvas.width=880;floorCanvas.height=Math.round(880*LAB.h/LAB.w);}if(!$("view-create").classList.contains("on"))return;if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
  const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.lab.objects);x.strokeStyle="rgba(34,65,70,.13)";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
@@ -600,7 +626,7 @@ function computeLabDuration(){const sc=$("lab-scrub");if(sc)sc.max=labDuration()
 function labReady(){const el=$("lab-ready");if(!el)return;const os=state.lab.objects;
  const moving=os.filter(o=>o.speed>0&&o.waypoints.length>1).length, placed=os.filter(o=>o.waypoints.length).length;
  el.innerHTML=os.length<2?`Add at least <b>2 components</b> to run analysis (${os.length} so far).`
-  :`Ready check: <b>${os.length} components</b> · ${placed} placed · ${moving} moving · stage ${LAB.w}×${LAB.h} m — ${moving?"press Run analysis.":"give a selected component a path (click the stage) to create motion."}`;
+  :`Ready check: <b>${os.length} components</b> · ${placed} placed · ${moving} moving · stage ${LAB.w}×${LAB.h} m — ${moving?"press Run analysis.":"choose Edit paths and add waypoints to create motion."}`;
  el.style.color=os.length>=2&&moving?"var(--teal)":"var(--amber)";
  const warns=os.flatMap(o=>o.speed>0||o.waypoints.length>1?realismWarnings(o):[]);
  if(warns.length)el.innerHTML+=warns.map(w=>`<br><span style="color:var(--amber)">⚠ ${w}</span>`).join("");}
@@ -612,6 +638,8 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
  el.innerHTML=state.lab.objects.length?state.lab.objects.map((o,index)=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${htmlText(o.id)}">
   <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${htmlText(o.displayName||o.id)}</b>${o.custom?' <span class="pill ghost">custom ✦</span>':""} <span class="dim">${htmlText(o.id)}</span> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
   <div class="row labctl" id="lab-fields-${index}" ${o.id===state.lab.selected?"":"hidden"}>
+   <label>Start X (m)<input type="number" step="0.1" min="${o.radius}" max="${LAB.w-o.radius}" value="${(o.waypoints[0]||[0,0])[0].toFixed(2)}" data-position="x"></label>
+   <label>Start Y (m)<input type="number" step="0.1" min="${o.radius}" max="${LAB.h-o.radius}" value="${(o.waypoints[0]||[0,0])[1].toFixed(2)}" data-position="y"></label>
    <label>Speed m/s<input type="number" step="0.1" min="0" max="8" value="${o.speed}" data-f="speed"></label>
    <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
    <label>Delay s<input type="number" step="0.25" min="0" max="10" value="${o.delay}" data-f="delay"></label>
@@ -623,9 +651,13 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    <button class="ghostbtn" data-act="clear">Clear path</button>
    <button class="ghostbtn" data-act="dup">Duplicate</button>
    <button class="ghostbtn" data-act="del">Delete</button></div></div>`).join("")
-  :'<p class="dim">No components yet. Add one, select it, then click the stage to lay its path.</p>';
+  :'<p class="dim">No components yet. Add one, then drag it to position it or choose Edit paths.</p>';
  el.querySelectorAll(".labobj").forEach(card=>{const o=labObj(card.dataset.id);
-  card.querySelectorAll("input,select").forEach(inp=>inp.onchange=()=>{o[inp.dataset.f]=(inp.dataset.f==="mode"||inp.dataset.f==="curve")?inp.value:Math.max(0,+inp.value||0);delete o._res;delete o._prof;touchLab();labRenderList();labDraw();});
+  card.querySelectorAll("[data-position]").forEach(input=>input.onchange=()=>{try{const start=o.waypoints[0]||[0,0],pos=posOnPath(o,state.lab.t)||start;moveLabObjectTo(o,pos[0]+(input.dataset.position==="x"?Number(input.value)-start[0]:0),pos[1]+(input.dataset.position==="y"?Number(input.value)-start[1]:0));}catch(error){labStatus(error.message);labRenderList();}});
+  card.querySelectorAll("[data-f]").forEach(inp=>inp.onchange=()=>{const field=inp.dataset.f,previous=o[field];try{
+   o[field]=(field==="mode"||field==="curve")?inp.value:Math.min(field==="speed"?8:field==="delay"?10:Math.min(3,LAB.w/2,LAB.h/2),Math.max(field==="radius"?.1:0,Number(inp.value)||0));
+   o.waypoints=fitLabPath(o,o.waypoints);invalidateLabObject(o);touchLab();
+  }catch(error){o[field]=previous;labStatus(error.message);}labRenderList();labDraw();});
   card.querySelectorAll("button").forEach(b=>b.onclick=()=>{const a=b.dataset.act;
    if(a==="select"){state.lab.selected=o.id;}
    if(a==="undo"){o.waypoints.pop();touchLab();}
@@ -633,75 +665,58 @@ function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
    if(a==="dup"){const c=labAdd(o.category,o.waypoints.map(w=>[w[0]+0.5,w[1]+0.5]),o.speed,o.radius,o.delay,o.mode,o.curve);labStatus(c.id+" duplicated — drag its waypoints apart.");}
    if(a==="del"){state.lab.objects=state.lab.objects.filter(q=>q.id!==o.id);if(state.lab.selected===o.id)state.lab.selected=null;touchLab();}
    labRenderList();labDraw();});});}
-// canvas editing: click a path to select & edit it; click near its line to
-// insert a point there; drag points to reshape; shift-drag moves the whole
-// path; right-click a point deletes it. Clicking empty stage appends.
-(()=>{const c=$("lab-canvas");if(!c)return;c.style.cursor="crosshair";
- let drag=null,moved=false,pathDrag=null;
- const evPos=e=>{const r=c.getBoundingClientRect();return [(e.clientX-r.left)*c.width/r.width,(e.clientY-r.top)*c.height/r.height];};
- const stagePos=e=>{const[px,py]=evPos(e);return labInv(px,py,c.width,c.height);};
- function hitWaypoint(px,py){let best=null;
-  for(const o of state.lab.objects)o.waypoints.forEach((w,i)=>{
-   const[a,b]=labXY(w[0],w[1],c.width,c.height);const d=Math.hypot(a-px,b-py);
-   if(d<13&&(!best||d<best.d))best={o,i,d};});
-  return best;}
- function hitPath(sx,sy){let best=null;
-  for(const o of state.lab.objects){if(o.waypoints.length<2)continue;
-   const pts=resolvePath(o).pts;
-   for(let i=1;i<pts.length;i++){const[a,b]=[pts[i-1],pts[i]];
-    const vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-9;
-    const k=Math.min(1,Math.max(0,((sx-a[0])*vx+(sy-a[1])*vy)/L2));
-    const d=Math.hypot(sx-(a[0]+vx*k),sy-(a[1]+vy*k));
-    if(!best||d<best.d)best={o,d};}}
-  return best;}
- function nearestWpSegment(o,sx,sy){let best={i:0,d:Infinity};
-  for(let i=1;i<o.waypoints.length;i++){const[a,b]=[o.waypoints[i-1],o.waypoints[i]];
-   const vx=b[0]-a[0],vy=b[1]-a[1],L2=vx*vx+vy*vy||1e-9;
-   const k=Math.min(1,Math.max(0,((sx-a[0])*vx+(sy-a[1])*vy)/L2));
-   const d=Math.hypot(sx-(a[0]+vx*k),sy-(a[1]+vy*k));
-   if(d<best.d)best={i:i-1,d};}
-  return best;}
- function select(o){if(state.lab.selected!==o.id){state.lab.selected=o.id;labRenderList();labDraw();}}
- c.addEventListener("pointerdown",e=>{if(e.button!==0)return;
-  try{c.setPointerCapture(e.pointerId);}catch(_){}
-  moved=false;c._suppressAdd=false;const[px,py]=evPos(e),[sx,sy]=stagePos(e);
-  const wh=hitWaypoint(px,py);
-  if(wh){select(wh.o);drag=wh;return;}
-  const ph=hitPath(sx,sy);
-  if(ph&&ph.d<0.45){select(ph.o);c._suppressAdd=true;
-   if(e.shiftKey){pathDrag={o:ph.o,sx,sy,orig:ph.o.waypoints.map(w=>[...w])};}
-   else labStatus(`${ph.o.id} selected — click near its path to insert a point, click empty stage to append, drag points to reshape, Shift-drag to move the whole path.`);
-   return;}});
- c.addEventListener("pointermove",e=>{const[px,py]=evPos(e),[sx,sy]=stagePos(e);
-  if(drag){moved=true;drag.o.waypoints[drag.i]=labInv(px,py,c.width,c.height);delete drag.o._res;labDraw();return;}
-  if(pathDrag){moved=true;const dx=sx-pathDrag.sx,dy=sy-pathDrag.sy;
-   pathDrag.o.waypoints=pathDrag.orig.map(w=>[Math.round((w[0]+dx)*10)/10,Math.round((w[1]+dy)*10)/10]);
-   delete pathDrag.o._res;labDraw();return;}
-  const hov=hitPath(sx,sy);const hovId=hov&&hov.d<0.45?hov.o.id:null;
-  c.style.cursor=hovId?"pointer":"crosshair";
-  if(hovId!==state.labHover){state.labHover=hovId;labDraw();}});
- c.addEventListener("pointercancel",()=>{drag=null;pathDrag=null;});
- c.addEventListener("pointerup",e=>{if(e.button!==0)return;const wasDrag=!!drag||!!pathDrag;
-  if(drag&&moved){drag=null;touchLab();labRenderList();labDraw();return;}
-  if(pathDrag){pathDrag=null;touchLab();labRenderList();labDraw();return;}
-  drag=null;
-  if(c._suppressAdd){c._suppressAdd=false;labRenderList();labDraw();return;}
-  const o=labObj(state.lab.selected);if(!o){labStatus("Add and select a component first.");return;}
-  const[sx,sy]=stagePos(e);
-  const seg=o.waypoints.length>1?nearestWpSegment(o,sx,sy):{i:0,d:Infinity};
-  const pt=[sx,sy];
-  if(o.waypoints.length>1&&seg.d<0.4){o.waypoints.splice(seg.i+1,0,pt);
-   labStatus(`Point inserted into ${o.id}'s path (position ${seg.i+2} of ${o.waypoints.length}). Drag it to shape the curve.`);}
-  else o.waypoints.push(pt);
-  delete o._res;touchLab();labRenderList();labDraw();});
- c.addEventListener("dblclick",e=>{const[px,py]=evPos(e);const wh=hitWaypoint(px,py);
-  if(wh){wh.o.waypoints.splice(wh.i,1);delete wh.o._res;touchLab();labRenderList();labDraw();
-   labStatus(`Waypoint removed from ${wh.o.id}.`);}});
- c.addEventListener("contextmenu",e=>{e.preventDefault();const[px,py]=evPos(e);
-  const wh=hitWaypoint(px,py);
-  if(wh){select(wh.o);wh.o.waypoints.splice(wh.i,1);delete wh.o._res;touchLab();labRenderList();labDraw();
-   labStatus(`Waypoint removed from ${wh.o.id}.`);}
-  else{const[sx,sy]=stagePos(e);const ph=hitPath(sx,sy);if(ph)select(ph.o);}});
+// The object body moves the complete path; path-edit mode exposes individual vertices.
+function setLabEditMode(mode){state.labEditMode=mode;pauseLabEditing();
+ $("lab-move-mode").setAttribute("aria-pressed",String(mode==="move"));$("lab-path-mode").setAttribute("aria-pressed",String(mode==="path"));
+ $("lab-edit-help").textContent=mode==="move"?"Drag an object to move it with its path, or select it and click a destination. Arrow keys move the selected object when the canvas is focused.":"Drag a waypoint to reshape the path. Click empty floor to append a point. Double-click or right-click a waypoint to remove it.";
+ $("lab-canvas").style.cursor=mode==="move"?"grab":"crosshair";}
+$("lab-move-mode").onclick=()=>setLabEditMode("move");$("lab-path-mode").onclick=()=>setLabEditMode("path");
+let objectDrag=null;
+function beginObjectDrag(id,x,y){const o=labObj(id);if(!o)return false;pauseLabEditing();state.lab.selected=id;
+ objectDrag={o,x,y,original:o.waypoints.map(p=>[...p]),envelope:resolvePath(o).pts.map(p=>[...p]),changed:false};labRenderList();labDraw();return true;}
+function updateObjectDrag(x,y){if(!objectDrag)return;const d=objectDrag;
+ const result=stageEdit.translatePath(d.original,x-d.x,y-d.y,[LAB.w,LAB.h],d.o.radius,d.envelope);
+ d.o.waypoints=result.points;d.changed=true;d.clamped=result.clamped;invalidateLabObject(d.o);labDraw();}
+function finishObjectDrag(cancel=false){if(!objectDrag)return;const d=objectDrag;objectDrag=null;
+ if(cancel)d.o.waypoints=d.original;else if(d.changed){touchLab();labStatus(d.clamped?"Moved to the closest placement that keeps the entire path inside the floor.":"Object and its path moved.");}invalidateLabObject(d.o);labRenderList();labDraw();}
+(()=>{const c=$("lab-canvas");if(!c)return;let gesture=null;
+ const pointer=e=>stageEdit.pointerPoint(e.clientX,e.clientY,c.getBoundingClientRect(),[LAB.w,LAB.h]);
+ const distance=(p,e)=>{const r=c.getBoundingClientRect();return Math.hypot(p[0]/LAB.w*r.width-(e.clientX-r.left),(1-p[1]/LAB.h)*r.height-(e.clientY-r.top));};
+ function hitBody(e){let best=null;for(const o of state.lab.objects){const p=posOnPath(o,state.lab.t);if(!p)continue;const d=distance(p,e),r=o.radius/LAB.w*c.getBoundingClientRect().width;
+  if(d<=Math.max(16,r*1.5)&&(!best||d<best.distance))best={o,distance:d};}return best?.o;}
+ function hitPoint(e){let best=null;for(const o of state.lab.objects)for(let i=0;i<o.waypoints.length;i++){const d=distance(o.waypoints[i],e);if(d<14&&(!best||d<best.distance))best={o,index:i,distance:d};}return best;}
+ function nearestSegment(o,p){let best={index:o.waypoints.length,distance:Infinity};for(let i=1;i<o.waypoints.length;i++){
+  const a=o.waypoints[i-1],b=o.waypoints[i],dx=b[0]-a[0],dy=b[1]-a[1],t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy||1e-9)));
+  const d=Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy);if(d<best.distance)best={index:i,distance:d};}return best;}
+ function hitPath(p){let best=null;for(const o of state.lab.objects){const hit=nearestSegment(o,p);if(hit.distance<.45&&(!best||hit.distance<best.distance))best={...hit,o};}return best;}
+ c.addEventListener("pointerdown",e=>{if(e.button!==0||e.isPrimary===false||gesture)return;c.focus({preventScroll:true});pauseLabEditing();const p=pointer(e);
+  const vertex=state.labEditMode==="path"?hitPoint(e):null,body=hitBody(e);
+  gesture={id:e.pointerId,start:[e.clientX,e.clientY],point:p,kind:"floor",moved:false};
+  if(vertex){state.lab.selected=vertex.o.id;gesture={...gesture,kind:"point",o:vertex.o,index:vertex.index,original:vertex.o.waypoints.map(p=>[...p])};}
+  else if(body){beginObjectDrag(body.id,...p);gesture.kind="object";}
+  else if(state.labEditMode==="path"){const hit=hitPath(p);if(hit){gesture.kind="path";gesture.o=hit.o;gesture.wasSelected=state.lab.selected===hit.o.id;state.lab.selected=hit.o.id;
+   if(e.shiftKey){beginObjectDrag(hit.o.id,...p);gesture.kind="object";}}}
+  c.setPointerCapture(e.pointerId);e.preventDefault();labRenderList();labDraw();});
+ c.addEventListener("pointermove",e=>{if(!gesture||gesture.id!==e.pointerId){c.style.cursor=hitBody(e)?"grab":state.labEditMode==="move"?"default":"crosshair";return;}
+  if(!gesture.moved&&Math.hypot(e.clientX-gesture.start[0],e.clientY-gesture.start[1])<4)return;gesture.moved=true;const p=pointer(e);
+  try{if(gesture.kind==="object"){c.style.cursor="grabbing";updateObjectDrag(...p);}
+   else if(gesture.kind==="point"){gesture.o.waypoints[gesture.index]=p;invalidateLabObject(gesture.o);labDraw();}}
+  catch(error){labStatus(error.message);}
+ });
+ function finish(e,cancel){if(!gesture||gesture.id!==e.pointerId)return;const g=gesture;gesture=null;
+  try{if(g.kind==="object")finishObjectDrag(cancel);
+   else if(g.kind==="point"){g.o.waypoints=cancel?g.original:fitLabPath(g.o,g.o.waypoints);invalidateLabObject(g.o);if(!cancel&&g.moved)touchLab();labRenderList();labDraw();}
+   else if(g.kind==="path"&&!cancel&&!g.moved&&!g.wasSelected){labRenderList();labDraw();}
+   else if(!cancel&&!g.moved){const o=labObj(state.lab.selected);if(!o){labStatus("Select a component first.");return;}const p=pointer(e);
+    if(state.labEditMode==="move")moveLabObjectTo(o,...p);else{if(o.waypoints.length>=24)throw Error("A path supports at most 24 waypoints.");const path=o.waypoints.map(point=>[...point]),near=nearestSegment(o,p);path.splice(near.distance<.4?near.index:path.length,0,p);o.waypoints=fitLabPath(o,path);invalidateLabObject(o);touchLab();labRenderList();labDraw();}}
+  }catch(error){if(g.original){g.o.waypoints=g.original;invalidateLabObject(g.o);}labStatus(error.message);labDraw();}
+  if(c.hasPointerCapture(e.pointerId))c.releasePointerCapture(e.pointerId);c.style.cursor=state.labEditMode==="move"?"grab":"crosshair";}
+ c.addEventListener("pointerup",e=>finish(e,false));c.addEventListener("pointercancel",e=>finish(e,true));c.addEventListener("lostpointercapture",e=>finish(e,true));
+ c.addEventListener("keydown",e=>{if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)||e.altKey||e.ctrlKey||e.metaKey)return;
+  const o=labObj(state.lab.selected);if(!o)return;e.preventDefault();const p=posOnPath(o,state.lab.t)||o.waypoints[0],step=e.shiftKey?1:.1;
+  try{moveLabObjectTo(o,p[0]+(e.key==="ArrowRight"?step:e.key==="ArrowLeft"?-step:0),p[1]+(e.key==="ArrowUp"?step:e.key==="ArrowDown"?-step:0));}catch(error){labStatus(error.message);}});
+ function removePoint(e){if(state.labEditMode!=="path")return;e.preventDefault();const point=hitPoint(e);if(!point)return;point.o.waypoints.splice(point.index,1);invalidateLabObject(point.o);touchLab();labRenderList();labDraw();}
+ c.addEventListener("dblclick",removePoint);c.addEventListener("contextmenu",removePoint);
 })();
 function buildPalette(){const sel=$("lab-new-cat");if(!sel)return;const cur=sel.value;
  sel.innerHTML=["forklift","pedestrian","robot","vehicle","cyclist","shelf"]
@@ -713,29 +728,38 @@ function labAddCustom(rec){const spec=rec.spec;
  const o=labAdd(spec.base_category,null,spec.base_category==="shelf"?0:1.2,spec.radius,0,"stop","straight");
  o.custom={id:rec.id,spec,image:rec.image||null};o.displayName=spec.name;
  labRenderList();labDraw();return o;}
-function applyStageSize(){const w=Math.min(60,Math.max(6,+$("lab-stage-w").value||16));
- const d=Math.min(60,Math.max(6,+$("lab-stage-h").value||14));
- LAB.w=w;LAB.h=d;localStorage.setItem("fs-stage-w",w);localStorage.setItem("fs-stage-h",d);
- const l=$("lab-stage-label");if(l)l.textContent=`${w} × ${d}`;
- state.lab.objects.forEach(o=>{delete o._res;delete o._prof;});
- if(state.labView==="3d")setLabView("3d");
- labDraw();
- labStatus(`Stage set to ${w} × ${d} m. Existing paths are unchanged — check the warnings if anything now leaves the stage.`);}
+function pauseLabEditing(){state.lab.playing=false;const button=$("lab-play");if(button)button.textContent="▶ Preview motion";}
+function invalidateLabObject(o){delete o._res;delete o._prof;}
+function fitLabPath(o,path,stage=[LAB.w,LAB.h]){const preview={...o,waypoints:path,_res:null,_prof:null};return stageEdit.fitPath(path,stage,o.radius,resolvePath(preview).pts);}
+function moveLabObjectTo(o,x,y){pauseLabEditing();const origin=posOnPath(o,state.lab.t)||o.waypoints[0];if(!origin){o.waypoints=fitLabPath(o,[[x,y]]);invalidateLabObject(o);touchLab();labRenderList();labDraw();return;}
+ const result=stageEdit.translatePath(o.waypoints,x-origin[0],y-origin[1],[LAB.w,LAB.h],o.radius,resolvePath(o).pts);
+ o.waypoints=result.points;invalidateLabObject(o);touchLab();labRenderList();labDraw();
+ labStatus(result.clamped?"Moved as far as the floor allows while keeping the whole path inside. Use Edit paths to change individual points.":"Object and its path moved.");}
+function applyStageSize(){const w=Math.min(60,Math.max(6,Number($("lab-stage-w").value)||16)),h=Math.min(60,Math.max(6,Number($("lab-stage-h").value)||14));
+ const before=[LAB.w,LAB.h],after=[w,h];try{
+  const resized=state.lab.objects.map(o=>fitLabPath(o,stageEdit.resizePath(o.waypoints,before,after,o.radius),after));
+  pauseLabEditing();LAB.w=w;LAB.h=h;state.lab.t=0;
+  state.lab.objects.forEach((o,i)=>{o.waypoints=resized[i];invalidateLabObject(o);});
+  localStorage.setItem("fs-stage-w",w);localStorage.setItem("fs-stage-h",h);$("lab-stage-label").textContent=`${w} × ${h}`;$("lab-canvas").setAttribute("aria-label",`Create Lab stage: components and paths on a ${w} by ${h} metre floor`);
+  touchLab();labRenderList();if(state.labView==="3d")setLabView("3d");labDraw();
+  labStatus(`Floor resized to ${w} × ${h} m. Positions and paths scaled to fit; physical sizes and speeds are unchanged.`);
+ }catch(error){labStatus(error.message);}
+ $("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;}
 $("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;
-{const l=$("lab-stage-label");if(l)l.textContent=`${LAB.w} × ${LAB.h}`;}
+{const l=$("lab-stage-label");if(l)l.textContent=`${LAB.w} × ${LAB.h}`;$("lab-canvas").setAttribute("aria-label",`Create Lab stage: components and paths on a ${LAB.w} by ${LAB.h} metre floor`);}
 $("lab-stage-w").addEventListener("change",applyStageSize);
 $("lab-stage-h").addEventListener("change",applyStageSize);
-$("lab-add").onclick=()=>{const v=$("lab-new-cat").value;
+$("lab-add").onclick=()=>{if(state.lab.objects.length>=24){labStatus("A scene supports at most 24 components.");return;}const v=$("lab-new-cat").value;
  if(v.startsWith("custom:")){const rec=(state.customObjects||[]).find(x=>x.id===v.slice(7));
-  if(rec){const o=labAddCustom(rec);labStatus(`${spec_name(o)} added — click the stage to lay its path.`);return;}}
+  if(rec){const o=labAddCustom(rec);labStatus(`${spec_name(o)} added — drag it to position it, or choose Edit paths to draw a route.`);return;}}
  const cat=v;const o=labAdd(cat);
- labStatus(`${o.id} added and selected — click the stage to lay its path (shelf = static, one point is enough).`);};
+ labStatus(`${o.id} added and selected — drag to position it, or choose Edit paths to draw a route.`);};
 function spec_name(o){return o.displayName||o.id;}
-document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};
+document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.loadingTemplate=true;
  if(b.dataset.tpl==="near-miss"){labAdd("forklift",[[1,7],[7.5,7],[13,7]],1.7,0.9,0);labAdd("pedestrian",[[8.6,13],[8.0,9],[8.5,5.5],[9.2,1]],1.35,0.45,0,"stop","smooth");}
  if(b.dataset.tpl==="crossing"){labAdd("vehicle",[[0.5,7],[6,6.8],[10,8],[15,11]],2.4,1.1,0,"stop","smooth");labAdd("cyclist",[[9,13.5],[8.6,8],[9.2,3],[9.5,0.5]],1.9,0.5,0.5,"stop","smooth");labAdd("pedestrian",[[14,2],[8,6.2],[3,11]],1.3,0.45,1,"stop","smooth");}
  if(b.dataset.tpl==="cell"){labAdd("robot",[[2,2],[13,2],[13,11],[2,11]],1.2,0.55,0,"loop","smooth");labAdd("forklift",[[1,12],[14,12]],0.9,0.9,1);labAdd("shelf",[[8,7]],0,1.4,0);labAdd("pedestrian",[[15,1],[10,6],[15,12]],1.1,0.45,2,"stop","smooth");}
- labSetTitle(b.dataset.tpl.replace("-"," ").replace(/\b\w/g,c=>c.toUpperCase())+" template",false);
+ state.loadingTemplate=false;labSetTitle(b.dataset.tpl.replace("-"," ").replace(/\b\w/g,c=>c.toUpperCase())+" template",false);
  if(!$("lab-ws-name").value)$("lab-ws-name").value=suggestedName(labTitleSafe());
  labStatus(`Template "${b.dataset.tpl}" loaded — edit any path, then Run analysis.`);labDraw();});
 function labTitleSafe(){return (state.labTitle||"").replace(/ template$/,"")||"";}
@@ -749,12 +773,12 @@ async function setLabView(v){state.labView=v;localStorage.setItem("fs-view-lab",
   try{
    if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
    const mod=window.__lab3dMod;
-   mod.showLab3D($("lab-3d"),{extent:()=>[LAB.w,LAB.h],resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
+   mod.showLab3D($("lab-3d"),{canDragObjects:()=>state.labEditMode==="move",onObjectDragStart:beginObjectDrag,onObjectDrag:updateObjectDrag,onObjectDragEnd:finishObjectDrag,extent:()=>[LAB.w,LAB.h],resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
     onContextLost:()=>{toast("3D context was lost (GPU) — returned to the 2D editor; your scene is untouched.","warn");setLabView("2d");},
     onGroundClick:(x,y)=>{const o=labObj(state.lab.selected);
-     if(!o){labStatus("Select a component first, then click the ground to add waypoints.");return;}
-     o.waypoints.push([Math.round(x*10)/10,Math.round(y*10)/10]);delete o._res;
-     labRenderList();labDraw();}});
+     if(!o){labStatus("Select a component first, then choose a destination or Edit paths.");return;}
+     if(x<0||y<0||x>LAB.w||y>LAB.h){labStatus("Choose a position inside the floor.");return;}
+     try{if(state.labEditMode==="move")moveLabObjectTo(o,x,y);else{if(o.waypoints.length>=24)throw Error("A path supports at most 24 waypoints.");o.waypoints=fitLabPath(o,[...o.waypoints,[x,y]]);invalidateLabObject(o);touchLab();labRenderList();labDraw();}}catch(error){labStatus(error.message);}}});
    window.__lab3dSync=(objs,t)=>mod.syncLab3D(objs,t);
    mod.syncLab3D(state.lab.objects,state.lab.t,true);
   }catch(e){toast("3D view unavailable (WebGL): "+e.message+" — the 2D editor is unaffected.","err");setLabView("2d");}
@@ -771,20 +795,21 @@ $("lab-play").onclick=()=>{state.lab.playing=!state.lab.playing;$("lab-play").te
   requestAnimationFrame(step);}};
 $("lab-scrub").oninput=e=>{state.lab.t=+e.target.value;labDraw();};
 function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
- for(const o of state.lab.objects){if(!o.waypoints.length)throw new Error(`${o.id} has no path — click the stage to add waypoints.`);
+ for(const o of state.lab.objects){if(!o.waypoints.length)throw new Error(`${o.id} has no position — select it and click the floor to place it.`);
   if(o.category!=="shelf"&&o.speed<=0&&o.waypoints.length>1)throw new Error(`${o.id} has a path but speed 0 — set a speed or make it a shelf.`);
-  if(o.category!=="shelf"&&o.speed>0&&o.waypoints.length<2)throw new Error(`${o.id} is placed but has no path yet — select it and click the stage to add waypoints, or set its speed to 0 to keep it parked.`);
+  if(o.category!=="shelf"&&o.speed>0&&o.waypoints.length<2)throw new Error(`${o.id} is placed but has no path yet — choose Edit paths and add waypoints, or set its speed to 0 to keep it parked.`);
   const pts=[];for(let t=0;t<=T+1e-9;t=Math.round((t+dt)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
   tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
  if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");
  return tracks;}
 function selectedModel(){const s=$("model-select");return s?s.value:"muse-spark-1.3";}
-async function analyzeCustom(tracks,label){
+async function analyzeCustom(tracks,label,stageMetres=null,sceneDocument=null){
+ const sourceRevision=sceneDocument?.id==="lab-current"?state.labRevision:null;
  const ctrl=new AbortController(); const killer=setTimeout(()=>ctrl.abort(),95000);
  let r;
  try{
   const res=await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,
-   body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,model:selectedModel(),
+   body:JSON.stringify({id:label||"created-scene",...(sceneDocument?{scene:sceneDocument}:{tracks}),metres_per_pixel:null,model:selectedModel(),
     speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:runApproved()})});
   const text=await res.text();
   try{ r=JSON.parse(text); }catch(e){ throw new Error(`server returned HTTP ${res.status} (non-JSON). The analysis likely timed out — press Run analysis again.`); }
@@ -795,7 +820,8 @@ async function analyzeCustom(tracks,label){
   labStatus("Analysis failed: "+e.message); const as=$("analyze-status"); if(as)as.textContent="Custom analysis failed: "+e.message;
   throw e;
  }finally{ clearTimeout(killer); }
- state.data=r.scenario;state.scenario=r.scenario.id;state.run=r.run;state.t=0;state.dataUpdatedAt=Date.now(); syncCounterfactual();
+ if(sourceRevision!==null&&sourceRevision!==state.labRevision)throw Error("Scene changed during analysis; the older result was discarded. Run analysis again.");
+ state.data=r.scenario;if(stageMetres)state.data.stage_metres=stageMetres;state.scenario=r.scenario.id;state.run=r.run;state.t=0;state.dataUpdatedAt=Date.now(); syncCounterfactual();
  syncApprovalUI();
  try{const k=sceneStoreKey();const mine=JSON.parse(localStorage.getItem(k)||"[]");
   mine.push({id:r.scenario.id,when:Date.now(),tracks});localStorage.setItem(k,JSON.stringify(mine.slice(-10)));}catch(e){}
@@ -816,16 +842,10 @@ $("lab-run").onclick=async()=>{let localTracks;
  const btn=$("lab-run"),old=btn.textContent,t0=Date.now();btn.disabled=true;btn.textContent="Sampling paths… 0s";
  const timer=setInterval(()=>{btn.textContent=`Analysing… ${Math.round((Date.now()-t0)/1000)}s`;},500);
  try{
-  let tracks=localTracks, sampledBy="browser sampler";
-  try{const r=await fetch("/api/tracks/from-paths",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({objects:state.lab.objects.map(o=>({object_id:o.id,category:o.category,waypoints:o.waypoints,
-     speed:o.speed,radius:o.radius,delay:o.delay,curve:o.curve,mode:o.mode}))})});
-   const out=await r.json();
-   if(r.ok&&out.tracks){tracks=out.tracks;sampledBy="server engine (engine/curves)";}
-   else if(out.error)throw new Error(out.error);
-  }catch(e){labStatus("Server sampling unavailable ("+e.message+") — using the identical browser sampler.");}
-  labStatus("Tracks sampled by "+sampledBy+". Running analysis…");
-  await analyzeCustom(tracks,"created-"+Date.now());
+  const revision=state.labRevision,document=currentLabScene();
+  labStatus("Preparing the current floor, components and paths on the server…");
+  await analyzeCustom(localTracks,"lab-current",[LAB.w,LAB.h],document);
+  if(state.labRevision!==revision)throw Error("Scene changed during analysis. Run analysis again.");
   labStatus("Analysis complete — showing Studio. Events are in the right-hand list; click one to seek.");
  }catch(e){/* analyzeCustom already surfaced the error */}
  finally{clearInterval(timer);btn.disabled=false;btn.textContent=old;}};
@@ -833,7 +853,7 @@ $("lab-export").onclick=()=>{download(new Blob([JSON.stringify({kind:"frontiersi
 $("lab-import-btn").onclick=()=>$("lab-import").click();
 $("lab-import").onchange=e=>{const f=e.target.files[0];e.target.value="";if(!f)return;f.text().then(txt=>{try{
  const d=JSON.parse(txt);const objs=d.objects||d;if(!Array.isArray(objs))throw new Error("expected {objects:[...]} ");
- state.lab.objects=[];state.lab.nextId={};objs.forEach(o=>labAdd(o.category||"object",(o.waypoints||o.points||[]).map(p=>[+p[0],+p[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight"));
+ labLoadScene({objects:objs.map(o=>({...o,waypoints:o.waypoints||o.points||[]})),stage_metres:d.stage_metres},"Scene imported.");
  labStatus(`Imported ${state.lab.objects.length} component(s).`);labDraw();}catch(err){labStatus("Import failed: "+err.message);}});};
 function labSetTitle(name,saved){state.labTitle=name||"Untitled scene";
  const t=$("lab-scene-title");if(t)t.textContent=state.labTitle;
@@ -842,11 +862,16 @@ function labSetTitle(name,saved){state.labTitle=name||"Untitled scene";
 function suggestedName(base){if(base)return base;
  const cats=[...new Set(state.lab.objects.map(o=>o.category))].join(" + ")||"scene";
  return `${cats} · ${state.lab.objects.length} components · ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;}
-function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;state.labUpdatedAt=Date.now();
+function labLoadScene(scene,label){
+ if(Array.isArray(scene.stage_metres)&&scene.stage_metres.length===2&&scene.stage_metres.every(v=>Number.isFinite(v)&&v>=6&&v<=60)){
+  [LAB.w,LAB.h]=scene.stage_metres;$("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;$("lab-stage-label").textContent=`${LAB.w} × ${LAB.h}`;$("lab-canvas").setAttribute("aria-label",`Create Lab stage: components and paths on a ${LAB.w} by ${LAB.h} metre floor`);
+  localStorage.setItem("fs-stage-w",LAB.w);localStorage.setItem("fs-stage-h",LAB.h);
+ }
+ state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;state.labUpdatedAt=Date.now();
  labSetTitle(scene.name||"",false);
  (scene.objects||[]).forEach(o=>{const nl=labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight");
   if(o.custom){nl.custom=o.custom;nl.displayName=o.displayName||o.custom.spec.name;}});
- labStatus(label);labDraw();}
+ labStatus(label);if(state.labView==="3d")setLabView("3d");labDraw();}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-prompt").addEventListener("input",()=>{$("lab-prompt-count").textContent=$("lab-prompt").value.length;});
 const MODEL_HINTS={"muse-spark-1.3":"Latest Spark — balanced cost and quality for scene design and hypotheses.",
@@ -1003,39 +1028,36 @@ function renderOnboard(){let o={};try{o=JSON.parse(localStorage.getItem("fs-onbo
  if(card&&localStorage.getItem("fs-onboard-hide")==="1")card.style.display="none";}
 renderOnboard();
 
-// ---- pricing toggle + waitlist (no billing exists; see docs/AUTH_AND_BILLING.md) ----
-$("bill-toggle").onclick=()=>{const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
- $("bill-toggle").setAttribute("aria-pressed",String(!annual));
- document.querySelectorAll(".amt").forEach(a=>{a.textContent=annual?a.dataset.m:a.dataset.a;});
- document.querySelectorAll(".per").forEach(a=>{a.textContent=annual?"/mo":"/yr";});
- $("bill-toggle").firstChild.textContent=annual?"Switch to annual ":"Switch to monthly ";};
-$("sub-btn").onclick=async()=>{const me=state.me||await refreshMe();
- if(!me.authenticated){toast("Create a free account first, then subscribe.","warn");goto("auth");return;}
- const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
- const out=await api("/api/billing/checkout",{method:"POST",body:JSON.stringify({period:annual?"annual":"monthly"})});
- if(out.status===200&&out.body.url){location.href=out.body.url;return;}
- if(out.body.code==="BILLING_NOT_CONFIGURED"){
-  toast("Billing isn't enabled on this deployment yet — joining the waitlist instead (no payment).","warn");
-  await api("/api/waitlist",{method:"POST",body:JSON.stringify({email:me.user.email,plan:"Researcher"})});
-  return;}
- toast(out.body.error||"Checkout could not be started.","err");};
-document.querySelectorAll(".waitlist-btn").forEach(b=>b.onclick=async()=>{
+// Pricing is a server-declared offer. Only available plans open Stripe Checkout.
+function updatePricing(){const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
+ document.querySelectorAll(".amt").forEach(a=>a.textContent=annual?a.dataset.a:a.dataset.m);
+ document.querySelectorAll(".per").forEach(a=>a.textContent=annual?"/year":"/month");
+ $("sub-amt").textContent=annual?"$190/year":"$19/month";
+ $("billing-period-label").textContent=annual?"Billed annually":"Billed monthly";
+ $("bill-toggle").textContent=annual?"Choose monthly billing":"Choose annual billing";
+ const available=state.billing?.periods?.[annual?"annual":"monthly"]===true;
+ $("sub-action").textContent=available?"Choose Researcher":"Request Researcher access";
+ $("billing-availability").textContent=available?(state.billing.mode==="live"?"Secure checkout with Stripe. Manage your subscription from your account.":"Checkout is in test mode; no live payments are collected."):"Researcher enrollment is opening soon. Contact us to arrange access; Explorer is ready to use.";
+}
+async function refreshBillingAvailability(){try{const response=await fetch("/api/billing/config");if(!response.ok)throw Error("unavailable");state.billing=await response.json();}catch(error){state.billing=null;}updatePricing();}
+$("bill-toggle").onclick=()=>{$("bill-toggle").setAttribute("aria-pressed",String($("bill-toggle").getAttribute("aria-pressed")!=="true"));updatePricing();};
+$("sub-btn").onclick=async()=>{
+ await refreshBillingAvailability();const annual=$("bill-toggle").getAttribute("aria-pressed")==="true",period=annual?"annual":"monthly";
+ if(!state.billing?.periods?.[period]){openQuote();$("q-needs").value=`Researcher ${period} access — ${annual?"$190/year":"$19/month"}.`;return;}
  const me=state.me||await refreshMe();
- const email=me.authenticated?me.user.email:"";
- if(!email){toast("Sign in (or create a free account) so the waitlist has an email to reach.","warn");goto("auth");return;}
- const out=await api("/api/waitlist",{method:"POST",body:JSON.stringify({email,plan:b.dataset.plan})});
- toast(out.status===201?`Waitlist joined for ${b.dataset.plan} as ${email}. No payment taken — billing is not enabled on this deployment.`
-   :"Waitlist failed: "+(out.body.error||"unknown"),"warn");});
+ if(!me.authenticated){toast("Sign in to continue with Researcher.","warn");goto("auth");return;}
+ const out=await api("/api/billing/checkout",{method:"POST",body:JSON.stringify({period})});
+ if(out.status===200&&out.body.url){location.href=out.body.url;return;}
+ toast(out.body.code==="BILLING_NOT_CONFIGURED"?"Checkout is temporarily unavailable. No payment was taken.":out.body.error||"Checkout could not be started.","warn");
+};
 function openQuote(){$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});}
 $("quote-open").onclick=openQuote;
 $("quote-open-2").onclick=openQuote;
 $("quote-send").onclick=async()=>{const out=await api("/api/sales/quote",{method:"POST",
  body:JSON.stringify({company:$("q-company").value.trim(),email:$("q-email").value.trim(),
   seats:$("q-seats").value.trim(),needs:$("q-needs").value.trim()})});
- $("quote-status").textContent=out.status===201?"Recorded — in production this also emails the sales contact. Custom pricing is manual."
+ $("quote-status").textContent=out.status===201?"Request received. For a direct reply, email hello@quantura.studio."
   :(out.body.error||"Could not send.");};
-$("bill-toggle").addEventListener("click",()=>{const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
- const sa=$("sub-amt");if(sa)sa.textContent=annual?"$19/mo":"$190/yr";});
 document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>{goto(b.dataset.goto);
  const tool=b.dataset.labTool;if(!tool)return;const object=tool==="object";
  const panel=$(object?"lab-object-generator":"lab-scene-generator");if(panel)panel.open=true;
@@ -1043,7 +1065,7 @@ document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>{goto(b.datase
 });
 
 // ---- shareable Create Lab links ----
-$("lab-share").onclick=async()=>{const payload={objects:state.lab.objects};
+$("lab-share").onclick=async()=>{const payload={objects:state.lab.objects,stage_metres:[LAB.w,LAB.h]};
  const enc=btoa(unescape(encodeURIComponent(JSON.stringify(payload)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
  const url=location.origin+location.pathname+"#view=create&s="+enc;
  try{await navigator.clipboard.writeText(url);toast("Share link copied — it encodes your scene (components + paths), nothing is uploaded.");}
@@ -1051,7 +1073,7 @@ $("lab-share").onclick=async()=>{const payload={objects:state.lab.objects};
 function loadShared(){if(!location.hash.includes("s="))return;
  try{const enc=new URLSearchParams(location.hash.slice(1)).get("s");
   const payload=JSON.parse(decodeURIComponent(escape(atob(enc.replace(/-/g,"+").replace(/_/g,"/")))));
-  labLoadScene({objects:payload.objects},"Shared scene loaded from link — press Run analysis.");
+  labLoadScene({objects:payload.objects,stage_metres:payload.stage_metres},"Shared scene loaded from link — press Run analysis.");
   goto("create");toast("Shared scene loaded from link.");}
  catch(e){toast("That share link could not be decoded — starting with the template instead.","err");}}
 loadShared();
@@ -1074,6 +1096,8 @@ _samDefaultImg.onload=()=>{if(state.samSource!=="default")return;const canvas=$(
 function showSamExample(index){if(!state.samGallery.length)return;resetSamSource();state.samGalleryIndex=(index+state.samGallery.length)%state.samGallery.length;const item=state.samGallery[state.samGalleryIndex];state.samSource="default";state.samAttribution={author:item.author,authorUrl:item.author_url,photoUrl:item.photo_url,license:item.license,licenseUrl:item.license_url};$("sam-video").pause();$("sam-video").style.display="none";$("sam-img").style.display="none";_samDefaultImg.src=item.src;$("sam-example").value=item.id;
  $("sam-concept").value=item.concepts[0];$("sam-concept2").value=item.concepts[1]||"";
  const credit=$("sam-photo-credit");credit.replaceChildren(document.createTextNode("Photo: "));const author=document.createElement("a");author.href=item.author_url;author.textContent=item.author;author.target="_blank";author.rel="noopener noreferrer";const photo=document.createElement("a");photo.href=item.photo_url;photo.textContent="Unsplash";photo.target="_blank";photo.rel="noopener noreferrer";credit.append(author,document.createTextNode(" on "),photo,document.createTextNode(" · "+item.title));}
+$("studio-open-vision").onclick=()=>{$("sam-panel").open=true;$("sam-panel").scrollIntoView({block:"start",behavior:"instant"});};
+$("sam-panel").addEventListener("toggle",()=>{$("studio-open-vision").setAttribute("aria-expanded",String($("sam-panel").open));if($("sam-panel").open)initSamGallery();});
 function initSamGallery(){if(state.samGalleryInitialized)return;state.samGalleryInitialized=true;
 fetch("/sam-gallery.json").then(response=>{if(!response.ok)throw Error("gallery unavailable");return response.json();}).then(items=>{state.samGallery=items;$("sam-example").replaceChildren(...items.map(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.title;return option;}));if(state.samSource==="default")showSamExample(0);}).catch(()=>samStatus("Example gallery unavailable. You can still upload an image."));}
 $("sam-example").onchange=event=>showSamExample(state.samGallery.findIndex(item=>item.id===event.target.value));$("sam-previous").onclick=()=>showSamExample(state.samGalleryIndex-1);$("sam-next").onclick=()=>showSamExample(state.samGalleryIndex+1);$("sam-restore").onclick=()=>showSamExample(state.samGalleryIndex);
@@ -1206,7 +1230,7 @@ function wsNormalizeLocal(w){return {...w, server:false, key:"local:"+w.id};}
 function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
  return {key:"server:"+s.id, server:true, id:s.id, version:s.version, name:s.name||w.name||"workspace",
   kind:w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
-  objects:w.objects||(s.payload&&s.payload.objects)||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
+  objects:w.objects||(s.payload&&s.payload.objects)||null,stage_metres:w.stage_metres||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
   captures:w.captures||null, image:w.image||null};}
 async function loadWorkspaces(){
  await initClerk();
@@ -1264,7 +1288,7 @@ function renderWorkspaces(){const more=$("workspace-more");if(more)more.hidden=!
    if(a==="open")openWorkspace(w);
    if(a==="studio")loadWorkspaceIntoStudio(w);
    if(a==="analyse"&&w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(e=>toast("Analysis failed: "+e.message,"err"));}
-   if(a==="update"){w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
+   if(a==="update"){w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.stage_metres=[LAB.w,LAB.h];w.updated=Date.now();
     await persistWorkspace(w);labSetTitle(w.name,true);toast(`Workspace "${w.name}" updated from the current Lab scene.`);loadWorkspaces();}
    if(a==="rename"){wsRenameInline(card,w);}
    if(a==="del"){await deleteWorkspace(w);loadWorkspaces();}
@@ -1287,7 +1311,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){
 async function persistWorkspace(w){
  await initClerk();
  if(hasSceneSession()&&!w.legacy){
-  const payload={workspace:{kind:w.kind,objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
+  const payload={workspace:{kind:w.kind,objects:w.objects||null,stage_metres:w.stage_metres||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
   if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload,...(state.authConfig?.firestore_scenes_enabled?{expectedVersion:w.version}:{})})});
    if(out.status===200){w.version=out.body.version||w.version;return true;}
    toast((out.body.error||"Update failed")+". Refresh before retrying.","err");return false;}
@@ -1298,7 +1322,7 @@ async function persistWorkspace(w){
  }
  const list=wsLocalList().filter(x=>x.id!==w.id);
  list.unshift({id:w.id||("ws-"+Date.now()),name:w.name,kind:w.kind,updated:w.updated||Date.now(),
-  objects:w.objects||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null});
+  objects:w.objects||null,stage_metres:w.stage_metres||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null});
  return wsLocalSave(list);}
 async function deleteWorkspace(w){
  if(w.server&&hasSceneSession()){const out=await api("/api/scenes/delete",{method:"POST",body:JSON.stringify({id:w.id,...(state.authConfig?.firestore_scenes_enabled?{expectedVersion:w.version}:{})})});if(out.status!==200){toast(out.body.error||"Delete failed","err");return false;}}
@@ -1314,9 +1338,9 @@ function openWorkspace(w){state.openWorkspace=w;
   else if(w.tracks){toast(`Workspace "${w.name}" has ${w.tracks.length} built track(s) — use "Analyse tracks" on its card, or segment new frames.`);}
   else toast(`Workspace "${w.name}" reopened with ${state.samCaptures.length} captured frame(s) — Build tracks when ready.`);
   const st=$("sam-status");if(st)st.textContent=`Workspace "${w.name}" loaded: ${state.samCaptures.length} captured frame(s). Segment more moments or Build tracks.`;
-  document.getElementById("sam-panel").scrollIntoView({behavior:"smooth"});
+  document.getElementById("sam-panel").open=true;document.getElementById("sam-panel").scrollIntoView({behavior:"smooth"});
  }else{
-  if(w.objects){labLoadScene({objects:w.objects},`Workspace "${w.name}" opened — edit anything, then Run analysis or Update.`);}
+  if(w.objects){labLoadScene({objects:w.objects,stage_metres:w.stage_metres},`Workspace "${w.name}" opened — edit anything, then Run analysis or Update.`);}
   else if(w.tracks){analyzeCustom(w.tracks,"workspace-"+w.id).catch(()=>{});return;}
   goto("create");
   const uw=$("lab-update-ws");if(uw)uw.classList.remove("hidden");
@@ -1325,14 +1349,14 @@ function openWorkspace(w){state.openWorkspace=w;
 $("lab-save-ws").onclick=async()=>{if(!state.lab.objects.length){labStatus("Nothing to save yet — add a component first.");return;}
  const name=($("lab-ws-name").value||"").trim()||suggestedName(state.labTitle);
  const w={id:"ws-"+Date.now(),name,kind:"lab",updated:Date.now(),
-  objects:JSON.parse(JSON.stringify(state.lab.objects))};
+  objects:JSON.parse(JSON.stringify(state.lab.objects)),stage_metres:[LAB.w,LAB.h]};
  state.openWorkspace=w;
  if(await persistWorkspace(w)){state.openWorkspace=w;const uw=$("lab-update-ws");if(uw)uw.classList.remove("hidden");
   labSetTitle(name,true);const sv=$("lab-save-ws");sv.classList.remove("pulse");sv.textContent="Save workspace";
   toast(`Workspace "${name}" saved${w.server?" on the server":" in this browser"} — now in Workspace and the Studio dropdown.`);loadWorkspaces();}};
 $("lab-update-ws").onclick=async()=>{const w=state.openWorkspace;
  if(!w){toast("Open a workspace first, or use Save workspace.","warn");return;}
- w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.updated=Date.now();
+ w.objects=JSON.parse(JSON.stringify(state.lab.objects));w.stage_metres=[LAB.w,LAB.h];w.updated=Date.now();
  if(await persistWorkspace(w)){labSetTitle(w.name,true);toast(`Workspace "${w.name}" updated.`);loadWorkspaces();}};
 $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capture at least one frame first.");return;}
  let image=null;try{const c=$("sam-canvas");image=c.toDataURL("image/jpeg",0.62);if(image.length>600000)image=null;}catch(e){}
@@ -1394,7 +1418,7 @@ async function loadClerk() {
     ClerkApp = window.Clerk;
     try { await ClerkApp.load({ publishableKey: cfg.clerk_publishable_key }); }
     catch (e) { await ClerkApp.load(); }
-    if (note) note.textContent = ClerkApp.user ? "Manage your account from the profile menu." : "Sign in or create your account securely with Clerk.";
+    if (note) note.textContent = ClerkApp.user ? "Manage your account from the profile menu." : "Sign in or create an account to save your work.";
     const btnSlot = $("clerk-userbtn");
     if (ClerkApp.user && btnSlot && ClerkApp.mountUserButton) {
       ClerkApp.mountUserButton(btnSlot, {});
@@ -1404,9 +1428,9 @@ async function loadClerk() {
     function renderClerkSignIn(user){
       if(!si)return;
       if(user&&signInMounted){ClerkApp.unmountSignIn(si);signInMounted=false;}
-      else if(!user&&!signInMounted&&ClerkApp.mountSignIn){ClerkApp.mountSignIn(si, {});signInMounted=true;}
+      else if(!user&&!signInMounted&&ClerkApp.mountSignIn){ClerkApp.mountSignIn(si, {routing:"hash",appearance:{variables:{colorPrimary:"#28677a",borderRadius:"0.875rem",fontFamily:"Inter, system-ui, sans-serif"},elements:{rootBox:"clerk-auth-root",cardBox:"clerk-auth-card",card:"clerk-auth-surface"}}});signInMounted=true;}
       const button=$("auth-btn");if(button)button.classList.toggle("hidden",!!user);
-      if(note)note.textContent=user?"Manage your account from the profile menu.":"Sign in or create your account securely with Clerk.";
+      if(note)note.textContent=user?"Manage your account from the profile menu.":"Sign in or create an account to save your work.";
     }
     renderClerkSignIn(ClerkApp.user);
     if (ClerkApp.user) await syncClerkSession();
@@ -1417,7 +1441,7 @@ async function loadClerk() {
       renderClerkSignIn(user);
       const currentTenant=sceneTenantKey();
       if(currentTenant!==previousTenant){previousTenant=currentTenant;state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();
-        if(state.lab){state.lab.objects=[];state.lab.running=false;labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
+        if(state.lab){state.lab.objects=[];state.lab.running=false;touchLab();resetRunState();state.data=null;state.scenario=null;$("objects").replaceChildren();$("studio-scene-size").textContent="";$("cf-scene-size").textContent="";const canvas=$("stage");canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);window.__studio3dSync?.([],0);window.__cf3dSync?.(null,0);labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
       if (user) syncClerkSession();
       else if (localStorage.getItem("fs-auth-provider") === "clerk") {
    // Only a session that Clerk created may be ended by Clerk signing out.
@@ -1425,23 +1449,10 @@ async function loadClerk() {
    localStorage.removeItem("fs-auth-provider");
    state.openWorkspace=null;state.samCaptures=[]; loadCustomObjects(); refreshMe(); }
     });
-    // Clerk Billing pricing table (plans live in Clerk Dashboard)
-    const tableHost = $("clerk-pricing");
-    if (tableHost && typeof ClerkApp.mountPricingTable === "function") {
-      try {
-        ClerkApp.mountPricingTable(tableHost, {});
-        tableHost.classList.remove("hidden");
-        const cards = $("plan-cards"); if (cards) cards.style.display = "none";
-        const tq = $("team-quote-row"); if (tq) tq.classList.remove("hidden");
-        const det = document.createElement("p"); det.className = "dim";
-        det.textContent = "Checkout and plan management run through Clerk (development instance). Feature comparison below still applies.";
-        tableHost.appendChild(det);
-      } catch (e) {
-        tableHost.innerHTML = `<p class="dim">Clerk Billing could not render here (${(e && e.message) || "billing not enabled"}). ` +
-          `Enable Billing in the Clerk Dashboard and create the plans described in docs/CLERK_SETUP.md — the plans below remain available via Stripe/waitlist.</p>`;
-        tableHost.classList.remove("hidden");
-      }
-    }
+    // Clerk owns identity; Stripe owns this product's subscription contract.
+    // Never hide the actual offer behind an unconfigured Clerk Billing table.
+    const tableHost=$("clerk-pricing");if(tableHost)tableHost.classList.add("hidden");
+
   } catch (e) {
     if (note) note.textContent = "Secure sign-in could not load. Please check your connection and retry.";
     $("clerk-retry")?.classList.remove("hidden");

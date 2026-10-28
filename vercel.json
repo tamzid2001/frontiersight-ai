@@ -232,6 +232,30 @@
     {
       "source": "/assets/(.*)",
       "destination": "/api/index?ep=asset&file=$1"
+    },
+    {
+      "source": "/stage-edit-core.js",
+      "destination": "/api/index?ep=stageedit"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index?ep=openapi"
+    },
+    {
+      "source": "/api/scenes/resize",
+      "destination": "/api/index?ep=scene-resize"
+    },
+    {
+      "source": "/api/scenes/reposition",
+      "destination": "/api/index?ep=scene-reposition"
+    },
+    {
+      "source": "/api/scenes/prepare",
+      "destination": "/api/index?ep=scene-prepare"
+    },
+    {
+      "source": "/api/billing/config",
+      "destination": "/api/index?ep=billingconfig"
     }
   ],
   "functions": {

@@ -114,7 +114,7 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         if ep == "asset":
             return "/assets/" + parse_qs(u.query).get("file", [""])[0]
-        return {"mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
+        return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
                 "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
                 "samdefault": "/sam-default.jpg", "three": "/vendor/three.module.min.js", "orbit": "/vendor/addons/OrbitControls.js", "threeview": "/three-view.js",
@@ -122,7 +122,7 @@ class H(BaseHTTPRequestHandler):
                 "analyze-custom": "/api/analyze-custom", "counterfactual-custom": "/api/counterfactual-custom",
                 "tracks": "/api/tracks", "from-paths": "/api/tracks/from-paths", "me": "/api/me", "signup": "/api/auth/signup",
                 "login": "/api/auth/login", "logout": "/api/auth/logout", "auth-config": "/api/auth/config",
-                "checkout": "/api/billing/checkout", "portal": "/api/billing/portal",
+                "billingconfig": "/api/billing/config", "checkout": "/api/billing/checkout", "portal": "/api/billing/portal",
                 "webhook": "/api/billing/webhook", "metakey": "/api/keys/meta",
                 "scenes": "/api/scenes", "scenedel": "/api/scenes/delete", "sceneupd": "/api/scenes/update",
                 "waitlist": "/api/waitlist", "quote": "/api/sales/quote",
@@ -164,7 +164,7 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.32.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.37.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 return self._send(200, _mcp.catalog())
@@ -183,8 +183,10 @@ class H(BaseHTTPRequestHandler):
                     "clerk_enabled": _clerk.enabled(),
                     "clerk_publishable_key": _clerk.publishable_key() or None,
                     "clerk_instance": "development" if _clerk.publishable_key().startswith("pk_test_") else ("production" if _clerk.enabled() else None),
-                    "billing_provider": "clerk" if _clerk.enabled() else ("stripe" if _billing.configured() else "none"),
+                    "billing_provider": "stripe" if _billing.checkout_configuration()["ready"] else "none",
+                    "billing": _billing.checkout_configuration(),
                     "first_party_auth": True, "firestore_scenes_enabled": _workspace.enabled()})
+            if route == "/api/billing/config": return self._send(200, _billing.checkout_configuration())
             if route.startswith("/api/me"):
                 user = _auth_user(self)
                 if not user: return self._send(200, {"authenticated": False, "plan": "explorer",
@@ -293,7 +295,26 @@ class H(BaseHTTPRequestHandler):
                 if resp is None: return self._send(202, b"", "application/json")
                 return self._send(200, resp)
             body = self._body()
+            if route in ("/api/scenes/resize", "/api/scenes/reposition", "/api/scenes/prepare"):
+                from engine.scene_edit import resize_scene, reposition_scene, prepare_scene
+                if not isinstance(body, dict):return self._send(400,{"error":"request must be an object"})
+                if route.endswith("prepare"):
+                    result=prepare_scene(body.get("scene"))
+                elif route.endswith("resize"):
+                    result=resize_scene(body.get("scene"),body.get("width"),body.get("height"))
+                else:
+                    result=reposition_scene(body.get("scene"),body.get("object_id"),body.get("x"),body.get("y"))
+                return self._send(200,result)
             if route.startswith("/api/analyze-custom"):
+                if "scene" in body:
+                    if "tracks" in body: raise ValueError("supply scene or tracks, not both")
+                    from engine.scene_edit import scene_to_scenario
+                    custom = scene_to_scenario(body["scene"])
+                    if len(custom["tracks"]) < 2: raise ValueError("analysis needs at least two objects")
+                    run = run_analysis(custom, float(body.get("speed_reduction_pct", 40)),
+                                       float(body.get("intervention_t", 1.0)), False,
+                                       body.get("idempotency_key"), body.get("model"))
+                    return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(custom)})
                 tracks = parse_tracks(body.get("tracks", []))
                 mpp = body.get("metres_per_pixel")
                 if mpp is not None:
@@ -310,11 +331,24 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(custom)})
             if route.startswith("/api/counterfactual-custom"):
                 from engine.pathsim import simulate_on_paths
+                if "scene" in body:
+                    if "tracks" in body: raise ValueError("supply scene or tracks, not both")
+                    from engine.scene_edit import simulate_scene
+                    count = int(body.get("mc_runs", 100))
+                    limit = _billing.entitlements(_plan_of(_auth_user(self)))["mc_runs"]
+                    if limit is not None and count > limit:
+                        raise _billing.PaymentRequired(f"mc_runs (limit {limit})", _plan_of(_auth_user(self)))
+                    result = simulate_scene(body["scene"], body.get("agent_id"), body.get("target_id"),
+                                            body.get("intervention_t", 1.0), body.get("speed_reduction_pct", 40),
+                                            body.get("braking_decel", 2.5), count)
+                    return self._send(200, result)
                 tracks = parse_tracks(body.get("tracks", []))
                 agent_id = body.get("agent_id", tracks[0].object_id)
                 agent = next((t for t in tracks if t.object_id == agent_id), None)
                 if agent is None: return self._send(400, {"error": f"unknown agent_id: {agent_id}"})
-                _others = [t for t in tracks if t.object_id != agent.object_id]
+                _others = [t for t in tracks if t.object_id != agent.object_id
+                           and (not body.get("target_id") or t.object_id == body["target_id"])]
+                if not _others: return self._send(400, {"error": "no comparison actor selected"})
                 _mc_req = int(body.get("mc_runs", 100))
                 _mc_limit = _billing.entitlements(_plan_of(_auth_user(self)))["mc_runs"]
                 if _mc_limit is not None and _mc_req > _mc_limit:
@@ -509,10 +543,12 @@ class H(BaseHTTPRequestHandler):
             if route.startswith("/api/billing/checkout"):
                 user = _auth_user(self)
                 if not user: return self._send(401, {"error": "sign in before subscribing", "upgrade_url": "/#view-auth"})
-                price_env = "PRICE_RESEARCHER_ANNUAL" if body.get("period") == "annual" else "PRICE_RESEARCHER_MONTHLY"
+                period = body.get("period", "monthly")
+                if period not in ("monthly", "annual"): raise ValueError("period must be monthly or annual")
+                price_env = "PRICE_RESEARCHER_ANNUAL" if period == "annual" else "PRICE_RESEARCHER_MONTHLY"
                 base = os.environ.get("APP_BASE_URL", "https://frontiersight-ai.vercel.app")
                 out = _billing.create_checkout(user, os.environ.get(price_env, ""),
-                                               base + "/?billing=success", base + "/?billing=cancelled")
+                                               base + "/?billing=success", base + "/?billing=cancelled", period)
                 return self._send(200, {"url": out.get("url"), "session_id": out.get("id")})
             if route.startswith("/api/billing/portal"):
                 user = _auth_user(self)

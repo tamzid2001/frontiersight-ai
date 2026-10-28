@@ -178,3 +178,11 @@ in the footer of the live site.
 ## License
 
 MIT — original work written for this hackathon. See [`LICENSE`](LICENSE).
+
+
+### Scene editing and API contract
+
+Create Lab floor dimensions, object definitions and paths transfer together into
+Studio and Counterfactual. [Editing, canonical preparation and MCP examples](docs/SCENE_EDITING_API.md)
+cover the deterministic endpoints; the [served OpenAPI contract](https://frontiersight-ai.vercel.app/openapi.json)
+and [coverage evidence](docs/SCENE_EDITING_COVERAGE.md) are available for integration.

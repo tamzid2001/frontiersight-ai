@@ -84,10 +84,10 @@
     <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub repository ↗</a></div>
    <p class="dim" id="hero-diag">Loading diagnostics…</p>
    <div class="proofstrip" aria-label="Measured facts about this build">
-    <div><b>84</b><span>tests in CI</span></div>
+    <div><b>Tested</b><span>CPU engine &amp; controls</span></div>
     <div><b>7</b><span>analytical validation cases</span></div>
     <div><b>5</b><span>curved-path scenarios</span></div>
-    <div><b>8</b><span>MCP tools exposed</span></div>
+    <div><b>10</b><span>MCP tools exposed</span></div>
     <div><b>4</b><span>Meta models integrated</span></div>
    </div>
   </div>
@@ -143,7 +143,7 @@
   <article class="card tile"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><button type="button" class="tilelink" data-goto="settings">Check the connection →</button></article>
   <article class="card tile"><div class="howico">🎙</div><h3>Voice dictation</h3><p>Speak your scene instead of typing: Muse Voice Transcribe turns speech into an editable prompt (browser-decoded to studio WAV first), then Muse Spark builds it.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="voice">Dictate a scene →</button></article>
   <article class="card tile"><div class="howico">✦</div><h3>Custom objects by Muse</h3><p>Describe any object — Muse Spark designs a buildable version, Muse Image renders it, and it becomes a real component in 2D and 3D, saved to your profile.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="object">Create an object →</button></article>
-  <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>The deterministic engine is an MCP server (HTTP + stdio): eight tools any agent can call for measured analysis and counterfactuals — no credits spent, no approvals bypassed.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
+  <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>The deterministic engine is an MCP server (HTTP + stdio): ten tools any agent can call for measured analysis and counterfactuals — no credits spent, no approvals bypassed.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
  </div>
 
  <div class="card wide"><h3>Architecture</h3>
@@ -202,7 +202,7 @@
 
  <div class="ctaband">
   <div><h2>Build a world. Then prove it.</h2>
-  <p class="dim">Free while the judges are watching — no card, no keys, nothing uploaded.</p></div>
+  <p class="dim">Start with a scene. See what you can learn. No card required.</p></div>
   <div class="row"><button data-goto="create">Open Create Lab</button>
   <button class="ghostbtn" data-goto="pricing">See pricing</button></div>
  </div>
@@ -226,33 +226,33 @@
 </section>
 
 <section id="view-studio" class="view">
- <div class="row"><h2>Video intelligence studio</h2>
+ <div class="row studio-heading"><h2>Video intelligence studio</h2>
   <select id="scenario-select" aria-label="Scenario"></select>
-  <span class="pill ghost">SYNTHETIC FIXTURE REPLAY — canvas-rendered from stored fixture tracks, ground truth held separately</span></div>
- <div class="studio">
+  <span id="studio-source-pill" class="pill ghost" title="Stored synthetic tracks; ground truth is held separately">Fixture replay</span><button id="studio-open-vision" type="button" class="ghostbtn" aria-controls="sam-panel" aria-expanded="false">Segment image / video</button></div>
+ <div class="studio studio-workbench">
   <div class="card stagecard">
    <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
     <button id="studio-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
     <button id="studio-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
     <span class="dim">Same tracks, same clock — 3D is a visualisation; analysis stays planar.</span></div>
-   <canvas id="stage" width="880" height="560" role="img" aria-label="Scene stage: tracked entities moving along their observed paths"></canvas>
+   <p id="studio-scene-size" class="scene-size dim" role="status"></p><div class="studio-surface"><canvas id="stage" width="880" height="560" role="img" aria-label="Scene stage: tracked entities moving along their observed paths"></canvas></div>
    <div id="studio-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the scenario tracks"></div>
    <div class="transport"><button id="play">▶ Play</button>
     <div class="speedseg" role="group" aria-label="Playback speed">
     <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button><button type="button" data-speed="1" class="on" aria-pressed="true">1×</button><button type="button" data-speed="2" aria-pressed="false">2×</button></div>
     <input id="scrub" type="range" aria-label="Scene time scrubber" min="0" max="8" step="0.05" value="0"><span id="clock" class="mono">t = 0.00s</span></div>
-   <p class="dim">Entities are drawn to scale and oriented to their heading:
+   <details class="studio-legend"><summary>Track legend</summary><p class="dim">Entities are drawn to scale and oriented to their heading:
    <span class="sw" style="--sw:#e9a13b">forklift</span> <span class="sw" style="--sw:#ff7847">pedestrian</span>
    <span class="sw" style="--sw:#aebfd2">robot</span> <span class="sw" style="--sw:#4d8dff">vehicle</span>
    <span class="sw" style="--sw:#b07fe8">cyclist</span> <span class="sw" style="--sw:#b08d5f">shelf</span> ·
-   trails = observed paths · red dashed ring = declared occlusion window. Click an event to seek.</p>
+   trails = observed paths · red dashed ring = declared occlusion window. Click an event to seek.</p></details>
   </div>
-  <aside class="card"><h3>Analysis events</h3><ul id="events"><li class="dim">Run analysis to detect events.</li></ul>
+  <aside class="card studio-inspector" tabindex="0" aria-label="Analysis events and tracked objects"><h3>Analysis events</h3><ul id="events"><li class="dim">Run analysis to detect events.</li></ul>
    <button id="analyze">Run analysis</button><p id="analyze-status" role="status"></p>
    <h3>Objects</h3><ul id="objects"></ul></aside>
  </div>
 
- <div class="card wide" id="sam-panel" style="margin-top:14px"><h3>SAM 3.1 Vision — segment your own image or video frame</h3>
+ <details class="card wide studio-tools" id="sam-panel" style="margin-top:14px"><summary>SAM 3.1 Vision — segment an image or video frame</summary>
   <p class="dim">Load an image or video (stays in your browser), then segment the current frame with SAM 3.1.
   For video: segment at two or more moments, then build tracks from the boxes (greedy-IoU association) and run
   the full analysis on them. A still image can instead become a 2D cutout scene and an illustrative 3D mask extrusion. Detections are image-space — results stay in pixels unless you declare a scale in Create Lab terms.</p>
@@ -280,10 +280,10 @@
     <code>person #0 · box [756,668]–[961,1052] · confidence 0.973</code>. Zero matches is a valid SAM result and is shown as-is.</li></ul>
    </aside>
   </div>
- </div>
- <div class="card wide" style="margin-top:14px"><h2>Motion &amp; geometry inspector</h2>
+ </details>
+ <details class="card wide studio-tools" style="margin-top:14px"><summary>Motion &amp; geometry inspector</summary>
  <div id="inspector-body" class="dim">Run analysis in the Studio, then inspect measured tracks, coordinate frames, and uncertainty here.</div>
- </div>
+ </details>
 <div class="card wide image-scene-panel" id="image-scene-panel" hidden>
   <h2>Scene from your segmented image</h2><p class="dim">The 2D scene uses actual image pixels and decoded SAM masks. The 3D view extrudes those silhouettes with assumed thickness and layer positions; it is not a metric reconstruction or a physical safety model.</p>
   <div class="row"><label class="chk"><input id="image-scene-background" type="checkbox" checked> Show original photograph for context</label><button id="image-scene-export" type="button" class="ghostbtn">Download scene JSON</button></div>
@@ -303,7 +303,7 @@
    <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
     <button id="lab-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
     <button id="lab-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
-    <span class="dim">3D visualises the same 2D scene model — heights are illustrative, physics stays planar. Drag waypoints in 2D; click the 3D ground to add them.</span></div>
+    <span class="dim">3D visualises the same 2D scene model — heights are illustrative, physics stays planar. Use Move objects to reposition a component and its path. Use Edit paths to change individual waypoints.</span></div>
    <details class="lab-tools lab-floor-settings"><summary>Floor size &amp; scenery</summary>
    <div class="row" style="margin-bottom:6px;align-items:flex-end;gap:10px">
     <label>Stage width (m)<input id="lab-stage-w" type="number" min="6" max="60" step="1" value="16" style="max-width:100px"></label>
@@ -311,12 +311,13 @@
     <span class="dim">The stage is <b>16 × 14 m</b> by default — set your own floor size; paths, previews and analysis use it.</span></div>
    <div class="row scenery-options"><label for="scene-environment">Scenery</label><select id="scene-environment"><option value="auto">Match scene objects</option><option value="warehouse">Warehouse</option><option value="road">Street</option><option value="robotics">Robotics workcell</option></select><span class="dim">Visual context only; scenery is not included in collision analysis.</span></div>
    </details>
-   <canvas id="lab-canvas" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
+   <div class="row lab-edit-mode" role="group" aria-label="Scene editing mode"><button id="lab-move-mode" type="button" class="ghostbtn" aria-pressed="true">Move objects</button><button id="lab-path-mode" type="button" class="ghostbtn" aria-pressed="false">Edit paths</button></div>
+   <p id="lab-edit-help" class="dim">Drag an object to move it with its path, or select it and click a destination. Arrow keys move the selected object when the canvas is focused.</p>
+   <canvas id="lab-canvas" tabindex="0" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
    <div id="lab-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the Create Lab scene"></div>
    <div class="transport"><button id="lab-play">▶ Preview motion</button>
     <input id="lab-scrub" type="range" aria-label="Preview time scrubber" min="0" max="20" step="0.05" value="0"><span id="lab-clock" class="mono">t = 0.00s</span></div>
-   <p id="lab-live" class="mono dim">Closest pair: —</p><p class="dim">Select a component, then <b>click the stage to add waypoints</b>. Drag any waypoint to move it.
-   The marker shows where each component will be at the preview time.</p>
+   <p id="lab-live" class="mono dim">Closest pair: —</p>
    <div class="row">
     <button id="lab-run">Run analysis →</button>
     <button id="lab-export" class="ghostbtn">Export scene JSON</button>
@@ -328,22 +329,7 @@
     <span id="lab-status" role="status" class="dim"></span>
    </div>
   </div>
-  <aside class="card lab-inspector" tabindex="0" aria-label="Scene components and generators">   <h3>Components</h3>
-   <div class="row"><select id="lab-new-cat" aria-label="Component type">
-     <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
-     <option value="robot">Robot</option><option value="vehicle">Vehicle</option>
-     <option value="cyclist">Cyclist</option><option value="shelf">Shelf (static)</option></select>
-    <button id="lab-add">+ Add component</button></div>
-   <div class="row"><span class="dim">Template:</span>
-    <button class="ghostbtn" data-tpl="near-miss">Near-miss</button>
-    <button class="ghostbtn" data-tpl="crossing">Crossing</button>
-    <button class="ghostbtn" data-tpl="cell">Robot cell</button></div>
-   <p id="lab-ready" class="mono"></p><div class="row"><button id="lab-clear-all" class="ghostbtn">Clear all components</button></div>
-   <div id="lab-list"></div>
-   <h3>How it flows</h3>
-   <p class="dim">Run analysis samples every path into timestamped tracks, runs all-pairs closest-approach/TTC
-   analysis, proposes a braking counterfactual for the focus pair, and lands you in the Studio with the full
-   agent trace. Pick the counterfactual agent in the Counterfactual screen — it defaults to the first moving component.</p>
+  <aside class="card lab-inspector" tabindex="0" aria-label="Scene components and generators">
 <h3 class="lab-generator-label">Create with AI</h3><details class="lab-tools" id="lab-scene-generator"><summary>✦ Generate a scene with Muse</summary>
    <textarea id="lab-prompt" rows="3" maxlength="4000" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
    <p class="dim" style="margin:2px 0 8px"><span id="lab-prompt-count">0</span> / 4000 characters</p>
@@ -385,20 +371,35 @@
    <span id="obj-status" class="dim" role="status"></span></div>
    <div id="obj-preview"></div>
    </details>
+
+   <h3>Components</h3>
+   <div class="row"><select id="lab-new-cat" aria-label="Component type">
+     <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
+     <option value="robot">Robot</option><option value="vehicle">Vehicle</option>
+     <option value="cyclist">Cyclist</option><option value="shelf">Shelf (static)</option></select>
+    <button id="lab-add">+ Add component</button></div>
+   <div class="row"><span class="dim">Template:</span>
+    <button class="ghostbtn" data-tpl="near-miss">Near-miss</button>
+    <button class="ghostbtn" data-tpl="crossing">Crossing</button>
+    <button class="ghostbtn" data-tpl="cell">Robot cell</button></div>
+   <p id="lab-ready" class="mono"></p><div class="row"><button id="lab-clear-all" class="ghostbtn">Clear all components</button></div>
+   <div id="lab-list"></div>
+   <h3>How it flows</h3>
+   <p class="dim">Run analysis samples every path into timestamped tracks, runs all-pairs closest-approach/TTC
+   analysis, proposes a braking counterfactual for the focus pair, and lands you in the Studio with the full
+   agent trace. Pick the counterfactual agent in the Counterfactual screen — it defaults to the first moving component.</p>
   </aside>
  </div>
 </section>
 <section id="view-counterfactual" class="view"><h2>Counterfactual simulator</h2>
- <p class="dim">Pick the scene, the agent that intervenes, and who it must avoid. Change anything — scene, agent,
- target, timing, braking — and the deterministic simulation reruns on the server. The map shows where bodies
- actually go; the chart shows how close they get.</p>
- <div class="card wide" style="margin-bottom:14px">
-  <div class="row" style="align-items:flex-end;gap:18px;flex-wrap:wrap">
-   <label style="flex:1;min-width:180px">Scene<select id="cf-scene"></select></label>
-   <label style="flex:1;min-width:150px">Intervening agent<select id="cf-agent"></select></label>
-   <label style="flex:1;min-width:150px">Must avoid<select id="cf-target"><option value="">All actors (worst case)</option></select></label>
+ <p class="dim cf-intro">Compare original and braking trajectories. Changes rerun the deterministic simulation.</p>
+ <div class="card wide cf-context">
+  <div class="cf-fields">
+   <label>Scene<select id="cf-scene"></select></label>
+   <label>Intervening agent<select id="cf-agent"></select></label>
+   <label>Must avoid<select id="cf-target"><option value="">All actors (worst case)</option></select></label>
   </div>
-  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px">
+  <div class="row cf-presets">
    <span class="dim">Presets:</span>
    <button class="ghostbtn cf-preset" data-sr="25" data-it="1.5" data-dec="2.0">Gentle, early</button>
    <button class="ghostbtn cf-preset" data-sr="50" data-it="1.0" data-dec="2.5">Half speed @1s</button>
@@ -406,24 +407,23 @@
    <button class="ghostbtn cf-preset" data-sr="80" data-it="2.0" data-dec="3.0">Near-stop, late</button>
   </div>
  </div>
- <div class="studio">
+ <div class="studio cf-workbench">
   <div class="card stagecard">
-   <h3 style="margin-top:0">Trajectory map — top-down</h3>
-   <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
+   <div class="row cf-view-controls"><h3>Trajectory map</h3>
     <button id="cf-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
     <button id="cf-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
-    <span class="dim">Synced with Create Lab &amp; Studio: same scene, same clock, same entities.</span></div>
-   <canvas id="cf-map" width="880" height="520" role="img" aria-label="Counterfactual trajectory map, top-down"></canvas>
-   <div id="cf-3d" class="hidden" style="height:520px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the counterfactual comparison"></div>
+    </div>
+   <p id="cf-scene-size" class="scene-size dim" role="status"></p><div class="cf-surface"><canvas id="cf-map" width="880" height="520" role="img" aria-label="Counterfactual trajectory map, top-down"></canvas></div>
+   <div id="cf-3d" class="hidden" role="img" aria-label="3D view of the counterfactual comparison"></div>
    <div class="transport"><button id="cf-play">▶ Play comparison</button>
     <input id="cf-scrub" type="range" aria-label="Comparison time scrubber" min="0" max="6" step="0.05" value="0"><span id="cf-clock" class="mono">t = 0.00s</span></div>
-   <p class="dim">Dashed slate = agent's original path · teal = counterfactual · thin lines = other actors ·
-   ◇ = closest approach (counterfactual). Ghost marker = where the original agent would have been.</p>
-   <h3>Separation over time</h3>
+   <details class="studio-legend"><summary>Trajectory legend</summary><p class="dim">Dashed slate = agent's original path · teal = counterfactual · thin lines = other actors ·
+   ◇ = closest approach (counterfactual). Ghost marker = where the original agent would have been.</p></details>
+   <details class="cf-separation"><summary>Separation over time</summary>
    <canvas id="cf-chart" width="880" height="330" role="img" aria-label="Separation over time chart for the focus pair"></canvas>
-   <p class="dim">Focus pair distance: original (slate) vs counterfactual (teal); red band = contact distance (sum of radii).</p>
+   <p class="dim">Focus pair distance: original (slate) vs counterfactual (teal); red band = contact distance (sum of radii).</p></details>
   </div>
-  <aside class="card"><h3>Intervention</h3>
+  <aside class="card cf-inspector" tabindex="0" aria-label="Intervention and simulation results"><h3>Intervention</h3>
    <label>Speed reduction <b id="sr-val">40%</b><input id="sr" type="range" min="0" max="80" value="40"></label>
    <label>Intervention time <b id="it-val">1.0s</b><input id="it" type="range" min="0" max="4" step="0.25" value="1"></label>
    <label>Braking deceleration <b id="dec-val">2.5 m/s²</b><input id="cf-decel" type="range" min="0.5" max="6" step="0.25" value="2.5"></label>
@@ -455,28 +455,27 @@
 </section>
 
 
-<section id="view-pricing" class="view"><h2>Pricing</h2>
- <p class="sub">Simple, honest pricing. Paid plans run through Stripe (checkout + customer portal) with
- server-enforced entitlements. <b>On this public demo deployment Stripe is not configured</b>, so Subscribe
- safely falls back to the waitlist and no card can be collected.</p>
- <div class="row" style="margin:14px 0"><span>Monthly</span>
-  <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Switch to annual <span class="dim">(2 months free)</span></button></div>
+<section id="view-pricing" class="view"><div class="pricing-intro"><span class="eyebrow">Build. Test. Share with confidence.</span><h2>Choose your next step.</h2>
+ <p class="sub">Start exploring physical-world scenarios for free. Upgrade for deeper simulation, more saved work and a workflow built around your research.</p>
+ <div class="row billing-switch"><span id="billing-period-label">Billed monthly</span>
+  <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Choose annual billing</button><span class="pill ok">Save $38 with annual</span></div>
+ <p id="billing-availability" class="dim" role="status">Checking plan availability…</p></div>
  <div id="clerk-pricing" class="hidden" style="margin-bottom:14px"></div>
  <p id="team-quote-row" class="dim hidden">Building for a team? <button type="button" id="quote-open-2" class="flink">Request a Team / Enterprise quote</button> — shared org workspace, audit log, SSO scoped in contract.</p>
  <div class="grid3" id="plan-cards">
-  <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Forever free · no card required</p>
+  <div class="card plan"><h3>Explorer</h3><p class="price">$0</p><p class="dim">Explore at your own pace · no card required</p>
    <ul><li>✓ All 5 built-in scenarios</li><li>✓ Create Lab + prompt-to-scene</li><li>✓ Deterministic analysis &amp; counterfactuals</li>
    <li>✓ Evidence export with recorded human approval</li><li>✓ 10 server-saved scenes · Monte-Carlo ≤ 200</li></ul>
    <button data-goto="create">Start free</button></div>
   <div class="card plan featured"><h3>Researcher</h3><p class="price"><span class="amt" data-m="$19" data-a="$190">$19</span><span class="per">/mo</span></p>
-   <p class="dim">For individual researchers &amp; engineers</p>
+   <p class="dim">For researchers turning experiments into evidence</p>
    <ul><li>✓ Everything in Explorer</li><li>✓ Your own Meta API key (encrypted, server-side)</li>
    <li>✓ SAM 3.1 video-mode tracking</li><li>✓ Unlimited server-saved scenes</li>
    <li>✓ Monte-Carlo up to 2,000 runs</li><li>✓ Priority support requests</li></ul>
-   <button id="sub-btn">Subscribe — <span id="sub-amt">$19/mo</span></button> <button class="waitlist-btn ghostbtn" data-plan="Researcher">or join waitlist</button></div>
-  <div class="card plan"><h3>Team / Enterprise</h3><p class="price">Custom</p><p class="dim">Annual contract · provisioned for your org</p>
+   <button id="sub-btn"><span id="sub-action">Choose Researcher</span> — <span id="sub-amt">$19/month</span></button><p class="plan-footnote">Manage or cancel from your billing portal when subscribed.</p></div>
+  <div class="card plan"><h3>Team / Enterprise</h3><p class="price">Custom</p><p class="dim">A tailored workspace for your team</p>
    <ul><li>✓ Everything in Researcher</li><li>✓ Shared org workspace &amp; member roles</li>
-   <li>✓ Org audit log (exports, approvals, provisioning)</li><li>✓ Unlimited Monte-Carlo</li>
+   <li>✓ Org audit log (exports, approvals, provisioning)</li><li>✓ Custom simulation budgets</li>
    <li>✓ Onboarding session for your safety team</li></ul>
    <button id="quote-open">Request a quote</button>
    <p class="dim">Scoped in the custom contract: SSO/SAML via your identity provider, private VPC deployment, SLA terms.</p></div>
@@ -490,33 +489,31 @@
    <tr><td>Meta calls</td><td>Host key, fair use</td><td>Your own key (BYOK)</td><td>Your own key (BYOK)</td></tr>
    <tr><td>SAM 3.1 video-mode tracking</td><td>—</td><td>✓</td><td>✓</td></tr>
    <tr><td>Server-saved scenes</td><td>10</td><td>Unlimited</td><td>Unlimited + shared org library</td></tr>
-   <tr><td>Monte-Carlo runs / analysis</td><td>200</td><td>2,000</td><td>Unlimited</td></tr>
+   <tr><td>Monte-Carlo runs / analysis</td><td>200</td><td>2,000</td><td>Scoped with your team</td></tr>
    <tr><td>Evidence export with approval record</td><td>✓</td><td>✓</td><td>✓ + org audit log</td></tr>
    <tr><td>Support</td><td>Standard queue</td><td>Priority queue</td><td>SLA (contract)</td></tr>
    <tr><td>SSO / SAML · VPC · SLA terms</td><td>—</td><td>—</td><td>Custom contract</td></tr>
   </table></div>
-  <p class="dim">Live Meta calls in this public demo run on the host's API key and are rate-limited
-  (120 requests/min per client; 30/min on model endpoints). Production deployments use your own
-  <code>MODEL_API_KEY</code>; Meta Model API usage is billed by Meta separately from any FrontierSight plan.</p>
+  <p class="dim">Start with included model access, subject to fair-use limits. Researcher supports your own Meta key for a dedicated workflow. Meta usage with your key is billed separately by Meta.</p>
  </div>
 
- <div class="card wide hidden" id="quote-card"><h3>Team / Enterprise — request a quote</h3>
+ <div class="card wide hidden" id="quote-card"><h3>Let’s find the right workflow.</h3>
   <label>Company<input id="q-company" type="text" style="width:100%"></label>
   <label>Work email<input id="q-email" type="email" style="width:100%"></label>
   <label>Seats<input id="q-seats" type="text" placeholder="e.g. 12" style="width:100%"></label>
   <label>What do you need? (SSO, VPC, SLA…)<textarea id="q-needs" rows="3" style="width:100%"></textarea></label>
   <button id="quote-send">Send quote request</button> <span id="quote-status" class="dim" role="status"></span>
-  <p class="dim">Recorded on this deployment; in production this also emails the sales contact. Custom pricing is manual — no checkout for Team plans.</p></div>
+  <p class="dim">Tell us about your workflow and we’ll help scope the right setup. You can also reach us at <a href="mailto:hello@quantura.studio">hello@quantura.studio</a>.</p></div>
 
- <div class="card wide"><h3>FAQ</h3>
-  <p><b>Will I be charged if I join the waitlist?</b> No. The waitlist records your email on this deployment for launch notification; no payment is taken. Full integration details: <code>docs/PAID_PLANS_INTEGRATION_PROMPT.md</code>.</p>
-  <p><b>What does the free tier actually include today?</b> Everything running on this site right now.</p>
-  <p><b>Do prices include Meta API costs?</b> No — Meta Model API usage is billed by Meta under your own key in production.</p>
-  <p><b>How are Team plans provisioned?</b> Manually, per contract: we create your organisation, assign member roles, and record it in the org audit log (<code>scripts/provision_org.py</code>). SSO/SAML is then connected through your identity provider.</p>
+ <div class="card wide pricing-faq"><h3>A few things worth knowing</h3>
+  <details><summary>Can I try FrontierSight before upgrading?</summary><p>Yes. Explorer includes Create Lab, the built-in examples and deterministic analysis. No card is required.</p></details>
+  <details><summary>What does annual billing save?</summary><p>Researcher is $190 per year, compared with $228 over 12 monthly payments. That’s $38 saved. Annual plans are paid upfront.</p></details>
+  <details><summary>Are model API costs included?</summary><p>Shared model access has fair-use limits. When you connect your own Meta API key, Meta bills that usage separately.</p></details>
+  <details><summary>How do I get a team workspace?</summary><p>Request a quote to discuss shared workspaces, member roles, onboarding and your simulation needs. SSO, private deployment and service terms are scoped individually.</p></details>
  </div>
 </section>
 
-<section id="view-auth" class="view"><h2 id="auth-title">Sign in</h2>
+<section id="view-auth" class="view"><div class="auth-intro"><img src="/logo-mark.svg" alt="" width="48" height="48"><span class="eyebrow">Your workspace, ready when you are</span><h2 id="auth-title">Welcome to FrontierSight.</h2><p>Save your scenes. Revisit your experiments. Build your next insight.</p></div>
  <div class="card wide" id="auth-card">
   <div id="clerk-block">
    <p id="clerk-note" class="dim" role="status">Loading secure sign-in…</p>
@@ -532,16 +529,15 @@
    <button id="auth-signout" class="ghostbtn">Sign out</button></div>
    <p id="auth-billing-status" class="dim" role="status"></p>
   </div>
- </div>
+ </div><p class="auth-support">Need a hand? <a href="/contact.html">Contact our team</a>.</p>
 </section>
 
 
 <section id="view-terms" class="view legal"><h2>Terms of Service</h2>
- <p class="dim">Last updated: October 27, 2026 · FrontierSight AI by Quantura Studio ("FrontierSight", "we").</p>
+ <p class="dim">Last updated: October 28, 2026 · FrontierSight AI by Quantura Studio ("FrontierSight", "we").</p>
  <h3>1. What this service is</h3>
  <p>FrontierSight AI is a research workbench that connects Meta AI models (Muse Spark, SAM 3.1, Muse Image)
- to a deterministic physics/geometry engine for analysing recorded physical scenes. This deployment is a
- hackathon demonstration build. Features marked "planned" on the Pricing page are not yet provided.</p>
+ to a deterministic physics/geometry engine for analysing recorded and user-created physical scenes. Available features and enrollment status are described on the Pricing page. Custom team services require a separate agreement.</p>
  <h3>2. No safety certification</h3>
  <p>Outputs are conditional analyses under declared assumptions. They are <b>not</b> safety certifications,
  risk assessments for operational use, or guarantees about real-world behaviour. You must not rely on
@@ -549,8 +545,7 @@
  fixtures validate the software pipeline on synthetic data only.</p>
  <h3>3. Your content</h3>
  <p>You retain all rights to scenes, paths, and media you create or load. Scenes you create are stored only
- in your browser (and encoded in share links you choose to copy) unless a future server-persistence feature
- is explicitly enabled and described. You grant us no licence to your content beyond operating the features
+ in your browser (and encoded in share links you choose to copy). When you sign in and choose to save or sync, scene data and account records may also be processed on the server. You grant us no licence to your content beyond operating the features
  you invoke. You are responsible for having the right to use any footage or data you analyse, including
  the privacy rights of people appearing in it.</p>
  <h3>4. Acceptable use</h3>
@@ -563,39 +558,26 @@
  in an evidence packet; model outputs are not represented as measurements.</p>
  <h3>6. Availability &amp; liability</h3>
  <p>The service is provided "as is" without warranties. To the maximum extent permitted by law, Quantura
- Studio is not liable for indirect or consequential damages arising from use of this demonstration. Any
- future paid service will be governed by updated terms published before billing is enabled.</p>
+ Studio is not liable for indirect or consequential damages arising from use of the service. Paid access, when available, is billed at the amount and recurring interval displayed at checkout; custom contracts may provide additional terms.</p>
  <h3>7. Changes</h3>
- <p>We may update these terms; material changes will be dated here. Questions: via the GitHub repository.</p>
+ <p>We may update these terms; material changes will be dated here. Questions: <a href="mailto:hello@quantura.studio">hello@quantura.studio</a>.</p>
 </section>
 
 <section id="view-privacy" class="view legal"><h2>Privacy Policy</h2>
- <p class="dim">Last updated: October 27, 2026 · This policy describes this build accurately; if a feature
- is not listed as collecting data, it does not.</p>
- <h3>What we collect on servers</h3>
- <ul><li><b>Nothing by default.</b> This build has no user accounts on a server, no analytics, and no
- advertising or tracking cookies.</li>
- <li>When you invoke a live Meta feature (hypothesis, scene generation, segmentation, live test), the
- relevant prompt or image is transmitted to the Meta Model API from our server so the feature can work.
- That processing is governed by Meta's terms. Do not submit confidential footage or personal data through
- live features unless you accept that transmission.</li>
- <li>Our hosting provider (Vercel) may keep standard infrastructure request logs (IP address, timestamps,
- URLs) under its own policies.</li></ul>
- <h3>What stays in your browser</h3>
- <ul><li>Local profile (name/email you type), created scenes, run history, onboarding progress, theme
- preference, and waitlist entries — all in <code>localStorage</code>, never transmitted by this build.</li>
- <li>Video/image files you load in Create/Studio flows are read locally; frames are sent only when you
- explicitly press a SAM segmentation button.</li>
- <li>The YouTube demo player loads only after you press play (privacy-enhanced embed).</li></ul>
- <h3>Deleting your data</h3>
- <p>Sign out removes the active profile pointer; clearing your browser's site data for this domain deletes
- all locally stored profiles, scenes, runs and preferences. There is no server-side copy for us to delete
- in this build.</p>
- <h3>Children &amp; sensitive data</h3>
- <p>The service is for professional/research use and is not directed at children. Please do not submit
- sensitive personal data (including identifiable footage of private individuals) through live AI features.</p>
- <h3>Changes &amp; contact</h3>
- <p>Material changes will be dated here. Questions or requests: open an issue on the GitHub repository.</p>
+ <p class="dim">Last updated: October 28, 2026 · FrontierSight AI by Quantura Studio.</p>
+ <h3>Account and workspace information</h3>
+ <p>Clerk processes sign-in information and authentication cookies when you open sign-in or use an account feature. Our server verifies your session and may retain your verified account identity, subscription status and organization membership. We do not receive your Clerk password.</p>
+ <p>Guest scenes, preferences and run history stay in your browser. Choosing Save or Sync while signed in sends the relevant workspace, object definitions or captured frames to the configured server store. Contact, support and access-request forms send the information you submit to our server. Model keys you explicitly save use server-side encryption.</p>
+ <h3>Model processing</h3>
+ <p>When you invoke generation, transcription, hypotheses or segmentation, the necessary prompt, image, audio or frame is sent from our server to the Meta Model API. Provider processing is governed by Meta’s terms. Loading a local file alone does not send it for inference. Deterministic scene preparation, resizing and simulation do not call a model.</p>
+ <h3>Billing and infrastructure</h3>
+ <p>When checkout is enabled, Stripe processes payment details and provides billing status to us. Card details do not pass through FrontierSight’s server. The hosting provider may retain ordinary request logs such as IP addresses, URLs and timestamps. Clerk and model client libraries may load from their service/CDN domains. The YouTube player loads after you press Play.</p>
+ <h3>Storage and retention</h3>
+ <p>Browser records remain until removed in Workspace, Settings or your browser. Server retention depends on the configured store; the current account store does not guarantee retention across redeployments. Export work you need to retain. Paid checkout on the Vercel deployment remains unavailable until durable billing persistence is implemented and verified.</p>
+ <h3>Sharing and deletion</h3>
+ <p>A copied scene link contains the scene data: share it only with intended recipients. Signing out ends access on this device but does not itself delete saved records. Use the workspace deletion controls for your saved scenes, or contact us about account/server data. Clearing site data removes browser copies, not copies held by recipients or providers.</p>
+ <h3>Sensitive data and contact</h3>
+ <p>This workbench is intended for professional and research use, not children. Do not submit confidential footage or sensitive personal information without appropriate rights and consent. Privacy requests: <a href="mailto:hello@quantura.studio">hello@quantura.studio</a>.</p>
 </section>
 
 
@@ -629,10 +611,10 @@
  <div class="card wide help-block" id="help-create"><h3>Create Lab &amp; path editing</h3>
   <ul>
    <li><b>Add a component</b> (forklift, pedestrian, robot, vehicle, cyclist, static shelf) — it appears
-   on the stage selected. Click the stage to lay its path; choose <i>straight lines</i> or
+   on the stage selected. Use <b>Move objects</b> to drag its body and complete path, or switch to <b>Edit paths</b> to lay out waypoints. Choose <i>straight lines</i> or
    <i>smooth curve</i> per component (curves are Catmull-Rom splines driven at constant,
    physically-limited speed — objects slow for tight turns and brake to a stop, just like the analysis assumes).</li>
-   <li><b>Click any path</b> to select its component. Then: click <b>near the line</b> to insert a point
+   <li>In <b>Edit paths</b>, click any path to select its component. Then: click <b>near the line</b> to insert a point
    exactly there, click <b>empty stage</b> to append, <b>drag points</b> to reshape,
    <b>Shift-drag a path</b> to move it whole, <b>right-click or double-click a point</b> to delete it,
    <b>Delete/Backspace</b> removes the last point. Hovering a path shows a pointer — paths are meant to be grabbed.</li>
@@ -640,7 +622,7 @@
    Amber warnings flag turns tighter than the vehicle can physically make, paths leaving the stage,
    or routes through a shelf — fix them by widening the curve.</li>
    <li><b>2D/3D:</b> both views edit and preview the same scene on the same clock; 3D adds orbit and
-   ground-click waypoint placement (drag points in 2D). Your per-section view choice is remembered.</li>
+   object dragging and destination placement in Move objects mode. Edit individual waypoints in 2D. Your per-section view choice is remembered.</li>
    <li><b>Generate with Muse:</b> describe the scene (up to 4,000 characters). Muse returns components,
    curved paths and speeds that are schema-validated and then scored by the engine (interaction quality,
    shelf collisions, turn warnings) — a poor first draft is retried once with the exact issues fed back.
@@ -766,4 +748,4 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
  <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span>
 </footer>
 <div id="toasts" aria-live="polite"></div>
-<script src="app.js"></script><script src="mobile-nav.js" defer></script></body></html>
+<script src="stage-edit-core.js"></script><script src="app.js"></script><script src="mobile-nav.js" defer></script></body></html>

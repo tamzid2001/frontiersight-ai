@@ -49,7 +49,9 @@ function buildCustom(spec) {
 }
 
 function buildEntity(o) {
-  if (o._lab && o._lab.custom && o._lab.custom.spec) return buildCustom(o._lab.custom.spec);
+  if (o._lab && o._lab.custom && o._lab.custom.spec) {
+    const spec=o._lab.custom.spec,g=buildCustom(spec);g.scale.setScalar((o.radius ?? spec.radius)/spec.radius);return g;
+  }
   const g = new THREE.Group();
   const c = REALC[o.category] || REALC.object;
   if (o.category === "forklift") {
@@ -94,8 +96,10 @@ function buildEntity(o) {
   } else {
     g.add(box(1.2, 0.7, 0.8, c, 0, 0.45, 0));
   }
-  const s = THREE.MathUtils.clamp((o.radius || BASER[o.category] || 0.6) / (BASER[o.category] || 0.6), 0.6, 1.8);
-  if (!g.userData.noScale && o.category !== "pedestrian" && o.category !== "cyclist") g.scale.setScalar(s);
+  // Fit the illustrative mesh to the declared disk footprint in metre space.
+  const bounds = new THREE.Box3().setFromObject(g);
+  const footprint = Math.max(...[bounds.min.x,bounds.max.x].flatMap(x=>[bounds.min.z,bounds.max.z].map(z=>Math.hypot(x,z))));
+  if (footprint > 0) g.scale.setScalar(Math.max(0, o.radius ?? BASER[o.category] ?? 0.6) / footprint);
   return g;
 }
 
@@ -167,7 +171,7 @@ function create(container, hooks) {
           const [tx, tz] = toThree(x, y); dot.position.set(tx, 0.07, tz); world.add(dot);
         }
       }
-      const ent = buildEntity(o);
+      const ent = buildEntity(o); ent.userData.objectId = o.id;
       if (o.opacity !== undefined) ent.traverse(m => { if (m.material) { m.material = m.material.clone(); m.material.transparent = true; m.material.opacity = o.opacity; } });
       world.add(ent); state.entities.set(o.id, ent);
     }
@@ -192,6 +196,38 @@ function create(container, hooks) {
 
   // ground click -> add waypoint (click vs orbit-drag disambiguated)
   const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  let activeDrag = null;
+  function groundPoint(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);
+    const hit = new THREE.Vector3();
+    return ray.ray.intersectPlane(plane,hit) ? [hit.x+_ext[0]/2,_ext[1]/2-hit.z] : null;
+  }
+  renderer.domElement.addEventListener("pointerdown", event => {
+    if(event.button!==0 || !hooks.canDragObjects?.())return;
+    const point=groundPoint(event);if(!point)return;
+    const hits=ray.intersectObjects(world.children,true);let node=hits[0]?.object;
+    while(node && !node.userData.objectId)node=node.parent;
+    if(!node || !hooks.onObjectDragStart?.(node.userData.objectId,...point))return;
+    activeDrag={pointer:event.pointerId,start:[event.clientX,event.clientY]};controls.enabled=false;
+    renderer.domElement.setPointerCapture(event.pointerId);event.stopImmediatePropagation();event.preventDefault();
+  },true);
+  renderer.domElement.addEventListener("pointermove",event=>{
+    if(!activeDrag || activeDrag.pointer!==event.pointerId)return;
+    if(Math.hypot(event.clientX-activeDrag.start[0],event.clientY-activeDrag.start[1])>=4){
+      const point=groundPoint(event);if(point)hooks.onObjectDrag?.(...point);
+    }
+    event.stopImmediatePropagation();event.preventDefault();
+  },true);
+  function endDrag(event,cancel=false){
+    if(!activeDrag || activeDrag.pointer!==event.pointerId)return;
+    activeDrag=null;controls.enabled=true;hooks.onObjectDragEnd?.(cancel);
+    if(renderer.domElement.hasPointerCapture(event.pointerId))renderer.domElement.releasePointerCapture(event.pointerId);
+    event.stopImmediatePropagation();event.preventDefault();
+  }
+  renderer.domElement.addEventListener("pointerup",event=>endDrag(event),true);
+  renderer.domElement.addEventListener("pointercancel",event=>endDrag(event,true),true);
+  renderer.domElement.addEventListener("lostpointercapture",event=>endDrag(event,true),true);
   let downAt = null;
   renderer.domElement.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
   renderer.domElement.addEventListener("pointerup", e => {
@@ -269,9 +305,9 @@ export function hideStudio3D() { if (S) S.stop(); }
 export function syncStudio3D(tracks, t, force = false) {
   if (!S || !S.visible) return;
   const items = tracks.map(tr => ({ id: tr.object_id, category: tr.category, radius: tr.radius,
-    pathPts: tr.points.map(p => [p[1], p[2]]), dots: null, _tr: tr }));
+    pathPts: tr.points.map(p => [p[1], p[2]]), dots: null, _tr: tr, _lab: tr._lab }));
   const sig = "studio:" + tracks.map(tr => tr.object_id + ":" + tr.points.length).join(",");
-  if (force || sig !== S.sig) { S.rebuild(items); S.sig = sig; }
+  if (force || sig !== S.sig || S._source !== tracks) { S.rebuild(items); S.sig = sig; S._source = tracks; }
   S.setTime(items, t);
 }
 export function refreshAll3DThemes() {
@@ -302,24 +338,25 @@ export function showCf3D(container, hooks) {
 }
 export function hideCf3D() { if (F) F.stop(); }
 export function syncCf3D(cf, meta, t, force = false) {
-  if (!F || !F.visible || !cf) return;
+  if (!F || !F.visible) return;
+  if (!cf) { if(F._source){F.rebuild([]);F._source=null;}return; }
   const focus = cf.focus_other, fr = cf.results[focus]; if (!fr) return;
   const agentMeta = meta[cf.agent_id] || { category: "object", radius: 0.6 };
   const items = [
-    { id: cf.agent_id, category: agentMeta.category, radius: agentMeta.radius, _at: "agent",
+    { id: cf.agent_id, category: agentMeta.category, radius: agentMeta.radius, _lab: agentMeta.definition, _at: "agent",
       _rows: fr.trajectories.counterfactual,
       lines: [{ pts: fr.trajectories.counterfactual.map(r => [r[1], r[2]]), color: 0x2dd4a8, opacity: 0.95 },
               { pts: fr.trajectories.original.map(r => [r[1], r[2]]), color: 0x8fa0b8, opacity: 0.55 }] },
-    { id: cf.agent_id + "-ghost", category: agentMeta.category, radius: agentMeta.radius, _at: "agent",
+    { id: cf.agent_id + "-ghost", category: agentMeta.category, radius: agentMeta.radius, _lab: agentMeta.definition, _at: "agent",
       _rows: fr.trajectories.original, opacity: 0.35, lines: [] },
   ];
   for (const [oid, r] of Object.entries(cf.results)) {
     const m = meta[oid] || { category: "object", radius: 0.5 };
-    items.push({ id: oid, category: m.category, radius: m.radius, _at: "other",
+    items.push({ id: oid, category: m.category, radius: m.radius, _lab: m.definition, _at: "other",
       _rows: r.trajectories.counterfactual,
       lines: [{ pts: r.trajectories.counterfactual.map(p => [p[3], p[4]]), color: 0x8fa0b8, opacity: 0.6 }] });
   }
   const sig = "cf:" + cf.agent_id + ":" + focus + ":" + Object.keys(cf.results).join(",");
-  if (force || sig !== F.sig) { F.rebuild(items); F.sig = sig; }
+  if (force || sig !== F.sig || F._source !== cf) { F.rebuild(items); F.sig = sig; F._source = cf; }
   F.setTime(items, t);
 }

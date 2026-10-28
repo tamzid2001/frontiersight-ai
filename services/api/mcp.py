@@ -9,19 +9,61 @@ Engine errors surface as MCP tool errors (isError) with the engine message.
 """
 from __future__ import annotations
 import json
+from pathlib import Path
+from copy import deepcopy
 from engine import scenarios as scen
 from engine.curves import sample_tracks
+from engine.scene_edit import resize_scene, reposition_scene, prepare_scene, simulate_scene
 from engine.kinematics import Calibration, analyse_pair
 from engine.pathsim import simulate_on_paths
 from integrations.meta.spark import validate_scene, ModelError
 
 PROTOCOL = "2024-11-05"
-SERVER = {"name": "frontiersight-ai", "version": "0.32.0"}
+SERVER = {"name": "frontiersight-ai", "version": "0.37.0"}
+
+def _scene_schema():
+    schema = _editor_schema("PrepareRequest")
+    definitions = schema["$defs"]
+    def expand(value):
+        if isinstance(value, dict):
+            if "$ref" in value:
+                return expand(definitions[value["$ref"].rsplit("/", 1)[1]])
+            return {key: expand(item) for key, item in value.items()}
+        if isinstance(value, list): return [expand(item) for item in value]
+        return value
+    return expand(schema["properties"]["scene"])
 
 def _schema(props: dict, required: list | None = None) -> dict:
     return {"type": "object", "properties": props, "required": required or []}
 
+def _editor_schema(name):
+    # The served OpenAPI document is the single published contract. Rewrite its
+    # references into a self-contained JSON Schema for MCP clients.
+    spec = json.loads((Path(__file__).resolve().parents[2]/"apps/web/openapi.json").read_text())
+    definitions = spec["components"]["schemas"]
+    schema = deepcopy(definitions[name])
+    selected = {}
+    def visit(value):
+        if isinstance(value, dict):
+            ref = value.get("$ref", "")
+            if ref.startswith("#/components/schemas/"):
+                key = ref.rsplit("/",1)[1]
+                if key not in selected:
+                    selected[key] = deepcopy(definitions[key]);visit(selected[key])
+            for item in value.values():visit(item)
+        elif isinstance(value, list):
+            for item in value:visit(item)
+    visit(schema)
+    schema["$defs"] = selected
+    return json.loads(json.dumps(schema).replace("#/components/schemas/", "#/$defs/"))
+
 TOOLS = [
+    {"name": "resize_scene", "description": "Resize a metre-space floor and scale all object paths to fit, including sampled smooth-curve envelopes. Preserves physical sizes and speeds. Returns a new scene; never saves it.",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "inputSchema": _editor_schema("ResizeRequest")},
+    {"name": "reposition_scene", "description": "Move one object's first waypoint toward x/y in metres, translating its whole path without changing its shape. Clamps the translation to keep the path and radius inside the floor. Returns a new scene, not a saved mutation.",
+     "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+     "inputSchema": _editor_schema("RepositionRequest")},
     {"name": "server_info", "description": "FrontierSight server identity, model, and honesty labels.",
      "inputSchema": _schema({})},
     {"name": "list_scenarios", "description": "List built-in demonstration scenarios with descriptions.",
@@ -38,9 +80,11 @@ TOOLS = [
                              "intervention_t": {"type": "number", "default": 1.0},
                              "speed_reduction_pct": {"type": "number", "default": 40},
                              "braking_decel": {"type": "number", "default": 2.5},
-                             "mc_runs": {"type": "integer", "default": 100}}, [])},
-    {"name": "sample_paths", "description": "Sample scene objects (waypoints + straight|smooth curve + speed/mode) into timestamped tracks using Catmull-Rom arc-length parameterisation.",
-     "inputSchema": _schema({"objects": {"type": "array"}}, ["objects"])},
+                             "mc_runs": {"type": "integer", "minimum": 0, "maximum": 200, "default": 100},
+                             "scene": _scene_schema(),
+                             "target_id": {"type": ["string", "null"]}}, [])},
+    {"name": "sample_paths", "description": "Sample scene objects into timestamped tracks. Pass scene with stage_metres and objects to preserve the full floor, definitions and digest for Studio/Counterfactual playback; legacy objects-only calls return tracks.",
+     "inputSchema": _schema({"objects": {"type": "array"}, "scene": _scene_schema()})},
     {"name": "validate_scene", "description": "Validate a generated scene document against the Create Lab scene schema. Rejects (never repairs) invalid scenes.",
      "inputSchema": _schema({"scene": {"type": "object"}}, ["scene"])},
 ]
@@ -50,6 +94,10 @@ def _ok(result) -> dict:
             "structuredContent": result if isinstance(result, dict) else {"result": result}}
 
 def call_tool(name: str, args: dict) -> dict:
+    if name == "resize_scene":
+        return _ok(resize_scene(args.get("scene"),args.get("width"),args.get("height")))
+    if name == "reposition_scene":
+        return _ok(reposition_scene(args.get("scene"),args.get("object_id"),args.get("x"),args.get("y")))
     if name == "server_info":
         return _ok({"server": SERVER, "protocol": PROTOCOL,
                     "labels": {"deterministic_engine": True, "model_backed_tools": False,
@@ -75,6 +123,11 @@ def call_tool(name: str, args: dict) -> dict:
         pairs = [analyse_pair(a, b, cal) for i, a in enumerate(tracks) for b in tracks[i + 1:]]
         return _ok({"pairs": pairs})
     if name == "simulate_counterfactual":
+        if "scene" in args:
+            if "scenario" in args: raise ValueError("supply scene or scenario, not both")
+            return _ok(simulate_scene(args["scene"], args.get("agent_id"), args.get("target_id"),
+                                      args.get("intervention_t", 1.0), args.get("speed_reduction_pct", 40),
+                                      args.get("braking_decel", 2.5), min(int(args.get("mc_runs",100)),200)))
         sc = scen.build(args.get("scenario", "warehouse-near-miss"))
         by_id = {t.object_id: t for t in sc["tracks"]}
         agent = by_id.get(args.get("agent_id"), sc["tracks"][0])
@@ -86,6 +139,9 @@ def call_tool(name: str, args: dict) -> dict:
                                 position_sigma=0.15, mc_runs=mc, seed=42)
         return _ok(out)
     if name == "sample_paths":
+        if "scene" in args:
+            if "objects" in args: raise ValueError("supply scene or objects, not both")
+            return _ok(prepare_scene(args["scene"]))
         tracks = sample_tracks(args["objects"])
         return _ok({"tracks": [scen.track_to_dict(t) for t in tracks]})
     if name == "validate_scene":
@@ -95,9 +151,12 @@ def call_tool(name: str, args: dict) -> dict:
 def handle_jsonrpc(body: dict) -> dict | None:
     """Returns the JSON-RPC response object, or None for notifications."""
     if not isinstance(body, dict) or body.get("jsonrpc") != "2.0":
-        return {"jsonrpc": "2.0", "id": (body or {}).get("id"),
+        return {"jsonrpc": "2.0", "id": body.get("id") if isinstance(body, dict) else None,
                 "error": {"code": -32600, "message": "invalid request: jsonrpc 2.0 expected"}}
-    method, mid, params = body.get("method"), body.get("id"), body.get("params") or {}
+    method, mid, params = body.get("method"), body.get("id"), body.get("params", {})
+    if not isinstance(params, dict):
+        return {"jsonrpc": "2.0", "id": mid,
+                "error": {"code": -32602, "message": "params must be an object"}}
     if mid is None:  # notification (e.g. notifications/initialized) — acknowledge silently
         return None
     try:
