@@ -447,7 +447,7 @@ $("cta-video").onclick=()=>{showView("home");document.getElementById("demo-video
 $("demo-play").onclick=()=>{const f=$("demo-frame");
  f.innerHTML='<iframe src="https://www.youtube-nocookie.com/embed/mYTkPqigoz8?autoplay=1&rel=0" title="FrontierSight AI demo video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';};
 $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark…";
- const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss"})});
+ const r=await fetch("/api/meta/hypothesis",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenario:state.scenario||"warehouse-near-miss",model:selectedModel()})});
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};
 
 diag();
@@ -457,7 +457,7 @@ else setTimeout(_boot,250);
 
 // ---- Create Lab ----
 state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
-const LAB={w:16,h:14};
+const LAB={w:parseFloat(localStorage.getItem("fs-stage-w"))||16,h:parseFloat(localStorage.getItem("fs-stage-h"))||14};
 function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
 function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
@@ -544,7 +544,7 @@ function realismWarnings(o){const out=[];if(!o.waypoints.length)return out;
  const dyn=DYN[o.category]||DYN.object,r=minTurnRadius(o);
  if(dyn.turn&&isFinite(r)&&r<dyn.turn)out.push(`${o.id}: tightest turn ${r.toFixed(2)} m is below the ${o.category} limit ${dyn.turn} m — widen the curve`);
  const pts=resolvePath(o).pts;
- if(pts.some(q=>q[0]<-0.05||q[0]>16.05||q[1]<-0.05||q[1]>14.05))out.push(`${o.id}: path leaves the stage bounds`);
+ if(pts.some(q=>q[0]<-0.05||q[0]>LAB.w+0.05||q[1]<-0.05||q[1]>LAB.h+0.05))out.push(`${o.id}: path leaves the ${LAB.w} × ${LAB.h} m stage bounds`);
  for(const s of state.lab.objects){if(s.category!=="shelf"||!s.waypoints.length)continue;
   const sp=s.waypoints[0];
   if(pts.some(q=>Math.hypot(q[0]-sp[0],q[1]-sp[1])<s.radius+(o.radius||0)*0.6))
@@ -708,6 +708,18 @@ function labAddCustom(rec){const spec=rec.spec;
  const o=labAdd(spec.base_category,null,spec.base_category==="shelf"?0:1.2,spec.radius,0,"stop","straight");
  o.custom={id:rec.id,spec,image:rec.image||null};o.displayName=spec.name;
  labRenderList();labDraw();return o;}
+function applyStageSize(){const w=Math.min(60,Math.max(6,+$("lab-stage-w").value||16));
+ const d=Math.min(60,Math.max(6,+$("lab-stage-h").value||14));
+ LAB.w=w;LAB.h=d;localStorage.setItem("fs-stage-w",w);localStorage.setItem("fs-stage-h",d);
+ const l=$("lab-stage-label");if(l)l.textContent=`${w} × ${d}`;
+ state.lab.objects.forEach(o=>{delete o._res;delete o._prof;});
+ if(state.labView==="3d")setLabView("3d");
+ labDraw();
+ labStatus(`Stage set to ${w} × ${d} m. Existing paths are unchanged — check the warnings if anything now leaves the stage.`);}
+$("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;
+{const l=$("lab-stage-label");if(l)l.textContent=`${LAB.w} × ${LAB.h}`;}
+$("lab-stage-w").addEventListener("change",applyStageSize);
+$("lab-stage-h").addEventListener("change",applyStageSize);
 $("lab-add").onclick=()=>{const v=$("lab-new-cat").value;
  if(v.startsWith("custom:")){const rec=(state.customObjects||[]).find(x=>x.id===v.slice(7));
   if(rec){const o=labAddCustom(rec);labStatus(`${spec_name(o)} added — click the stage to lay its path.`);return;}}
@@ -732,7 +744,7 @@ async function setLabView(v){state.labView=v;localStorage.setItem("fs-view-lab",
   try{
    if(!window.__lab3dMod){window.__lab3dMod=await import("/three-view.js");}
    const mod=window.__lab3dMod;
-   mod.showLab3D($("lab-3d"),{resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
+   mod.showLab3D($("lab-3d"),{extent:()=>[LAB.w,LAB.h],resolve:o=>resolvePath(o),pos:(o,t)=>posOnPath(o,t),
     onContextLost:()=>{toast("3D context was lost (GPU) — returned to the 2D editor; your scene is untouched.","warn");setLabView("2d");},
     onGroundClick:(x,y)=>{const o=labObj(state.lab.selected);
      if(!o){labStatus("Select a component first, then click the ground to add waypoints.");return;}
@@ -761,12 +773,13 @@ function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
   tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
  if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");
  return tracks;}
+function selectedModel(){const s=$("model-select");return s?s.value:"muse-spark-1.3";}
 async function analyzeCustom(tracks,label){
  const ctrl=new AbortController(); const killer=setTimeout(()=>ctrl.abort(),95000);
  let r;
  try{
   const res=await fetch("/api/analyze-custom",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctrl.signal,
-   body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,
+   body:JSON.stringify({id:label||"created-scene",tracks,metres_per_pixel:null,model:selectedModel(),
     speed_reduction_pct:+$("sr").value,intervention_t:+$("it").value,human_approved:runApproved()})});
   const text=await res.text();
   try{ r=JSON.parse(text); }catch(e){ throw new Error(`server returned HTTP ${res.status} (non-JSON). The analysis likely timed out — press Run analysis again.`); }
@@ -831,6 +844,18 @@ function labLoadScene(scene,label){state.lab.objects=[];state.lab.selected=null;
  labStatus(label);labDraw();}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-prompt").addEventListener("input",()=>{$("lab-prompt-count").textContent=$("lab-prompt").value.length;});
+const MODEL_HINTS={"muse-spark-1.3":"Latest Spark — balanced cost and quality for scene design and hypotheses.",
+ "muse-spark-1.2":"Previous Spark generation.","muse-spark-1.1":"Earliest Spark — the budget option.",
+ "muse-spark-1.3-contributor":"Spark 1.3 in discounted Contributor mode (same capabilities, lower price).",
+ "muse-spark-1.2-contributor":"Spark 1.2 in discounted Contributor mode.",
+ "muse-wonder-1.0":"Most capable Meta model — deeper reasoning for complex scenes; higher cost per call."};
+function paintModelHint(){const s=$("model-select"),h=$("model-hint");
+ if(h)h.textContent=(MODEL_HINTS[s.value]||"")+" SAM 3.1, Muse Image and Voice keep their dedicated models.";}
+$("model-select").value=localStorage.getItem("fs-model")||"muse-spark-1.3";
+paintModelHint();
+$("model-select").addEventListener("change",()=>{localStorage.setItem("fs-model",$("model-select").value);
+ paintModelHint();
+ toast(`Reasoning model: ${$("model-select").selectedOptions[0].textContent} — used for scene generation, hypotheses and object design.`);});
 $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
  if(desc.length<8){$("lab-gen-status").textContent="Describe the scene in a sentence or two first (at least a few words).";return;}
  if(desc.length>4000){$("lab-gen-status").textContent=`Your description is ${desc.length} characters — the limit is 4000. Shorten it a little and try again.`;return;}
@@ -1505,10 +1530,9 @@ $("mic-btn").onclick = async () => {
       if (wav.size > 9 * 1024 * 1024) { micStatus("That take is too long for one transcription — keep it under about 2 minutes."); return; }
       const dataUrl = await new Promise(res => { const fr = new FileReader();
         fr.onload = () => res(fr.result); fr.readAsDataURL(wav); });
-      const lang = $("voice-lang").value;
       const resp = await fetch("/api/meta/transcribe", { method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio_data_url: dataUrl, language_bias: lang ? [lang] : null }) });
+        body: JSON.stringify({ audio_data_url: dataUrl, language_bias: null }) });
       const out = await resp.json();
       if (resp.status === 200 && !out.transcript) {
         micStatus("Meta heard no speech in that take — try again a little closer to the microphone, or type the scene.");
@@ -1536,10 +1560,8 @@ $("mic-btn").onclick = async () => {
 $("voice-fallback").onclick = () => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { micStatus("This browser has no built-in speech recognition either — typing is the way."); return; }
-  const langMap = { "": navigator.language || "en-US", English: "en-US", Spanish: "es-ES", Hindi: "hi-IN",
-    French: "fr-FR", German: "de-DE", Portuguese: "pt-PT", Japanese: "ja-JP", Korean: "ko-KR", "Mandarin Chinese": "zh-CN" };
   const rec = new SR();
-  rec.lang = langMap[$("voice-lang").value] || "en-US";
+  rec.lang = navigator.language || "en-US";
   rec.interimResults = false;
   micStatus("Listening with your browser's speech recognition (not Meta)…");
   rec.onresult = e => { const text = e.results[0][0].transcript;
@@ -1608,7 +1630,7 @@ $("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
  $("obj-status").textContent="Muse Spark is designing the build spec, then Muse Image renders it (10–40s)…";
  try{
   const resp=await fetch("/api/meta/object",{method:"POST",headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({description:desc})});
+   body:JSON.stringify({description:desc,model:selectedModel()})});
   const out=await resp.json();
   if(!(resp.status===200&&out.spec)){throw new Error(out.error||out.detail||("HTTP "+resp.status));}
   const image=await resizeImageForSave(out.image_data_url);

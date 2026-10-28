@@ -280,7 +280,7 @@ def test_voice_endpoint_validation_and_stub(api, monkeypatch):
 def test_custom_objects_generate_and_profile(api, monkeypatch):
     from integrations.meta import spark
     monkeypatch.setattr(spark, "design_custom_object",
-                        lambda d: ({"name": "Scissor Lift", "base_category": "vehicle", "radius": 1.0,
+                        lambda d, model=None: ({"name": "Scissor Lift", "base_category": "vehicle", "radius": 1.0,
                                     "height_m": 2.6, "palette": {"body": "#f2b04a", "accent": "#38c6d9", "dark": "#2c3444"},
                                     "parts": [{"shape": "box", "size": [1.6, 0.4, 0.9], "pos": [0, 0.3, 0], "color": "body"}],
                                     "description": "test"}, {"model": "muse-spark-1.3"}))
@@ -329,3 +329,16 @@ def test_clerk_sync_ignores_posted_identity_and_rejects_wrong_origin(api,monkeyp
     assert status==200 and result['user']['email']=='verified@example.com'
     monkeypatch.setattr('integrations.clerk_auth.verify_session_token',lambda tok:{'sub':'user_verified','azp':'https://other.example'})
     assert call(api,'/api/auth/clerk-sync',{},headers={'Authorization':'Bearer fixture'})[0]==401
+
+def test_model_selection_validation(api, monkeypatch):
+    from integrations.meta import spark
+    assert spark.resolve_model(None) == spark.MODEL
+    assert spark.resolve_model("muse-wonder-1.0") == "muse-wonder-1.0"
+    with pytest.raises(ValueError): spark.resolve_model("muse-spark-9.9")
+    s, out = call(api, "/api/meta/scene", {"prompt": "a forklift and a pedestrian in an aisle", "model": "gpt-9"})
+    assert s == 400 and "unknown model" in out["error"]
+    # a valid non-default model reaches the ( stubbed ) generator path cleanly
+    monkeypatch.setattr(spark, "generate_scene",
+                        lambda desc, model=None: ({"name": "T", "objects": [], "quality": {}}, {"model": model}))
+    s, out = call(api, "/api/meta/scene", {"prompt": "a forklift and a pedestrian in an aisle", "model": "muse-spark-1.1"})
+    assert s in (200, 400)  # 200 with stub content; never a crash

@@ -209,7 +209,8 @@ function create(container, hooks) {
 
   const resize = new ResizeObserver(() => {
     const w = container.clientWidth; if (!w) return;
-    renderer.setSize(w, 560); camera.aspect = w / 560; camera.updateProjectionMatrix();
+    const height = container.clientHeight || 560;
+    renderer.setSize(w, height); camera.aspect = w / height; camera.updateProjectionMatrix();
   }); resize.observe(container);
 
   function loop() {
@@ -231,11 +232,13 @@ function labItems(objects) {
 }
 let C0 = null; // lab hooks (resolve) captured at show time for item building
 export function showLab3D(container, hooks) {
+  const key = hooks.extent ? hooks.extent().join("x") : "16x14";
+  if (C && C._extentKey !== key) { C.dispose(); C = null; }
   C0 = hooks;
   const wrapped = { ...hooks,
     sig: () => JSON.stringify((C0._objs || []).map(o => [o.id, o.category, o.waypoints, o.curve, o.mode, o.radius])),
     pos: (item, t) => hooks.pos(item._lab, t) };
-  if (!C) C = create(container, wrapped);
+  if (!C) { C = create(container, wrapped); C._extentKey = key; }
   C.hooks = wrapped; C.start();
   return C;
 }

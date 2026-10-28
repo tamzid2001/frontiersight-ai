@@ -11,17 +11,35 @@ import json, os, time, urllib.request, urllib.error, uuid
 BASE = os.environ.get("META_API_BASE", "https://api.meta.ai/v1")
 MODEL = os.environ.get("META_MODEL", "muse-spark-1.3")
 
+# Reasoning models served by Meta Model API (dev.meta.ai/docs/models).
+# Muse Image / SAM 3.1 / Voice keep their dedicated models; Muse Spark Open
+# and Muse Glimmer are self-hosted open weights and are NOT API-selectable.
+MODELS = {
+    "muse-spark-1.3": "Muse Spark 1.3 — latest Spark, balanced cost/quality (default)",
+    "muse-spark-1.2": "Muse Spark 1.2",
+    "muse-spark-1.1": "Muse Spark 1.1 — earliest Spark, cheapest Spark tier",
+    "muse-spark-1.3-contributor": "Muse Spark 1.3 Contributor — discounted contributor mode",
+    "muse-spark-1.2-contributor": "Muse Spark 1.2 Contributor — discounted contributor mode",
+    "muse-wonder-1.0": "Muse Wonder 1.0 — most capable; complex reasoning, higher cost",
+}
+
+def resolve_model(requested: str | None) -> str:
+    if not requested: return MODEL
+    if requested not in MODELS:
+        raise ValueError(f"unknown model '{requested}' — choose one of: {', '.join(MODELS)}")
+    return requested
+
 class BlockedCredentials(RuntimeError): pass
 class ModelError(RuntimeError): pass
 
 def configured() -> bool:
     return bool(os.environ.get("MODEL_API_KEY", "").strip())
 
-def _call(prompt: str, timeout: int = 60, retries: int = 2) -> tuple[str, dict]:
+def _call(prompt: str, timeout: int = 60, retries: int = 2, model: str | None = None) -> tuple[str, dict]:
     key = os.environ.get("MODEL_API_KEY", "").strip()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
     req_id = str(uuid.uuid4())
-    body = json.dumps({"model": MODEL, "input": prompt}).encode()
+    body = json.dumps({"model": model or MODEL, "input": prompt}).encode()
     last = None
     for attempt in range(retries + 1):
         started = time.time()
@@ -36,9 +54,9 @@ def _call(prompt: str, timeout: int = 60, retries: int = 2) -> tuple[str, dict]:
                 for item in out.get("output", []):
                     for c in item.get("content", []):
                         if c.get("text"): text += c["text"]
-            meta = {"model": MODEL, "request_id": req_id, "attempt": attempt,
+            meta = {"model": model or MODEL, "request_id": req_id, "attempt": attempt,
                     "latency_ms": round((time.time() - started) * 1000),
-                    "usage": out.get("usage"), "response_id": out.get("id")}
+                    "usage": out.get("usage"), "response_id": out.get("id"), "model_used": model or MODEL}
             return text, meta
         except urllib.error.HTTPError as e:
             last = ModelError(f"Meta Model API HTTP {e.code}: {e.read().decode()[:300]}")
@@ -51,7 +69,7 @@ def _call(prompt: str, timeout: int = 60, retries: int = 2) -> tuple[str, dict]:
 
 HYPOTHESIS_SCHEMA = {"hypothesis": str, "intervention": dict, "rationale": str}
 
-def propose_hypothesis(findings: dict) -> tuple[dict, dict]:
+def propose_hypothesis(findings: dict, model: str | None = None) -> tuple[dict, dict]:
     """Ask Muse Spark for a counterfactual hypothesis as strict JSON.
     Returns (hypothesis, call_metadata). Raises ModelError on bad JSON/schema."""
     prompt = ("You are the Counterfactual Designer in a physical-AI safety research tool. "
@@ -60,7 +78,7 @@ def propose_hypothesis(findings: dict) -> tuple[dict, dict]:
               '{"hypothesis": str, "intervention": {"speed_reduction_pct": number 0-80, '
               '"intervention_time_s": number >= 0}, "rationale": str}. '
               "Findings:\n" + json.dumps(findings)[:5000])
-    text, meta = _call(prompt, timeout=30, retries=1)
+    text, meta = _call(prompt, timeout=30, retries=1, model=resolve_model(model))
     try:
         obj = json.loads(text[text.index("{"): text.rindex("}") + 1])
     except Exception as e:
@@ -143,7 +161,7 @@ def scene_quality(objects: list) -> dict:
             "has_close_interaction": bool(min_sep is not None and min_sep <= 2.0),
             "issues": issues, "warnings": warnings}
 
-def generate_scene(description: str) -> tuple[dict, dict]:
+def generate_scene(description: str, model: str | None = None) -> tuple[dict, dict]:
     """Muse Spark generates a Create Lab scene as strict JSON (validated)."""
     if not description or len(description) > 4000:
         raise ValueError(f"scene description must be 1..4000 characters (yours: {len(description)})")
@@ -164,7 +182,7 @@ def generate_scene(description: str) -> tuple[dict, dict]:
               "Do not claim any safety conclusion. Scene requested:\n" + description)
     feedback = ""
     for attempt in range(2):
-        text, meta = _call(prompt + feedback, timeout=45, retries=1)
+        text, meta = _call(prompt + feedback, timeout=45, retries=1, model=resolve_model(model))
         try:
             obj = json.loads(text[text.index("{"): text.rindex("}") + 1])
         except Exception as e:
@@ -229,7 +247,7 @@ def validate_custom_object(obj: dict) -> dict:
             "palette": palette, "parts": parts,
             "description": str(obj.get("description", ""))[:240]}
 
-def design_custom_object(description: str) -> tuple[dict, dict]:
+def design_custom_object(description: str, model: str | None = None) -> tuple[dict, dict]:
     """Muse Spark designs a custom object as a strict, buildable spec."""
     if not description or len(description) > 300:
         raise ValueError(f"object description must be 1..300 characters (yours: {len(description)})")
@@ -244,7 +262,7 @@ def design_custom_object(description: str) -> tuple[dict, dict]:
               "Use 3-8 parts that genuinely read as the object from the side and from above: a scissor lift "
               "needs a base, criss-cross lift arms and a platform basket; a traffic barrier needs posts and a "
               "striped arm. Keep the total footprint honest. Object requested:\n" + description)
-    text, meta = _call(prompt, timeout=45, retries=1)
+    text, meta = _call(prompt, timeout=45, retries=1, model=resolve_model(model))
     try:
         obj = json.loads(text[text.index("{"): text.rindex("}") + 1])
     except Exception as e:

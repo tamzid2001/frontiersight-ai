@@ -170,6 +170,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, _mcp.catalog())
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
+                                        "available_models": spark.MODELS,
                                         "sam_model": sam.MODEL, "key_source": "server env MODEL_API_KEY (value never exposed)",
                                         "mode": "LIVE_META" if spark.configured() else "FIXTURE_REPLAY"})
             if route.startswith("/api/scenarios"):
@@ -305,7 +306,7 @@ class H(BaseHTTPRequestHandler):
                           "disclaimer": "User-uploaded scene; no ground truth held. Metric claims only if calibration declared."}
                 run = run_analysis(custom, float(body.get("speed_reduction_pct", 40)),
                                    float(body.get("intervention_t", 1.0)), bool(body.get("human_approved", False)),
-                                   body.get("idempotency_key"))
+                                   body.get("idempotency_key"), body.get("model"))
                 return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(custom)})
             if route.startswith("/api/counterfactual-custom"):
                 from engine.pathsim import simulate_on_paths
@@ -347,7 +348,7 @@ class H(BaseHTTPRequestHandler):
                 run = run_analysis(sc, float(body.get("speed_reduction_pct", 40)),
                                    float(body.get("intervention_t", 1.0)),
                                    bool(body.get("human_approved", False)),
-                                   body.get("idempotency_key"))
+                                   body.get("idempotency_key"), body.get("model"))
                 return self._send(200, {"run": run.to_dict(), "scenario": scen.scenario_to_dict(sc)})
             if route.startswith("/api/counterfactual"):
                 sc = get_scenario(body.get("scenario", "warehouse-near-miss"))
@@ -371,13 +372,13 @@ class H(BaseHTTPRequestHandler):
                 sc = get_scenario(body.get("scenario", "warehouse-near-miss"))
                 cal = Calibration(sc["calibration"].get("metres_per_pixel"))
                 pairs = [analyse_pair(a, b, cal) for i, a in enumerate(sc["tracks"]) for b in sc["tracks"][i + 1:]]
-                obj, meta = spark.propose_hypothesis({"pairs": pairs})
+                obj, meta = spark.propose_hypothesis({"pairs": pairs}, body.get("model"))
                 return self._send(200, {"hypothesis": obj, "model_call": meta, "source": "MODEL_DERIVED"})
             if route.startswith("/api/meta/scene"):
                 from agents.scene_heuristic import match as _match
                 desc = str(body.get("prompt", ""))
                 try:
-                    scene, meta = spark.generate_scene(desc)
+                    scene, meta = spark.generate_scene(desc, body.get("model"))
                     return self._send(200, {"scene": scene, "source": "MODEL_DERIVED", "model_call": meta})
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
@@ -582,7 +583,7 @@ class H(BaseHTTPRequestHandler):
                 desc = str(body.get("description", "")).strip()
                 if not desc: return self._send(400, {"error": "describe the object first"})
                 try:
-                    spec, meta = _spark.design_custom_object(desc)
+                    spec, meta = _spark.design_custom_object(desc, body.get("model"))
                     source = "MODEL_DERIVED"
                 except BlockedCredentials:
                     spec, meta, source = _spark.procedural_object(desc), None, "OFFLINE_PROCEDURAL"

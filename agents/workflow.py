@@ -48,7 +48,8 @@ class Run:
 _checkpoint_store: dict = {}
 
 def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention_t: float = 1.0,
-                 human_approved: bool = False, idempotency_key: str | None = None) -> Run:
+                 human_approved: bool = False, idempotency_key: str | None = None,
+                 model: str | None = None) -> Run:
     if len(scenario.get("tracks", [])) < 2:
         raise ValueError("scene needs at least two tracks to analyse interactions")
     if len({tr.space for tr in scenario["tracks"]}) > 1:
@@ -130,7 +131,7 @@ def run_analysis(scenario: dict, speed_reduction_pct: float = 40.0, intervention
         nonlocal hypothesis
         if live:
             try:
-                obj, meta = spark.propose_hypothesis({"pairs": analysis["pairs"], "agent": agent.object_id})
+                obj, meta = spark.propose_hypothesis({"pairs": analysis["pairs"], "agent": agent.object_id}, model)
                 hypothesis = obj
                 return ({"hypothesis": obj, "model_call": meta}, obj)
             except Exception as e:

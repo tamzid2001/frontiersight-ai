@@ -293,11 +293,15 @@
 
 <section id="view-create" class="view"><h2>Create Lab — build a scene, set the paths, run the proof</h2>
  <p class="dim">Create components, give each one a path and a speed, watch them move, then run the same deterministic
- analysis and counterfactual pipeline used for the built-in scenarios. The stage is a <b>16 × 14 metre</b> floor plan;
+ analysis and counterfactual pipeline used for the built-in scenarios. The stage is a <b><span id="lab-stage-label">16 × 14</span> metre</b> floor plan (editable above);
  positions are metres, so metric claims are valid by construction. Nothing here is pre-baked: tracks are sampled
  from <em>your</em> paths at 10 Hz when you press Run analysis.</p>
  <div class="studio">
   <div class="card stagecard">
+   <div class="row" style="margin-bottom:6px;align-items:flex-end;gap:10px">
+    <label>Stage width (m)<input id="lab-stage-w" type="number" min="6" max="60" step="1" value="16" style="max-width:100px"></label>
+    <label>Stage depth (m)<input id="lab-stage-h" type="number" min="6" max="60" step="1" value="14" style="max-width:100px"></label>
+    <span class="dim">The stage is <b>16 × 14 m</b> by default — set your own floor size; paths, previews and analysis use it.</span></div>
    <div class="row" style="margin-bottom:6px"><h3 id="lab-scene-title" style="margin:0">Untitled scene</h3>
     <span id="lab-saved-badge" class="pill warn">unsaved</span></div>
    <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
@@ -325,18 +329,31 @@
   <aside class="card"><h3>✦ Generate with Muse Spark</h3>
    <textarea id="lab-prompt" rows="3" maxlength="4000" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
    <p class="dim" style="margin:2px 0 8px"><span id="lab-prompt-count">0</span> / 4000 characters</p>
-   <div class="row">
-    <button id="mic-btn" type="button">🎙 Speak instead</button>
-    <select id="voice-lang" aria-label="Dictation language" style="max-width:190px">
-     <option value="">Auto-detect language</option><option>English</option><option>Spanish</option>
-     <option>Hindi</option><option>French</option><option>German</option><option>Portuguese</option>
-     <option>Japanese</option><option>Korean</option><option>Mandarin Chinese</option></select>
+   <div class="row" style="align-items:center;margin-top:2px">
+    <button id="mic-btn" type="button">🎙 Speak</button>
+    <span class="dim">or speak it — language is auto-detected.</span>
     <span id="voice-src" class="pill ghost hidden"></span>
     <button id="voice-fallback" type="button" class="ghostbtn hidden">Use browser speech instead</button>
    </div>
    <p id="mic-status" class="dim" role="status">Or dictate it: press the mic, speak your scene, press Stop.
    Audio goes to Meta only when you press Stop — nothing is recorded or stored here — and the transcript
    lands in the box above for you to edit before generating.</p>
+   <label>Reasoning model
+    <select id="model-select" aria-label="Muse model for generation and hypotheses">
+     <optgroup label="Muse Spark">
+      <option value="muse-spark-1.3" selected>Muse Spark 1.3 (default)</option>
+      <option value="muse-spark-1.2">Muse Spark 1.2</option>
+      <option value="muse-spark-1.1">Muse Spark 1.1</option>
+     </optgroup>
+     <optgroup label="Muse Spark Contributor (discounted)">
+      <option value="muse-spark-1.3-contributor">Spark 1.3 Contributor</option>
+      <option value="muse-spark-1.2-contributor">Spark 1.2 Contributor</option>
+     </optgroup>
+     <optgroup label="Muse Wonder">
+      <option value="muse-wonder-1.0">Muse Wonder 1.0 (most capable)</option>
+     </optgroup>
+    </select></label>
+   <p class="dim" id="model-hint" style="margin:2px 0 8px"></p>
    <div class="row"><button id="lab-generate">Generate scene</button>
     <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
     <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>
