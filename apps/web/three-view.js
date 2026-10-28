@@ -130,7 +130,7 @@ function create(container, hooks) {
   border.rotation.x = -Math.PI / 2; border.position.y = 0.02; scene.add(border);
 
   const world = new THREE.Group(); scene.add(world);
-  const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, raf: 0, ground };
+  const state = { renderer, scene, camera, controls, world, entities: new Map(), sig: "", visible: true, inViewport: true, raf: 0, ground };
   INSTANCES.add(state);
   renderer.domElement.addEventListener("webglcontextlost", e=>{e.preventDefault(); state.stop();
    if(hooks.onContextLost)hooks.onContextLost();});
@@ -214,14 +214,18 @@ function create(container, hooks) {
   }); resize.observe(container);
 
   function loop() {
-    if (!state.visible) return;
+    if (!state.visible || !state.inViewport) return;
     controls.update(); renderer.render(scene, camera);
     state.raf = requestAnimationFrame(loop);
   }
   state.rebuild = rebuild; state.setTime = setTime; state.hooks = hooks;
   state.start = () => { state.visible = true; cancelAnimationFrame(state.raf); loop(); };
   state.stop = () => { state.visible = false; cancelAnimationFrame(state.raf); };
-  state.dispose = () => { state.stop(); resize.disconnect(); controls.dispose();
+  const visibility = new IntersectionObserver(entries => {
+    state.inViewport = entries.at(-1)?.isIntersecting || false;
+    if (state.inViewport && state.visible) state.start();
+  }); visibility.observe(container);
+  state.dispose = () => { state.stop(); resize.disconnect(); visibility.disconnect(); controls.dispose();
     disposeObject(scene); renderer.dispose(); renderer.domElement.remove(); INSTANCES.delete(state); };
   return state;
 }

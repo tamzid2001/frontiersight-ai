@@ -136,13 +136,13 @@
  <h2 class="section-title">Everything in the workbench</h2>
  <div class="bento">
   <article class="card tile"><div class="howico">✦</div><h3>Create Lab</h3><p>Compose scenes from forklifts, pedestrians, robots and shelves. Click paths, drag waypoints, set speeds — then analyse your own world.</p><button type="button" class="tilelink" data-goto="create">Build a scene →</button></article>
-  <article class="card tile"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><button type="button" class="tilelink" data-goto="create">Generate with Muse →</button></article>
+  <article class="card tile"><div class="howico">✎</div><h3>Prompt-to-scene</h3><p>Describe a scene in a sentence; Muse Spark designs it as schema-validated JSON. You edit every waypoint before anything runs.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="scene">Generate with Muse →</button></article>
   <article class="card tile"><div class="howico">▶</div><h3>Video Studio</h3><p>Frame-synchronised playback with heading-oriented entities, event seeking, occlusion markers and an all-pairs inspector.</p><button type="button" class="tilelink" data-goto="studio">Open the Studio →</button></article>
   <article class="card tile"><div class="howico">⇄</div><h3>Counterfactual simulator</h3><p>Pick scene, agent and target; brake earlier or harder. Trajectory map, separation chart, Monte-Carlo intervals, per-actor results.</p><button type="button" class="tilelink" data-goto="counterfactual">Run a what-if →</button></article>
   <article class="card tile"><div class="howico">▤</div><h3>Evidence & trace</h3><p>Nine auditable agent stages with artifact hashes, then a human-approved, hash-bound evidence packet you can export and replay.</p><button type="button" class="tilelink" data-goto="evidence">Inspect evidence →</button></article>
   <article class="card tile"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><button type="button" class="tilelink" data-goto="settings">Check the connection →</button></article>
-  <article class="card tile"><div class="howico">🎙</div><h3>Voice dictation</h3><p>Speak your scene instead of typing: Muse Voice Transcribe turns speech into an editable prompt (browser-decoded to studio WAV first), then Muse Spark builds it.</p><button type="button" class="tilelink" data-goto="create">Dictate a scene →</button></article>
-  <article class="card tile"><div class="howico">✦</div><h3>Custom objects by Muse</h3><p>Describe any object — Muse Spark designs a buildable version, Muse Image renders it, and it becomes a real component in 2D and 3D, saved to your profile.</p><button type="button" class="tilelink" data-goto="create">Create an object →</button></article>
+  <article class="card tile"><div class="howico">🎙</div><h3>Voice dictation</h3><p>Speak your scene instead of typing: Muse Voice Transcribe turns speech into an editable prompt (browser-decoded to studio WAV first), then Muse Spark builds it.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="voice">Dictate a scene →</button></article>
+  <article class="card tile"><div class="howico">✦</div><h3>Custom objects by Muse</h3><p>Describe any object — Muse Spark designs a buildable version, Muse Image renders it, and it becomes a real component in 2D and 3D, saved to your profile.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="object">Create an object →</button></article>
   <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>The deterministic engine is an MCP server (HTTP + stdio): eight tools any agent can call for measured analysis and counterfactuals — no credits spent, no approvals bypassed.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
  </div>
 
@@ -296,19 +296,21 @@
  analysis and counterfactual pipeline used for the built-in scenarios. The stage is a <b><span id="lab-stage-label">16 × 14</span> metre</b> floor plan (editable above);
  positions are metres, so metric claims are valid by construction. Nothing here is pre-baked: tracks are sampled
  from <em>your</em> paths at 10 Hz when you press Run analysis.</p>
- <div class="studio">
-  <div class="card stagecard">
-   <div class="row" style="margin-bottom:6px;align-items:flex-end;gap:10px">
-    <label>Stage width (m)<input id="lab-stage-w" type="number" min="6" max="60" step="1" value="16" style="max-width:100px"></label>
-    <label>Stage depth (m)<input id="lab-stage-h" type="number" min="6" max="60" step="1" value="14" style="max-width:100px"></label>
-    <span class="dim">The stage is <b>16 × 14 m</b> by default — set your own floor size; paths, previews and analysis use it.</span></div>
+ <div class="studio lab-workbench">
+  <div class="card stagecard lab-preview-card" tabindex="0" role="region" aria-label="Scene preview and analysis controls">
    <div class="row" style="margin-bottom:6px"><h3 id="lab-scene-title" style="margin:0">Untitled scene</h3>
     <span id="lab-saved-badge" class="pill warn">unsaved</span></div>
    <div class="row" style="margin-bottom:8px"><span class="dim">View:</span>
     <button id="lab-view-2d" class="ghostbtn" aria-pressed="true">2D canvas</button>
     <button id="lab-view-3d" class="ghostbtn" aria-pressed="false">3D view</button>
     <span class="dim">3D visualises the same 2D scene model — heights are illustrative, physics stays planar. Drag waypoints in 2D; click the 3D ground to add them.</span></div>
+   <details class="lab-tools lab-floor-settings"><summary>Floor size &amp; scenery</summary>
+   <div class="row" style="margin-bottom:6px;align-items:flex-end;gap:10px">
+    <label>Stage width (m)<input id="lab-stage-w" type="number" min="6" max="60" step="1" value="16" style="max-width:100px"></label>
+    <label>Stage depth (m)<input id="lab-stage-h" type="number" min="6" max="60" step="1" value="14" style="max-width:100px"></label>
+    <span class="dim">The stage is <b>16 × 14 m</b> by default — set your own floor size; paths, previews and analysis use it.</span></div>
    <div class="row scenery-options"><label for="scene-environment">Scenery</label><select id="scene-environment"><option value="auto">Match scene objects</option><option value="warehouse">Warehouse</option><option value="road">Street</option><option value="robotics">Robotics workcell</option></select><span class="dim">Visual context only; scenery is not included in collision analysis.</span></div>
+   </details>
    <canvas id="lab-canvas" width="880" height="620" role="img" aria-label="Create Lab stage: components and their waypoint paths on a 16 by 14 metre floor plan"></canvas>
    <div id="lab-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the Create Lab scene"></div>
    <div class="transport"><button id="lab-play">▶ Preview motion</button>
@@ -326,7 +328,23 @@
     <span id="lab-status" role="status" class="dim"></span>
    </div>
   </div>
-  <aside class="card"><h3>✦ Generate with Muse Spark</h3>
+  <aside class="card lab-inspector" tabindex="0" aria-label="Scene components and generators">   <h3>Components</h3>
+   <div class="row"><select id="lab-new-cat" aria-label="Component type">
+     <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
+     <option value="robot">Robot</option><option value="vehicle">Vehicle</option>
+     <option value="cyclist">Cyclist</option><option value="shelf">Shelf (static)</option></select>
+    <button id="lab-add">+ Add component</button></div>
+   <div class="row"><span class="dim">Template:</span>
+    <button class="ghostbtn" data-tpl="near-miss">Near-miss</button>
+    <button class="ghostbtn" data-tpl="crossing">Crossing</button>
+    <button class="ghostbtn" data-tpl="cell">Robot cell</button></div>
+   <p id="lab-ready" class="mono"></p><div class="row"><button id="lab-clear-all" class="ghostbtn">Clear all components</button></div>
+   <div id="lab-list"></div>
+   <h3>How it flows</h3>
+   <p class="dim">Run analysis samples every path into timestamped tracks, runs all-pairs closest-approach/TTC
+   analysis, proposes a braking counterfactual for the focus pair, and lands you in the Studio with the full
+   agent trace. Pick the counterfactual agent in the Counterfactual screen — it defaults to the first moving component.</p>
+<h3 class="lab-generator-label">Create with AI</h3><details class="lab-tools" id="lab-scene-generator"><summary>✦ Generate a scene with Muse</summary>
    <textarea id="lab-prompt" rows="3" maxlength="4000" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
    <p class="dim" style="margin:2px 0 8px"><span id="lab-prompt-count">0</span> / 4000 characters</p>
    <div class="row" style="align-items:center;margin-top:2px">
@@ -358,7 +376,7 @@
     <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
     <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>
    <p id="lab-gen-status" role="status" class="dim">Muse proposes the scene; you edit every waypoint before anything is analysed. Offline, a labelled keyword template is used instead — never passed off as a model call.</p>
-   <h3>✦ Create object with Muse</h3>
+   </details><details class="lab-tools" id="lab-object-generator"><summary>✦ Create a custom object</summary>
    <p class="dim">Describe any object — Muse Spark designs a buildable version (footprint, palette,
    construction parts) and Muse Image renders a reference. It becomes a real component below and is
    saved to your profile (server when signed in, this browser as guest).</p>
@@ -366,22 +384,7 @@
    <div class="row"><button id="obj-gen">Generate object</button>
    <span id="obj-status" class="dim" role="status"></span></div>
    <div id="obj-preview"></div>
-   <h3>Components</h3>
-   <div class="row"><select id="lab-new-cat" aria-label="Component type">
-     <option value="forklift">Forklift</option><option value="pedestrian">Pedestrian</option>
-     <option value="robot">Robot</option><option value="vehicle">Vehicle</option>
-     <option value="cyclist">Cyclist</option><option value="shelf">Shelf (static)</option></select>
-    <button id="lab-add">+ Add component</button></div>
-   <div class="row"><span class="dim">Template:</span>
-    <button class="ghostbtn" data-tpl="near-miss">Near-miss</button>
-    <button class="ghostbtn" data-tpl="crossing">Crossing</button>
-    <button class="ghostbtn" data-tpl="cell">Robot cell</button></div>
-   <p id="lab-ready" class="mono"></p><div class="row"><button id="lab-clear-all" class="ghostbtn">Clear all components</button></div>
-   <div id="lab-list"></div>
-   <h3>How it flows</h3>
-   <p class="dim">Run analysis samples every path into timestamped tracks, runs all-pairs closest-approach/TTC
-   analysis, proposes a braking counterfactual for the focus pair, and lands you in the Studio with the full
-   agent trace. Pick the counterfactual agent in the Counterfactual screen — it defaults to the first moving component.</p>
+   </details>
   </aside>
  </div>
 </section>
@@ -516,31 +519,9 @@
 <section id="view-auth" class="view"><h2 id="auth-title">Sign in</h2>
  <div class="card wide" id="auth-card">
   <div id="clerk-block">
-   <p id="clerk-note" class="dim">Checking sign-in providers…</p>
+   <p id="clerk-note" class="dim" role="status">Loading secure sign-in…</p>
+   <button id="clerk-retry" type="button" class="ghostbtn hidden">Retry sign-in</button>
    <div id="clerk-signin"></div>
-  </div>
-  <div id="auth-signedout">
-   <p>Create a free Explorer account to save scenes on the server, or sign in. Passwords are
-   PBKDF2-hashed server-side; sessions last 30 days. <span class="dim">Demo-deployment note: the public
-   demo's database is per-instance SQLite until a managed Postgres (<code>DATABASE_URL</code>) is
-   connected, so demo accounts may reset on redeploy — production uses managed persistence
-   (<code>docs/AUTH_AND_BILLING.md</code>).</span></p>
-   <div class="row" role="tablist" aria-label="Account">
-    <button id="tab-signup" class="ghostbtn" aria-selected="true">Create account</button>
-    <button id="tab-signin" class="ghostbtn" aria-selected="false">Sign in</button></div>
-   <form id="form-signup" autocomplete="on">
-    <label>Full name<input id="su-name" name="name" type="text" autocomplete="name" placeholder="Ada Lovelace" style="width:100%"></label>
-    <label>Email<input id="su-email" name="email" type="email" autocomplete="email" placeholder="ada@example.com" style="width:100%"></label>
-    <label>Password (8+ characters)<input id="su-password" name="password" type="password" autocomplete="new-password" placeholder="••••••••" style="width:100%"></label>
-    <button id="auth-signup" type="submit">Create free account</button>
-   </form>
-   <form id="form-signin" class="hidden" autocomplete="on">
-    <label>Email<input id="si-email" name="email" type="email" autocomplete="email" placeholder="ada@example.com" style="width:100%"></label>
-    <label>Password<input id="si-password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%"></label>
-    <button id="auth-signin" type="submit">Sign in</button>
-   </form>
-   <div class="row" style="margin-top:10px"><button id="auth-guest" class="ghostbtn">Continue as guest (device-local scenes only)</button></div>
-   <p id="auth-status" role="status" class="dim"></p>
   </div>
   <div id="auth-signedin" class="hidden">
    <p><b id="auth-who"></b> <span class="dim" id="auth-meta"></span></p>
@@ -685,7 +666,7 @@
 
  <div class="card wide help-block" id="help-accounts"><h3>Accounts, plans &amp; billing</h3>
   <ul>
-   <li><b>Sign in</b> with Clerk (when configured on the deployment) or email/password. Guests can use
+   <li><b>Sign in</b> with Clerk. Guests can use
    everything in Explorer; signing in adds server-saved workspaces.</li>
    <li><b>Explorer (free):</b> all built-in scenarios, Create Lab, prompt-to-scene, deterministic
    analysis, evidence export, 10 server-saved scenes, Monte-Carlo up to 200 runs.</li>

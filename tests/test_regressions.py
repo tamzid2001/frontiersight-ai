@@ -68,7 +68,10 @@ def test_pricing_and_auth_are_honest():
     assert "stripe is not configured" in html.lower()  # honest demo-deployment state
     pricing = html[html.index('id="view-pricing"'):html.index('id="view-auth"')]
     assert "◷" not in pricing and "planned launch" not in pricing.lower()
-    assert 'id="auth-signup"' in html and 'id="sub-btn"' in html  # real server accounts + subscribe flow
+    assert 'id="clerk-signin"' in html and 'id="sub-btn"' in html
+    auth = html[html.index('id="view-auth"'):html.index('id="view-settings"')]
+    assert 'id="form-signup"' not in auth and 'id="form-signin"' not in auth
+    assert 'Demo-deployment note' not in auth
     assert 'data-theme-mode="system"' in html
 
 def test_demo_video_integrated():

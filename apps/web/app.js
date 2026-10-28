@@ -76,6 +76,8 @@ function showView(v){
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
   if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
+ window.scrollTo(0,0);
+ if(v==="studio")draw();
  if(v==="create"){if(typeof labDraw==="function")labDraw();
    if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
@@ -195,7 +197,7 @@ function computeWorld(){if(!state.data)return WORLD;let mx=1,my=1;
 function px(x,y,W,H){return [x/WORLD.x*W, H-(y/WORLD.y*H)];}
 function posAt(track,t){const p=track.points;if(t<=p[0][0])return p[0];if(t>=p[p.length-1][0])return p[p.length-1];
  for(let i=1;i<p.length;i++){if(p[i][0]>=t){const[t0,a]=[p[i-1][0],p[i-1]],[t1,b]=[p[i][0],p[i]];const k=(t-t0)/(t1-t0||1);return[0,a[1]+(b[1]-a[1])*k,a[2]+(b[2]-a[2])*k];}}return p[p.length-1];}
-function draw(){if(window.__studio3dSync)window.__studio3dSync(state.data?state.data.tracks:[],state.t);
+function draw(){if(!$("view-studio").classList.contains("on"))return;if(window.__studio3dSync)window.__studio3dSync(state.data?state.data.tracks:[],state.t);
  const c=$("stage");if(!c||!state.data)return;computeWorld();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.data.tracks);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue("--line");for(let gx=0;gx<=WORLD.x;gx+=2){const[a]=px(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  const _labels=[];
@@ -328,7 +330,7 @@ function cfBounds(r){let xs=[],ys=[];for(const v of Object.values(r.results)){
 function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy)*0.92;
  return (x,y)=>[W/2-(b.x0+b.x1)/2*s+x*s, H/2+(b.y0+b.y1)/2*s-y*s];}
 function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t)<Math.abs(best[0]-t))best=p;}return best;}
-function drawCfMap(){if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
+function drawCfMap(){if(!$("view-counterfactual").classList.contains("on"))return;if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
  const r=state.cfData,c=$("cf-map");if(!r||!c)return;const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.data?.tracks||[]);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
@@ -567,7 +569,7 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
  if(o.waypoints.length===1||o.speed<=0)return o.waypoints[0];
  const lt=Math.max(0,t-o.delay);
  return profPosition(o,lt);}
-function labDraw(){if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
+function labDraw(){if(!$("view-create").classList.contains("on"))return;if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
  const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.lab.objects);x.strokeStyle="rgba(34,65,70,.13)";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
@@ -598,7 +600,7 @@ function computeLabDuration(){const sc=$("lab-scrub");if(sc)sc.max=labDuration()
 function labReady(){const el=$("lab-ready");if(!el)return;const os=state.lab.objects;
  const moving=os.filter(o=>o.speed>0&&o.waypoints.length>1).length, placed=os.filter(o=>o.waypoints.length).length;
  el.innerHTML=os.length<2?`Add at least <b>2 components</b> to run analysis (${os.length} so far).`
-  :`Ready check: <b>${os.length} components</b> · ${placed} placed · ${moving} moving · stage 16×14 m — ${moving?"press Run analysis.":"give a selected component a path (click the stage) to create motion."}`;
+  :`Ready check: <b>${os.length} components</b> · ${placed} placed · ${moving} moving · stage ${LAB.w}×${LAB.h} m — ${moving?"press Run analysis.":"give a selected component a path (click the stage) to create motion."}`;
  el.style.color=os.length>=2&&moving?"var(--teal)":"var(--amber)";
  const warns=os.flatMap(o=>o.speed>0||o.waypoints.length>1?realismWarnings(o):[]);
  if(warns.length)el.innerHTML+=warns.map(w=>`<br><span style="color:var(--amber)">⚠ ${w}</span>`).join("");}
@@ -607,16 +609,16 @@ document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace
  if(o&&o.waypoints.length){o.waypoints.pop();labRenderList();labDraw();}}});
 function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
  if(state.labTitle)labSetTitle(state.labTitle,false);
- el.innerHTML=state.lab.objects.length?state.lab.objects.map(o=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${o.id}">
-  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${o.displayName||o.id}</b>${o.custom?' <span class="pill ghost">custom ✦</span>':""} <span class="dim">${o.id}</span> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
-  <div class="row labctl">
+ el.innerHTML=state.lab.objects.length?state.lab.objects.map((o,index)=>`<div class="labobj ${o.id===state.lab.selected?"sel":""}" data-id="${htmlText(o.id)}">
+  <b style="color:${COL[o.category]||"#fff"}">●</b> <b>${htmlText(o.displayName||o.id)}</b>${o.custom?' <span class="pill ghost">custom ✦</span>':""} <span class="dim">${htmlText(o.id)}</span> <span class="dim">${o.waypoints.length} waypoint(s) · ${pathLen(o).toFixed(1)} m${o.speed?` · ${(pathDur(o)).toFixed(1)}s`:""}</span>
+  <div class="row labctl" id="lab-fields-${index}" ${o.id===state.lab.selected?"":"hidden"}>
    <label>Speed m/s<input type="number" step="0.1" min="0" max="8" value="${o.speed}" data-f="speed"></label>
    <label>Radius m<input type="number" step="0.1" min="0.1" max="3" value="${o.radius}" data-f="radius"></label>
    <label>Delay s<input type="number" step="0.25" min="0" max="10" value="${o.delay}" data-f="delay"></label>
    <label>Path mode<select data-f="mode"><option ${o.mode==="stop"?"selected":""}>stop</option><option ${o.mode==="loop"?"selected":""}>loop</option><option ${o.mode==="pingpong"?"selected":""}>pingpong</option></select></label>
    <label>Path shape<select data-f="curve"><option value="straight" ${o.curve!=="smooth"?"selected":""}>straight lines</option><option value="smooth" ${o.curve==="smooth"?"selected":""}>smooth curve</option></select></label>
   </div>
-  <div class="row"><button data-act="select">${o.id===state.lab.selected?"Selected ✓":"Select & edit path"}</button>
+  <div class="row lab-actions"><button data-act="select" aria-expanded="${o.id===state.lab.selected}" aria-controls="lab-fields-${index}">${o.id===state.lab.selected?"Selected ✓":"Select & edit path"}</button>
    <button class="ghostbtn" data-act="undo">Undo point</button>
    <button class="ghostbtn" data-act="clear">Clear path</button>
    <button class="ghostbtn" data-act="dup">Duplicate</button>
@@ -955,29 +957,7 @@ async function refreshMe(){const {body}=await api("/api/me");state.me=body;
  return body;}
 function refreshAuthUI(){refreshMe();}
 $("auth-btn").onclick=()=>goto("auth");
-$("tab-signup").onclick=()=>{$("form-signup").classList.remove("hidden");$("form-signin").classList.add("hidden");
- $("tab-signup").setAttribute("aria-selected","true");$("tab-signin").setAttribute("aria-selected","false");};
-$("tab-signin").onclick=()=>{$("form-signin").classList.remove("hidden");$("form-signup").classList.add("hidden");
- $("tab-signin").setAttribute("aria-selected","true");$("tab-signup").setAttribute("aria-selected","false");};
-async function afterAuth(out, msg){state.openWorkspace=null;state.samCaptures=[];
- localStorage.setItem("fs-auth-provider", "local");
- localStorage.setItem("fs-session",out.body.token);
- localStorage.setItem("fs-user",JSON.stringify(out.body.user));
- await refreshMe();renderMyScenes();toast(msg);goto("workspace");}
-// Enter-key submission already clicks the (submit) button natively; the form
-// listener only prevents the page reload — it must not click again (double signup).
-$("form-signup").addEventListener("submit",e=>e.preventDefault());
-$("form-signin").addEventListener("submit",e=>e.preventDefault());
-$("auth-signup").onclick=async()=>{const out=await api("/api/auth/signup",{method:"POST",
- body:JSON.stringify({name:$("su-name").value.trim(),email:$("su-email").value.trim(),password:$("su-password").value})});
- if(out.status!==201){$("auth-status").textContent=out.body.error||"Sign-up failed.";return;}
- afterAuth(out,`Welcome, ${out.body.user.name.split(" ")[0]} — free Explorer account created.`);};
-$("auth-signin").onclick=async()=>{const out=await api("/api/auth/login",{method:"POST",
- body:JSON.stringify({email:$("si-email").value.trim(),password:$("si-password").value})});
- if(out.status!==200){$("auth-status").textContent=out.body.error||"Sign-in failed.";return;}
- afterAuth(out,`Welcome back, ${out.body.user.name.split(" ")[0]}.`);};
-$("auth-guest").onclick=()=>{toast("Continuing as guest — device-local scenes only, Explorer limits.","warn");goto("home");};
-$("auth-signout").onclick=async()=>{await api("/api/auth/logout",{method:"POST"});
+$("auth-signout").onclick=async()=>{if(ClerkApp?.user)await ClerkApp.signOut();await api("/api/auth/logout",{method:"POST"});
  localStorage.removeItem("fs-session");localStorage.removeItem("fs-user");
  await refreshMe();renderMyScenes();toast("Signed out.","warn");goto("home");};
 $("auth-goto-app").onclick=()=>goto("workspace");
@@ -1056,7 +1036,11 @@ $("quote-send").onclick=async()=>{const out=await api("/api/sales/quote",{method
   :(out.body.error||"Could not send.");};
 $("bill-toggle").addEventListener("click",()=>{const annual=$("bill-toggle").getAttribute("aria-pressed")==="true";
  const sa=$("sub-amt");if(sa)sa.textContent=annual?"$19/mo":"$190/yr";});
-document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>goto(b.dataset.goto));
+document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>{goto(b.dataset.goto);
+ const tool=b.dataset.labTool;if(!tool)return;const object=tool==="object";
+ const panel=$(object?"lab-object-generator":"lab-scene-generator");if(panel)panel.open=true;
+ const field=$(object?"obj-desc":"lab-prompt");field?.focus();
+});
 
 // ---- shareable Create Lab links ----
 $("lab-share").onclick=async()=>{const payload={objects:state.lab.objects};
@@ -1210,13 +1194,8 @@ function paintRange(r){const min=+r.min||0,max=+r.max||100,v=+r.value||0;
 document.querySelectorAll('input[type="range"]').forEach(r=>{paintRange(r);
  r.addEventListener("input",()=>paintRange(r));});
 function markInvalid(ids,invalid){ids.forEach(id=>{const el=$(id);if(el)el.classList.toggle("invalid",invalid);});}
-["su-name","su-email","su-password","si-email","si-password","byok-key"].forEach(id=>{
+["byok-key"].forEach(id=>{
  const el=$(id);if(el)el.addEventListener("input",()=>el.classList.remove("invalid"));});
-const _suBtn=$("auth-signup");if(_suBtn){const _su=_suBtn.onclick;
- _suBtn.onclick=async()=>{await _su();if($("auth-status").textContent)markInvalid(["su-name","su-email","su-password"],true);};}
-const _siBtn=$("auth-signin");if(_siBtn){const _si=_siBtn.onclick;
- _siBtn.onclick=async()=>{await _si();if($("auth-status").textContent)markInvalid(["si-email","si-password"],true);};}
-
 // ---- Workspaces: saved labs + SAM frame sets (search · open · update · delete) ----
 function wsKey(){if(sceneTenantKey())return "fs-workspaces:"+sceneTenantKey();const u=(typeof serverUser==="function")?serverUser():null;return "fs-workspaces:"+(u?("u"+u.id):"guest");}
 function wsLocalList(){try{return JSON.parse(localStorage.getItem(wsKey())||"[]");}catch(e){return[];}}
@@ -1392,17 +1371,19 @@ async function syncClerkSession() {
 }
 var _clerkInitPromise;
 function initClerk(){return _clerkInitPromise??=loadClerk();}
+$("clerk-retry").onclick=()=>{_clerkInitPromise=undefined;state.authConfig=null;initClerk();};
 async function loadClerk() {
   const note = $("clerk-note");
   let cfg = state.authConfig;
   try { if (!cfg) { cfg = await (await fetch("/api/auth/config")).json(); state.authConfig = cfg; } }
-  catch (e) { if (note) note.textContent = "Sign-in providers unavailable right now; email/password below still works."; return; }
+  catch (e) { if (note) note.textContent = "Secure sign-in is temporarily unavailable. Please retry in a moment.";$("clerk-retry")?.classList.remove("hidden"); return; }
+  $("clerk-retry")?.classList.add("hidden");
   if (!cfg.clerk_enabled) {
-    if (note) note.textContent = "Clerk single sign-on is not configured on this deployment (CLERK_PUBLISHABLE_KEY missing). Email/password accounts below are fully functional.";
+    if (note) note.textContent = "Secure sign-in is temporarily unavailable. Please contact support if this continues.";
     return;
   }
   try {
-    await new Promise((resolve, reject) => {
+    if(!window.Clerk)await new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
       s.async = true; s.crossOrigin = "anonymous";
@@ -1413,20 +1394,27 @@ async function loadClerk() {
     ClerkApp = window.Clerk;
     try { await ClerkApp.load({ publishableKey: cfg.clerk_publishable_key }); }
     catch (e) { await ClerkApp.load(); }
-    if (note) note.innerHTML = `Signed in with <b>Clerk</b> (${cfg.clerk_instance} instance). ` +
-      (ClerkApp.user ? "Manage your account from the avatar menu." : "Use the Clerk form below, or email/password further down.");
+    if (note) note.textContent = ClerkApp.user ? "Manage your account from the profile menu." : "Sign in or create your account securely with Clerk.";
     const btnSlot = $("clerk-userbtn");
     if (ClerkApp.user && btnSlot && ClerkApp.mountUserButton) {
       ClerkApp.mountUserButton(btnSlot, {});
       const ab = $("auth-btn"); if (ab) ab.classList.add("hidden");
     }
-    const si = $("clerk-signin");
-    if (si && !ClerkApp.user && ClerkApp.mountSignIn) ClerkApp.mountSignIn(si, {});
+    const si = $("clerk-signin");let signInMounted=false;
+    function renderClerkSignIn(user){
+      if(!si)return;
+      if(user&&signInMounted){ClerkApp.unmountSignIn(si);signInMounted=false;}
+      else if(!user&&!signInMounted&&ClerkApp.mountSignIn){ClerkApp.mountSignIn(si, {});signInMounted=true;}
+      const button=$("auth-btn");if(button)button.classList.toggle("hidden",!!user);
+      if(note)note.textContent=user?"Manage your account from the profile menu.":"Sign in or create your account securely with Clerk.";
+    }
+    renderClerkSignIn(ClerkApp.user);
     if (ClerkApp.user) await syncClerkSession();
     let previousTenant=sceneTenantKey();
     const orgSlot=document.createElement("div");$("clerk-userbtn")?.after(orgSlot);
     if(ClerkApp.mountOrganizationSwitcher)ClerkApp.mountOrganizationSwitcher(orgSlot,{hidePersonal:false});
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
+      renderClerkSignIn(user);
       const currentTenant=sceneTenantKey();
       if(currentTenant!==previousTenant){previousTenant=currentTenant;state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();
         if(state.lab){state.lab.objects=[];state.lab.running=false;labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
@@ -1455,7 +1443,8 @@ async function loadClerk() {
       }
     }
   } catch (e) {
-    if (note) note.textContent = "Clerk could not be loaded (network/CDN). Email/password accounts below remain fully functional.";
+    if (note) note.textContent = "Secure sign-in could not load. Please check your connection and retry.";
+    $("clerk-retry")?.classList.remove("hidden");
   }
 }
 // ClerkJS loads on first need (auth/pricing view or an explicit billing action),
