@@ -361,3 +361,5 @@ button.tilelink:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
 
 .labobj .labctl label{margin:0}
 @media(max-width:900px){.labobj .labctl input,.labobj .labctl select{font-size:16px;min-height:44px}}
+
+#view-auth{max-width:640px}#clerk-signin{display:flex;justify-content:center;min-width:0}#auth-card{padding:20px}
