@@ -78,13 +78,13 @@ function showView(v){
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
  window.scrollTo(0,0);
  if(v==="studio"){draw();syncLabToCfIfNewer().then(()=>{if($("view-studio").classList.contains("on"))draw();}).catch(error=>toast(error.message,"err"));}
- if(v==="create"){if(typeof labDraw==="function")labDraw();
+ if(v==="create"){ensureLabStarted();if(typeof labDraw==="function")labDraw();
    if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
  if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
  if(v==="auth")initClerk();
  if(v==="pricing")refreshBillingAvailability();
- if(v==="workspace")loadScenarioCounts();
+ if(v==="workspace"){loadScenarioCounts();loadWorkspaces();}
  if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
    if(!changed&&state.cfData){drawCfMap();drawCfChart();}}).catch(error=>{$("cf-results").textContent=error.message;});}}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
@@ -482,7 +482,7 @@ $("live-test").onclick=async()=>{$("live-out").textContent="Calling Muse Spark�
  $("live-out").textContent=JSON.stringify(await r.json(),null,2).slice(0,1600);};
 
 diag();
-const _boot=()=>loadScenarios().then(()=>{ if(state.data) runCf(); });
+const _boot=()=>loadScenarios().then(()=>{if($("view-counterfactual").classList.contains("on"))syncCounterfactual();});
 if("requestIdleCallback" in window) requestIdleCallback(_boot,{timeout:1200});
 else setTimeout(_boot,250);
 
@@ -598,7 +598,7 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
  if(o.waypoints.length===1||o.speed<=0)return o.waypoints[0];
  const lt=Math.max(0,t-o.delay);
  return profPosition(o,lt);}
-function labDraw(){const floorCanvas=$("lab-canvas");if(floorCanvas){floorCanvas.width=880;floorCanvas.height=Math.round(880*LAB.h/LAB.w);}if(!$("view-create").classList.contains("on"))return;if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
+function labDraw(){if(!$("view-create").classList.contains("on"))return;const floorCanvas=$("lab-canvas");if(floorCanvas){const height=Math.round(880*LAB.h/LAB.w);if(floorCanvas.width!==880)floorCanvas.width=880;if(floorCanvas.height!==height)floorCanvas.height=height;}if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
  const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.lab.objects);x.strokeStyle="rgba(34,65,70,.13)";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
@@ -865,7 +865,7 @@ function labSetTitle(name,saved){state.labTitle=name||"Untitled scene";
 function suggestedName(base){if(base)return base;
  const cats=[...new Set(state.lab.objects.map(o=>o.category))].join(" + ")||"scene";
  return `${cats} · ${state.lab.objects.length} components · ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;}
-function labLoadScene(scene,label){
+function labLoadScene(scene,label){state.labInitialized=true;
  if(Array.isArray(scene.stage_metres)&&scene.stage_metres.length===2&&scene.stage_metres.every(v=>Number.isFinite(v)&&v>=6&&v<=60)){
   [LAB.w,LAB.h]=scene.stage_metres;$("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;$("lab-stage-label").textContent=`${LAB.w} × ${LAB.h}`;$("lab-canvas").setAttribute("aria-label",`Create Lab stage: components and paths on a ${LAB.w} by ${LAB.h} metre floor`);
   localStorage.setItem("fs-stage-w",LAB.w);localStorage.setItem("fs-stage-h",LAB.h);
@@ -914,8 +914,8 @@ $("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
    (q.warnings&&q.warnings.length?` Warnings: ${q.warnings.join("; ")}`:""):"");
  toast("Scene generated — name prefilled under the stage. Save it to keep it in your workspaces.");
  $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
-// starter template so the Lab is never an empty, unexplained canvas
-if(!state.lab.objects.length){$("lab-add")&&document.querySelector('[data-tpl="near-miss"]').click();}
+// Build the starter only on first use; hidden Lab work must not block Overview.
+function ensureLabStarted(){if(state.labInitialized)return;state.labInitialized=true;if(!state.lab.objects.length)document.querySelector('[data-tpl="near-miss"]').click();}
 
 // ---- theme: light / dark / system (persisted, OS-aware, pre-paint handled in <head>) ----
 const _mq=matchMedia("(prefers-color-scheme: light)");
@@ -1236,7 +1236,7 @@ function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
   objects:w.objects||(s.payload&&s.payload.objects)||null,stage_metres:w.stage_metres||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
   captures:w.captures||null, image:w.image||null};}
 async function loadWorkspaces(){
- await initClerk();
+ if(hasSceneSession()||$("view-workspace").classList.contains("on"))await initClerk();
  const tenantAtStart=sceneTenantKey();state.workspaceNext=null;
  let list=wsLocalList().map(wsNormalizeLocal);
  // legacy analysed scenes become workspaces (read-compat, deduped by id)

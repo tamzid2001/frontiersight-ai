@@ -64,3 +64,11 @@ See [Scene editing API](SCENE_EDITING_API.md) and [coverage evidence](SCENE_EDIT
   Live checkout is blocked on Vercel's temporary storage. A tested durable store,
   production Clerk domain/DNS/OAuth, encrypted billing configuration and end-to-end
   live verification are still required. No provider activation or payment occurred.
+
+### Startup work
+
+Create Lab's starter and hidden canvas allocation are deferred until first use.
+The mobile navigation initializes before the application scripts; all three
+scripts use ordered `defer`. Guest workspace discovery no longer initializes
+Clerk on Overview, and hidden Counterfactual simulation is not run on page load.
+The existing Lighthouse budgets are unchanged.
