@@ -344,17 +344,20 @@ async function runCf(){if(!state.data||state.data.tracks.length<2){$("cf-results
   (r.monte_carlo?`<br>Monte Carlo (focus pair, ${r.monte_carlo.runs} runs, seed ${r.monte_carlo.seed}): p05/p50/p95 ${r.monte_carlo.d_min_p05} / ${r.monte_carlo.d_min_p50} / ${r.monte_carlo.d_min_p95} m`:"")+
   `<br><span class="dim">manifest ${(r.manifest_hash||"").slice(0,16)}… · conditional prediction under declared assumptions, not a guarantee</span>`;
  drawCfMap();drawCfChart();}
-function cfBounds(r){const floor=r.stage_metres||state.data?.stage_metres;if(floor)return {x0:0,x1:floor[0],y0:0,y1:floor[1]};let xs=[],ys=[];for(const v of Object.values(r.results)){
- for(const s of ["original","counterfactual"])v.trajectories[s].forEach(p=>{xs.push(p[1],p[3]);ys.push(p[2],p[4]);});}
- return {x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys)};}
-function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy);
+function cfBounds(r){const floor=r.stage_metres||state.data?.stage_metres;if(floor)return {x0:0,x1:floor[0],y0:0,y1:floor[1],padding:1};
+ const radii=new Map((state.data?.tracks||[]).map(tr=>[tr.object_id,tr.radius||0])),agentRadius=radii.get(r.agent_id)||0;let xs=[],ys=[];
+ for(const [id,v] of Object.entries(r.results)){const radius=radii.get(id)||0;
+  for(const series of ["original","counterfactual"])v.trajectories[series].forEach(p=>{xs.push(p[1]-agentRadius,p[1]+agentRadius,p[3]-radius,p[3]+radius);ys.push(p[2]-agentRadius,p[2]+agentRadius,p[4]-radius,p[4]+radius);});}
+ return {x0:Math.min(...xs),x1:Math.max(...xs),y0:Math.min(...ys),y1:Math.max(...ys),padding:.96};}
+function cfXY(b,W,H){const dx=(b.x1-b.x0)||1,dy=(b.y1-b.y0)||1,s=Math.min(W/dx,H/dy)*b.padding;
  return (x,y)=>[W/2-(b.x0+b.x1)/2*s+x*s, H/2+(b.y0+b.y1)/2*s-y*s];}
+
 function trajAt(traj,t){let best=traj[0];for(const p of traj){if(Math.abs(p[0]-t)<Math.abs(best[0]-t))best=p;}return best;}
 function drawCfMap(){if(!$("view-counterfactual").classList.contains("on"))return;if(window.__cf3dSync)window.__cf3dSync(state.cfData,state.cfT);
  const r=state.cfData,c=$("cf-map");if(!r||!c)return;const floor=r.stage_metres||state.data?.stage_metres;if(floor){c.width=880;c.height=Math.round(880*floor[1]/floor[0]);c.setAttribute("aria-label",`Counterfactual trajectory map: ${floor[0]} by ${floor[1]} metre floor`);}else{c.width=880;c.height=520;}const context=$("cf-scene-size");if(context)context.textContent=floor?`${floor[0]} × ${floor[1]} m · ${state.data.tracks.length} components`:"";const x=c.getContext("2d"),W=c.width,H=c.height;
  const line=getComputedStyle(document.documentElement).getPropertyValue("--line");
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.data?.tracks||[]);x.strokeStyle=line;for(let gx=0;gx<W;gx+=44){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
- const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other,scale=Math.min(W/(b.x1-b.x0||1),H/(b.y1-b.y0||1));
+ const b=cfBounds(r),xy=cfXY(b,W,H),focus=r.focus_other,scale=Math.min(W/(b.x1-b.x0||1),H/(b.y1-b.y0||1))*b.padding;
  for(const [oid,v] of Object.entries(r.results)){
   x.strokeStyle="#8fa0b8";x.lineWidth=1.2;x.beginPath();v.trajectories.original.forEach((p,i)=>{const[a,bb]=xy(p[3],p[4]);i?x.lineTo(a,bb):x.moveTo(a,bb);});x.stroke();
   const o=trajAt(v.trajectories.counterfactual,state.cfT);const[ox,oy]=xy(o[3],o[4]);

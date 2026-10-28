@@ -8,7 +8,7 @@ claims of physical robot validation, measured image depth or full UI coverage.
 | Complete Python suite | 166 passed, zero skipped; actual local Firestore emulator | — | — | Raw command/log recorded in release workspace |
 | `engine.scene_edit` | Full-suite execution: resize, movement, canonical handoff, simulation, HTTP/MCP/stdio | 100% | 100% | `coverage/workbench-release.xml` |
 | `integrations.billing` | Price validation, readiness, signed webhooks and real HTTP to a local provider fixture | 100% | 72.22% | `coverage/workbench-release.xml` |
-| Pure image/scenery/stage controls | 17 Node 24 tests | 99.44% | 96.13% | `coverage/web-scenes.lcov` |
+| Pure image/scenery/stage controls | 19 Node 24 tests | 99.44% | 96.13% | `coverage/web-scenes.lcov` |
 
 Python emitted 11 warnings, including legacy SQLite test-connection cleanup
 warnings. There were no failed or skipped tests in that run. Coverage includes

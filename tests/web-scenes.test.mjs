@@ -131,3 +131,29 @@ test('the browser bundle exposes the same implementation without Node globals',a
  assert.equal(typeof context.FrontierStageEdit.resizePath,'function');
  assert.equal(context.FrontierStageEdit.resizePath([[8,7]],[16,14],[8,7])[0][0],4);
 });
+
+
+async function comparisonGeometry(data){
+ const {readFile}=await import('node:fs/promises'),vm=await import('node:vm');
+ const source=await readFile(new URL('../apps/web/app.js',import.meta.url),'utf8');
+ // Run the actual DOM-independent production projection functions, not a copy.
+ const scope={state:{data}};
+ vm.runInNewContext(source.slice(source.indexOf('function cfBounds('),source.indexOf('function trajAt(')),scope);
+ return scope;
+}
+
+test('counterfactual framing keeps declared floor and equal metre scales',async()=>{
+ const api=await comparisonGeometry({stage_metres:[9,8],tracks:[]});
+ const bounds=api.cfBounds({results:{}}),project=api.cfXY(bounds,900,800);
+ assert.deepEqual(JSON.parse(JSON.stringify(bounds)),{x0:0,x1:9,y0:0,y1:8,padding:1});
+ assert.deepEqual(Array.from(project(0,0)),[0,800]);
+ assert.equal(project(1,1)[0]-project(0,0)[0],project(0,0)[1]-project(1,1)[1]);
+});
+
+test('legacy counterfactual framing includes complete physical footprints',async()=>{
+ const api=await comparisonGeometry({tracks:[{object_id:'agent',radius:.9},{object_id:'other',radius:.4}]});
+ const rows=[[0,1,1,5,3],[1,2,2,4,2]],result={agent_id:'agent',results:{other:{trajectories:{original:rows,counterfactual:rows}}}};
+ const bounds=api.cfBounds(result),project=api.cfXY(bounds,880,520);
+ assert.ok(Math.abs(bounds.x0-.1)<1e-10);assert.equal(bounds.x1,5.4);
+ for(const p of [[.1,.1],[5.4,3.4]]){const [x,y]=project(...p);assert.ok(x>=0&&x<=880&&y>=0&&y<=520);}
+});
