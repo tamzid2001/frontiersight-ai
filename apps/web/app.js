@@ -2,7 +2,8 @@ const $=id=>document.getElementById(id);
 const state={scenario:null,data:null,t:0,playing:false,run:null,cf:null};
 let sceneryPainter=null;
 function paintSceneContext(context,w,h,items){if(sceneryPainter)sceneryPainter(context,w,h,items,window.frontierSceneryChoice||'auto');}
-import('/scenery-core.mjs').then(module=>{sceneryPainter=module.paintScenery2D;draw();labDraw();drawCfMap();}).catch(()=>{});
+let sceneryLoad;
+function loadScenery(){sceneryLoad??=import('/scenery-core.mjs').then(module=>{sceneryPainter=module.paintScenery2D;draw();labDraw();drawCfMap();}).catch(()=>{});}
 
 // ---- Real entity rendering (top-down vector silhouettes, heading-oriented) ----
 // Each kind is drawn in local space pointing +x, scaled by footprint radius px.
@@ -70,6 +71,8 @@ const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc
 
 // tabs
 function showView(v){
+ if(["create","studio","counterfactual"].includes(v))loadScenery();
+ if(v==="studio")initSamGallery();
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
   if(on)x.setAttribute("aria-current","page");else x.removeAttribute("aria-current");});
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
@@ -1084,11 +1087,11 @@ function resetSamSource(){state.samVersion++;state.samAbort?.abort();state.samCa
  if(state.samObjectUrl){URL.revokeObjectURL(state.samObjectUrl);state.samObjectUrl=null;}}
 const _samDefaultImg=new Image();
 _samDefaultImg.onload=()=>{if(state.samSource!=="default")return;const canvas=$("sam-canvas"),context=canvas.getContext("2d");context.clearRect(0,0,canvas.width,canvas.height);const scale=Math.min(canvas.width/_samDefaultImg.naturalWidth,canvas.height/_samDefaultImg.naturalHeight);context.drawImage(_samDefaultImg,(canvas.width-_samDefaultImg.naturalWidth*scale)/2,(canvas.height-_samDefaultImg.naturalHeight*scale)/2,_samDefaultImg.naturalWidth*scale,_samDefaultImg.naturalHeight*scale);samStatus("Example photograph ready. Segment it, then build an image-based scene. No inference runs until you press Segment.");};
-_samDefaultImg.src="/assets/sam-gallery/warehouse.jpg";
 function showSamExample(index){if(!state.samGallery.length)return;resetSamSource();state.samGalleryIndex=(index+state.samGallery.length)%state.samGallery.length;const item=state.samGallery[state.samGalleryIndex];state.samSource="default";state.samAttribution={author:item.author,authorUrl:item.author_url,photoUrl:item.photo_url,license:item.license,licenseUrl:item.license_url};$("sam-video").pause();$("sam-video").style.display="none";$("sam-img").style.display="none";_samDefaultImg.src=item.src;$("sam-example").value=item.id;
  $("sam-concept").value=item.concepts[0];$("sam-concept2").value=item.concepts[1]||"";
  const credit=$("sam-photo-credit");credit.replaceChildren(document.createTextNode("Photo: "));const author=document.createElement("a");author.href=item.author_url;author.textContent=item.author;author.target="_blank";author.rel="noopener noreferrer";const photo=document.createElement("a");photo.href=item.photo_url;photo.textContent="Unsplash";photo.target="_blank";photo.rel="noopener noreferrer";credit.append(author,document.createTextNode(" on "),photo,document.createTextNode(" · "+item.title));}
-fetch("/sam-gallery.json").then(response=>{if(!response.ok)throw Error("gallery unavailable");return response.json();}).then(items=>{state.samGallery=items;$("sam-example").replaceChildren(...items.map(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.title;return option;}));if(state.samSource==="default")showSamExample(0);}).catch(()=>samStatus("Example gallery unavailable. You can still upload an image."));
+function initSamGallery(){if(state.samGalleryInitialized)return;state.samGalleryInitialized=true;
+fetch("/sam-gallery.json").then(response=>{if(!response.ok)throw Error("gallery unavailable");return response.json();}).then(items=>{state.samGallery=items;$("sam-example").replaceChildren(...items.map(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.title;return option;}));if(state.samSource==="default")showSamExample(0);}).catch(()=>samStatus("Example gallery unavailable. You can still upload an image."));}
 $("sam-example").onchange=event=>showSamExample(state.samGallery.findIndex(item=>item.id===event.target.value));$("sam-previous").onclick=()=>showSamExample(state.samGalleryIndex-1);$("sam-next").onclick=()=>showSamExample(state.samGalleryIndex+1);$("sam-restore").onclick=()=>showSamExample(state.samGalleryIndex);
 $("sam-file").onchange=event=>{const file=event.target.files[0];event.target.value="";if(!file)return;const video=file.type.startsWith("video/"),image=/^image\/(jpeg|png|webp)$/.test(file.type);
  if(!video&&!image){samStatus("Use a JPEG, PNG, WebP image or a browser-supported video.");return;}if(file.size>(video?60:12)*1024*1024){samStatus(video?"Video exceeds the 60 MB local preview limit.":"Image exceeds the 12 MB upload preview limit.");return;}

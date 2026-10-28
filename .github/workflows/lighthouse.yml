@@ -20,6 +20,8 @@ jobs:
           d = json.load(open("lh.json"))
           scores = {k: round(v["score"] * 100) for k, v in d["categories"].items()}
           print("Lighthouse:", scores)
+          requests = d["audits"]["network-requests"]["details"]["items"]
+          assert not any("/assets/sam-gallery/" in r["url"] or "/image-scene.mjs" in r["url"] for r in requests), "Hidden segmentation views must load on demand"
           limits = {"performance": 90}
           failing = {k: v for k, v in scores.items() if v < limits.get(k, 95)}
           if failing:
