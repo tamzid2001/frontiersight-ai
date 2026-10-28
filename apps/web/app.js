@@ -1421,7 +1421,7 @@ async function loadClerk() {
     ClerkApp = window.Clerk;
     try { await ClerkApp.load({ publishableKey: cfg.clerk_publishable_key }); }
     catch (e) { await ClerkApp.load(); }
-    if (note) note.textContent = ClerkApp.user ? "Manage your account from the profile menu." : "Sign in or create an account to save your work.";
+    if (note) note.textContent = ClerkApp.user ? "Manage your account from the profile menu." : "";
     const btnSlot = $("clerk-userbtn");
     if (ClerkApp.user && btnSlot && ClerkApp.mountUserButton) {
       ClerkApp.mountUserButton(btnSlot, {});
@@ -1431,9 +1431,9 @@ async function loadClerk() {
     function renderClerkSignIn(user){
       if(!si)return;
       if(user&&signInMounted){ClerkApp.unmountSignIn(si);signInMounted=false;}
-      else if(!user&&!signInMounted&&ClerkApp.mountSignIn){ClerkApp.mountSignIn(si, {routing:"hash",appearance:{variables:{colorPrimary:"#28677a",borderRadius:"0.875rem",fontFamily:"Inter, system-ui, sans-serif"},elements:{rootBox:"clerk-auth-root",cardBox:"clerk-auth-card",card:"clerk-auth-surface"}}});signInMounted=true;}
+      else if(!user&&!signInMounted&&ClerkApp.mountSignIn){ClerkApp.mountSignIn(si, {routing:"hash",appearance:{variables:{colorPrimary:"#28677a",borderRadius:"0.875rem",fontFamily:"Inter, system-ui, sans-serif"},elements:{rootBox:"clerk-auth-root",cardBox:"clerk-auth-card"}}});signInMounted=true;}
       const button=$("auth-btn");if(button)button.classList.toggle("hidden",!!user);
-      if(note)note.textContent=user?"Manage your account from the profile menu.":"Sign in or create an account to save your work.";
+      if(note)note.textContent=user?"Manage your account from the profile menu.":"";
     }
     renderClerkSignIn(ClerkApp.user);
     if (ClerkApp.user) await syncClerkSession();

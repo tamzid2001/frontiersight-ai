@@ -13,13 +13,15 @@ jobs:
           for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/api/health && break || sleep 1; done
       - name: Run Lighthouse (a11y/BP/SEO >= 95, performance >= 90 under throttled emulation)
         run: |
-          npx -y lighthouse@latest http://127.0.0.1:8799/ --output=json --output-path=lh.json \
+          npx -y lighthouse@13.6.0 http://127.0.0.1:8799/ --output=json --output-path=lh.json \
             --chrome-flags="--headless --no-sandbox" --quiet
           python3 - << 'PY'
           import json, sys
           d = json.load(open("lh.json"))
           scores = {k: round(v["score"] * 100) for k, v in d["categories"].items()}
           print("Lighthouse:", scores)
+          print("Runner benchmark index:", d.get("environment", {}).get("benchmarkIndex"))
+          print("TBT:", d["audits"]["total-blocking-time"].get("displayValue"))
           requests = d["audits"]["network-requests"]["details"]["items"]
           assert not any("/assets/sam-gallery/" in r["url"] or "/image-scene.mjs" in r["url"] for r in requests), "Hidden segmentation views must load on demand"
           limits = {"performance": 90}

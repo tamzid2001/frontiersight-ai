@@ -72,3 +72,15 @@ The mobile navigation initializes before the application scripts; all three
 scripts use ordered `defer`. Guest workspace discovery no longer initializes
 Clerk on Overview, and hidden Counterfactual simulation is not run on page load.
 The existing Lighthouse budgets are unchanged.
+
+Below-fold feature grids and the architecture block now defer rendering with
+intrinsic size estimates, only on viewports up to 900 px high where they were
+confirmed below the initial fold. Sequential keyboard navigation across both
+boundaries was verified. Mobile navigation initializes before main content is
+parsed, and mobile headers use an opaque background instead of a backdrop blur.
+Lighthouse is pinned to the actually inspected 13.6.0 release and reports runner
+benchmark index/TBT; its score thresholds and throttling remain unchanged.
+
+The healthy sign-in hint and outer card have been removed at the user's request;
+Clerk's own form remains. Error/retry feedback is retained when authentication
+cannot load.

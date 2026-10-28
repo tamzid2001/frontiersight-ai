@@ -68,6 +68,7 @@
  <div class="drawer-heading"><h2 id="mobile-navigation-title">Navigation</h2><form method="dialog"><button class="ghostbtn" aria-label="Close navigation" autofocus>✕</button></form></div>
  <div id="mobile-navigation-slot"></div>
 </dialog>
+<script src="mobile-nav.js"></script>
 <main id="main" tabindex="-1">
 <section id="view-home" class="view on">
  <div class="hero-grid">
@@ -146,7 +147,7 @@
   <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>The deterministic engine is an MCP server (HTTP + stdio): ten tools any agent can call for measured analysis and counterfactuals — no credits spent, no approvals bypassed.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
  </div>
 
- <div class="card wide"><h3>Architecture</h3>
+ <div class="card wide home-deferred" id="home-architecture"><h3>Architecture</h3>
 <svg class="arch-svg" viewBox="0 0 1120 330" role="img" aria-label="FrontierSight architecture: video or fixture flows through SAM 3.1 segmentation, scene extraction and Muse Spark hypothesis, then deterministic counterfactual simulation, independent verification, human review, and a hash-bound evidence packet">
   <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="svg-arrowhead"/></marker></defs>
   <!-- row 1 -->
@@ -514,7 +515,7 @@
 </section>
 
 <section id="view-auth" class="view"><div class="auth-intro"><img src="/logo-mark.svg" alt="" width="48" height="48"><span class="eyebrow">Your workspace, ready when you are</span><h2 id="auth-title">Welcome to FrontierSight.</h2><p>Save your scenes. Revisit your experiments. Build your next insight.</p></div>
- <div class="card wide" id="auth-card">
+ <div id="auth-card">
   <div id="clerk-block">
    <p id="clerk-note" class="dim" role="status">Loading secure sign-in…</p>
    <button id="clerk-retry" type="button" class="ghostbtn hidden">Retry sign-in</button>
@@ -748,4 +749,4 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
  <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span>
 </footer>
 <div id="toasts" aria-live="polite"></div>
-<script src="mobile-nav.js" defer></script><script src="stage-edit-core.js" defer></script><script src="app.js" defer></script></body></html>
+<script src="stage-edit-core.js" defer></script><script src="app.js" defer></script></body></html>
