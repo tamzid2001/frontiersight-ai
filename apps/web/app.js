@@ -913,7 +913,9 @@ $("lab-generate").onclick=async()=>{
   });
   if(state.labRevision!==revision||$("lab-prompt").value.trim()!==desc){status.textContent="Generation finished; your scene or prompt changed, so the result was not applied.";return;}
   if(!r.scene||!Array.isArray(r.scene.objects))throw new Error("Unexpected scene response; nothing was changed");
-  labLoadScene(r.scene,`Generated “${r.scene.name}” — edit waypoints, then run analysis.`);
+  const fitted=SceneRequest.fitScene(r.scene,[LAB.w,LAB.h],stageEdit.resizePath);
+  fitted.objects=fitted.objects.map(object=>({...object,waypoints:fitLabPath(object,object.waypoints)}));
+  labLoadScene(fitted,`Generated “${r.scene.name}” — edit waypoints, then run analysis.`);
   if(r.source==="MODEL_DERIVED")obDone("muse");
   $("lab-ws-name").value=r.scene.name||"";
   const save=$("lab-save-ws");save.classList.add("pulse");save.textContent="Save this scene →";

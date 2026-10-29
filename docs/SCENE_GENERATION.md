@@ -29,3 +29,8 @@ radii, physical paths and deterministic analysis are unchanged.
 
 Validation: `python -m pytest -q`; `node --test tests/*.test.mjs`.
 Tests use bounded local fixtures, not paid inference or simulated GPU evidence.
+
+Generated scenes declare the 16 × 14 m source coordinate space. Before applying
+a result, the browser rescales and validates every path against the current
+floor dimensions. Validation completes before any existing object is replaced.
+Physical radii and speeds are preserved.

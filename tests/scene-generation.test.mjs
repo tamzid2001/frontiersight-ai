@@ -46,3 +46,13 @@ test('synchronous errors release the request lock without retry',async()=>{
  assert.equal(calls,1);assert.equal(core.busy,false);
  for(const deadline of [0,-1,NaN])assert.throws(()=>requestCore.create(deadline));
 });
+
+import stageEdit from '../apps/web/stage-edit-core.js';
+test('generated paths fit the current floor before replacing any scene',()=>{
+ const original={name:'Example',objects:[{category:'pedestrian',radius:.45,waypoints:[[8,7],[12,10]]}]};
+ const copy=structuredClone(original),fitted=requestCore.fitScene(original,[9,8],stageEdit.resizePath);
+ assert.deepEqual(fitted.stage_metres,[9,8]);assert.deepEqual(fitted.objects[0].waypoints[0],[4.5,4]);
+ assert.equal(fitted.objects[0].radius,.45);assert.deepEqual(original,copy);
+ for(const bad of [null,{objects:[]},{objects:Array(25).fill(original.objects[0])}])assert.throws(()=>requestCore.fitScene(bad,[9,8],stageEdit.resizePath));
+ assert.throws(()=>requestCore.fitScene({...original,stage_metres:[0,8]},[9,8],stageEdit.resizePath));
+});
