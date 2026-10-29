@@ -20,7 +20,7 @@ test("server adapters fail safely without configuration, including MCP and suppo
 test("OpenAPI is specific to this product, covers implemented operations and requires authentication", () => {
   const spec = workspaceOpenApi(site, origin);
   assert.equal(spec.openapi, "3.1.0"); assert.equal(spec.info.title, "Adapters workspace API");
-  assert.equal(Object.keys(spec.paths).length, 5);
+  assert.equal(Object.keys(spec.paths).length, 7);
   assert.equal(spec.paths["/api/v1/workflows"].post.parameters[0].required, true);
   assert.equal(spec.components.schemas.Record.properties.stage.maximum, 1);
   assert.deepEqual(spec.security, [{ ClerkSession: [] }]);
@@ -48,7 +48,7 @@ test("support is authenticated, bounded and never calls an unverified provider",
 });
 test("explicitly enabled free provider receives only a bounded question and documentation context", { skip: !emulator }, async () => {
   let calls = 0;
-  const env = { SUPPORT_AI_FREE_ENDPOINT_VERIFIED: "true", SUPPORT_AI_MODEL: "test/free-model", NVIDIA_API_KEY: "test-only-not-a-real-key" };
+  const env = { SUPPORT_AI_FREE_ENDPOINT_VERIFIED: "true", SUPPORT_AI_MODEL: "nvidia/nemotron-3.5-bolt-e4b", NVIDIA_API_KEY: "test-only-not-a-real-key" };
   const handler = createSupportHandler({ ...site, siteId: site.siteId + "-ai" }, deps, env, async (url, init) => {
     calls++; assert.equal(url, "https://integrate.api.nvidia.com/v1/chat/completions");
     const body = JSON.parse(init!.body as string);

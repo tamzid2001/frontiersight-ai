@@ -54,3 +54,17 @@ npm run build
 The package tests actual Clerk RSA signature verification, real Firestore emulator transactions, cross-product/tenant denial, concurrent updates, idempotency, quotas, audit tampering and real MCP client/server negotiation. The emulator tests are skipped without the emulator; CI must fail on unexpected skips. Coverage covers server `.ts` modules; React `.tsx` UI is a separate browser-validation surface, not included in the server percentage. No real cloud write, production index/load test, payment or provider-LLM execution is implied.
 
 References: [Clerk sessions](https://clerk.com/docs/guides/sessions/session-tokens), [Firestore server SDK](https://docs.cloud.google.com/firestore/native/docs/create-database-server-client-library), [transactions](https://docs.cloud.google.com/firestore/native/docs/manage-data/transactions), [server rules bypass](https://firebase.google.com/docs/firestore/security/rules-conditions), [index best practices](https://firebase.google.com/docs/firestore/best-practices), [MCP handler](https://github.com/vercel/mcp-adapter).
+
+## Reviewed model requests (0.1.2)
+
+`GET /api/v1/models` lists capabilities applicable to this product.
+`POST /api/v1/models/prepare` validates a reasoning prompt or a bounded Kumo
+Tabular regression table and returns a request with a placeholder API key.
+MCP exposes `list_applicable_models` and `prepare_model_request`. Both use the
+same verified identity, paid API-access feature and durable request budget.
+These operations prepare requests only; they never invoke NVIDIA. Scientific
+protein jobs require a dedicated adapter and are explicitly rejected here.
+See `docs/research/NVIDIA_MODELS_2026-10-29.md` in the source repository for the
+catalog review, exact provider references, trial terms and verification limits.
+The support assistant's optional free-provider integration now accepts only
+reviewed model IDs; a boolean setting cannot route an arbitrary model as free.

@@ -91,7 +91,13 @@ test("actual MCP client negotiates the SDK protocol, calls tools and preserves t
   });
   try {
     await client.connect(transport);
-    const tools = await client.listTools(); assert.equal(tools.tools.length, 4);
+    const tools = await client.listTools(); assert.equal(tools.tools.length, 6);
+    const modelList = await client.callTool({name:"list_applicable_models",arguments:{}});
+    assert.equal(JSON.parse((modelList.content as {text:string}[])[0].text).models[0].task,"reasoning");
+    const prepared = await client.callTool({name:"prepare_model_request",arguments:{model:"nvidia/nemotron-3.5-bolt-e4b",prompt:"Explain uncertainty"}});
+    assert.equal(JSON.parse((prepared.content as {text:string}[])[0].text).status,"prepared_not_executed");
+    const invalidModel = await client.callTool({name:"prepare_model_request",arguments:{model:"unknown",prompt:"Explain"}});
+    assert.equal(invalidModel.isError,true);
     const created = await client.callTool({ name: "create_workflow", arguments: { title: "MCP real save", payload: { sample: true }, idempotencyKey: randomUUID() } });
     assert.equal(created.isError, false);
     const row = JSON.parse((created.content as { text: string }[])[0].text);
@@ -104,4 +110,15 @@ test("actual MCP client negotiates the SDK protocol, calls tools and preserves t
   const denied = await mcp(new Request(origin + "/api/mcp", { method: "POST", headers: {
     authorization: "Bearer " + token({ fea: "", pla: "u:free" }), "content-type": "application/json" }, body: "{}" }));
   assert.equal(denied.status, 403);
+});
+
+
+test("model HTTP contracts preserve paid access, validation and zero external execution", {skip:!emulator}, async()=>{
+ const run=(suffix:string,method="GET",body?:unknown,jwt=token())=>api(new Request(origin+"/api/v1/models"+suffix,{method,headers:{authorization:"Bearer "+jwt,"content-type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)}));
+ assert.equal((await (await run("")).json()).execution,"request_preparation_only");
+ const prepared=await run("/prepare","POST",{model:"nvidia/nemotron-3.5-bolt-e4b",prompt:"Review evidence"});
+ assert.equal((await prepared.json()).status,"prepared_not_executed");
+ assert.equal((await run("/prepare","POST",{model:"unknown"})).status,400);
+ assert.equal((await run("/unknown")).status,405);
+ assert.equal((await run("","GET",undefined,token({fea:"",pla:"u:free"}))).status,403);
 });

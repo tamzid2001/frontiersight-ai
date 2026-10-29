@@ -1,3 +1,4 @@
+import { FREE_CHAT_MODELS } from "./models.ts";
 import { FirestoreWorkspace } from "./firestore.ts";
 import { storagePolicy, type WorkspaceConfiguration, type WorkspaceDependencies } from "./api.ts";
 import { enforceOrigin, errorResponse, jsonResponse, readJson, strictFields } from "./http.ts";
@@ -29,7 +30,7 @@ export function createSupportHandler(config: WorkspaceConfiguration, dependencie
       // Explicit opt-in after provider free-tier verification. No paid routing,
       // automatic provider discovery or workspace data is sent externally.
       if (env.SUPPORT_AI_FREE_ENDPOINT_VERIFIED === "true" && env.NVIDIA_API_KEY
-          && /^[A-Za-z0-9][A-Za-z0-9_./:-]{1,127}$/.test(env.SUPPORT_AI_MODEL ?? "")) {
+          && (FREE_CHAT_MODELS as readonly string[]).includes(env.SUPPORT_AI_MODEL ?? "")) {
         try {
           const response = await providerFetch("https://integrate.api.nvidia.com/v1/chat/completions", {
             method: "POST", signal: AbortSignal.timeout(10_000), headers: {

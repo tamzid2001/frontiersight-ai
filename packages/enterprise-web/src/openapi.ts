@@ -21,6 +21,10 @@ export function workspaceOpenApi(config: WorkspaceConfiguration, origin: string)
       description: "Clerk-authenticated, Firestore-backed records. Paid programmatic access is checked on every request in the active personal or organization workspace. Stage changes only record status; they do not execute domain actions." },
     servers: [{ url: origin }], security: [{ ClerkSession: [] }],
     paths: {
+      "/api/v1/models": { get: { operationId: "listApplicableModels", description: "Reviewed model capabilities applicable to this product. Free development endpoints have provider trial terms and rate limits; no model is invoked.", responses: { 200: response({ type: "object" }), ...errors } } },
+      "/api/v1/models/prepare": { post: { operationId: "prepareModelRequest", description: "Validate a bounded reasoning or tabular regression payload and return a provider request with a placeholder key. This operation never invokes NVIDIA or uploads workspace data. Protein jobs require a dedicated scientific adapter and are rejected here.",
+        requestBody: body({ type: "object", required: ["model"], additionalProperties: false, properties: { model: {type:"string"}, prompt:{type:"string",minLength:1,maxLength:4000}, table:{type:"object",description:"columns [{name,dtype: float64|string}], target name, context rows including numeric target last (2–200), predict rows excluding target (1–32). 1–24 feature columns, finite numbers, strings <=256 characters or missing null features."}} }),
+        responses: { 200: response({ type:"object",properties:{status:{const:"prepared_not_executed"},url:{type:"string"},body:{type:"object"}} }), ...errors } } },
       "/api/v1/workflows": {
         get: { operationId: "listWorkflows", parameters: paging, responses: { 200: response(ref("Page")), ...errors } },
         post: { operationId: "createWorkflow", parameters: [key], requestBody: body(ref("CreateRecord")),
