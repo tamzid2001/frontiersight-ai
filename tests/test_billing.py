@@ -286,7 +286,7 @@ def test_custom_objects_generate_and_profile(api, monkeypatch):
                                     "description": "test"}, {"model": "muse-spark-1.3"}))
     import services.api.server as srv
     monkeypatch.setattr("integrations.meta.image.generate_illustration",
-                        lambda prompt: {"data": [{"b64_json": "AAAA"}], "model": "muse-image-1.0"})
+                        lambda prompt, timeout: {"data": [{"b64_json": "AAAA"}], "model": "muse-image-1.0"})
     s, out = call(api, "/api/meta/object", {"description": "a yellow scissor lift"})
     assert s == 200 and out["spec"]["name"] == "Scissor Lift" and out["source"] == "MODEL_DERIVED"
     assert out["image_data_url"].startswith("data:image/webp")
