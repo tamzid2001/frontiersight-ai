@@ -245,7 +245,7 @@ $("analyze").onclick=async()=>{
  syncApprovalUI();
  if(state.scenario==="warehouse-near-miss")obDone("demo");
  renderTrace(r.run);renderInspector(r);drawCfFromRun(r.run);};
-function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${s.status}"><b>${s.name}</b> · ${s.status} · <span class="dim">${s.attribution}${s.artifact?" · artifact "+s.artifact:""}${s.retries?" · retries "+s.retries:""}</span><br><span class="dim mono">${JSON.stringify(s.detail).slice(0,320)}</span></li>`).join("");}
+function renderTrace(run){$("trace").innerHTML=run.stages.map(s=>`<li class="${htmlText(s.status)}"><b>${htmlText(s.name)}</b> · ${htmlText(s.status)} · <span class="dim">${htmlText(s.attribution)}${s.artifact?" · artifact "+htmlText(s.artifact):""}${s.retries?" · retries "+htmlText(s.retries):""}</span><br><span class="dim mono">${htmlText(JSON.stringify(s.detail).slice(0,320))}</span></li>`).join("");}
 function renderInspector(r){const sc=r.scenario;const mpp=sc.calibration.metres_per_pixel;
  const unitsLine=(sc.tracks[0]&&sc.tracks[0].space==="world")
   ? `<b>Units:</b> metres (world space${mpp?`, declared scale ${mpp} m/px`:", 1 unit = 1 m by construction"})`
@@ -891,31 +891,46 @@ paintModelHint();
 $("model-select").addEventListener("change",()=>{localStorage.setItem("fs-model",$("model-select").value);
  paintModelHint();
  toast(`Reasoning model: ${$("model-select").selectedOptions[0].textContent} — used for scene generation, hypotheses and object design.`);});
-$("lab-generate").onclick=async()=>{const desc=$("lab-prompt").value.trim();
- if(desc.length<8){$("lab-gen-status").textContent="Describe the scene in a sentence or two first (at least a few words).";return;}
- if(desc.length>4000){$("lab-gen-status").textContent=`Your description is ${desc.length} characters — the limit is 4000. Shorten it a little and try again.`;return;}
- $("lab-gen-status").textContent="Asking Muse Spark to design the scene…";
- let r;try{const res=await fetch("/api/meta/scene",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:desc})});
-  r=await res.json();r.status=res.status===200?"OK":res.status;}
- catch(e){$("lab-gen-status").textContent="Generation failed: API unreachable.";return;}
- if(r.status==="BLOCKED_CREDENTIALS"){$("lab-gen-status").textContent=r.detail;return;}
- if(r.error||r.status==="MODEL_ERROR"){
-  $("lab-gen-status").textContent=(r.status===400||/characters|required/.test(r.error||""))
-   ? "Check your description: "+(r.error||r.detail)
-   : "Muse could not produce a valid scene: "+(r.error||r.detail)+" — try a clearer description.";return;}
- if(!r.scene||!Array.isArray(r.scene.objects)){$("lab-gen-status").textContent="Generation returned an unexpected shape — nothing was changed. Try again.";return;}
- labLoadScene(r.scene,`Generated "${r.scene.name}" — edit any waypoint, then Run analysis.`);
- if(r.source==="MODEL_DERIVED")obDone("muse");
- $("lab-ws-name").value=r.scene.name||"";
- const sv=$("lab-save-ws");sv.classList.add("pulse");sv.textContent="Save this scene →";
- const q=r.scene.quality;
- $("lab-gen-status").innerHTML+=`<br><b>Auto-labelled:</b> “${r.scene.name}” — it is prefilled below the stage. Press <b>Save workspace</b> to keep it (it will also appear in the Video Studio dropdown under <i>My workspaces</i>).`+
-  (q?`<br><b>Path quality (engine-scored):</b> closest surface separation ${q.min_separation_m} m`+
-   (q.has_close_interaction?" — a real interaction to analyse.":" — no close interaction; edit paths closer together.")+
-   (q.issues&&q.issues.length?` Issues: ${q.issues.join("; ")}`:"")+
-   (q.warnings&&q.warnings.length?` Warnings: ${q.warnings.join("; ")}`:""):"");
- toast("Scene generated — name prefilled under the stage. Save it to keep it in your workspaces.");
- $("lab-gen-status").innerHTML=`Source: <b>${r.source==="MODEL_DERIVED"?"MODEL_DERIVED · Muse Spark "+(r.model_call?`(${r.model_call.model}, ${r.model_call.latency_ms} ms)`:""):"OFFLINE_HEURISTIC (no model call)"}</b><br>${r.scene.explanation||""}`;};
+const sceneRequest=SceneRequest.create();
+$("lab-cancel-generation").onclick=()=>sceneRequest.cancel();
+$("lab-generate").onclick=async()=>{
+ if(sceneRequest.busy)return;
+ const desc=$("lab-prompt").value.trim(), count=Number($("lab-candidates").value);
+ const status=$("lab-gen-status"), revision=state.labRevision;
+ if(desc.length<8||desc.length>4000){status.textContent="Describe the scene using 8–4000 characters.";return;}
+ if(!Number.isInteger(count)||count<1||count>8){status.textContent="Choose 1–8 candidates.";return;}
+ const controls=[$("lab-generate"),$("lab-candidates"),...document.querySelectorAll(".lab-chip")];
+ controls.forEach(control=>control.disabled=true);
+ $("lab-cancel-generation").hidden=false;status.setAttribute("aria-busy","true");
+ status.textContent=`Designing ${count} candidate${count===1?"":"s"}… One scene will be selected. You can cancel.`;
+ try{
+  const r=await sceneRequest.run(async signal=>{
+   const res=await fetch("/api/meta/scene",{method:"POST",signal,headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({prompt:desc,model:selectedModel(),candidates:count})});
+   const body=await res.json();
+   if(!res.ok||body.status==="BLOCKED_CREDENTIALS")throw new Error(body.detail||body.error||"Scene generation unavailable");
+   return body;
+  });
+  if(state.labRevision!==revision||$("lab-prompt").value.trim()!==desc){status.textContent="Generation finished; your scene or prompt changed, so the result was not applied.";return;}
+  if(!r.scene||!Array.isArray(r.scene.objects))throw new Error("Unexpected scene response; nothing was changed");
+  labLoadScene(r.scene,`Generated “${r.scene.name}” — edit waypoints, then run analysis.`);
+  if(r.source==="MODEL_DERIVED")obDone("muse");
+  $("lab-ws-name").value=r.scene.name||"";
+  const save=$("lab-save-ws");save.classList.add("pulse");save.textContent="Save this scene →";
+  const q=r.scene.quality, m=r.model_call;
+  const lines=[r.source==="MODEL_DERIVED"?`Scene generated · ${m?.model||"Muse"} · ${m?.candidates_valid??1}/${m?.candidates_requested??1} valid candidates. Generation stopped.`:"Offline template loaded; no model request was made.",r.scene.explanation||""];
+  if(q)lines.push(`Path quality: ${q.min_separation_m} m closest surface separation.`,...(q.issues||[]),...(q.warnings||[]));
+  lines.push("Save this scene to keep it in your workspaces.");
+  status.textContent=lines.filter(Boolean).join("\n");
+  toast("One scene loaded. Generation complete.");
+ }catch(error){
+  status.textContent=error.name==="AbortError"?"Generation cancelled. No scene was changed. The provider may finish requests already sent."
+   :error.name==="TimeoutError"?"Generation timed out. No scene was changed. Retry manually when ready."
+   :`Generation failed: ${error.message}. No automatic retry was made.`;
+ }finally{
+  controls.forEach(control=>control.disabled=false);$("lab-cancel-generation").hidden=true;status.removeAttribute("aria-busy");
+ }
+};
 // Build the starter only on first use; hidden Lab work must not block Overview.
 function ensureLabStarted(){if(state.labInitialized)return;state.labInitialized=true;if(!state.lab.objects.length)document.querySelector('[data-tpl="near-miss"]').click();}
 
@@ -1015,7 +1030,7 @@ function renderRuns(){const host=$("scenario-list");if(!host)return;
  let runs=[];
  try{runs=JSON.parse(localStorage.getItem(runsKey())||"[]");}catch(e){}
  if(!runs.length)return;const div=document.createElement("div");div.className="card wide";div.id="runs-card";
- div.innerHTML=`<h3>Recent runs</h3>`+runs.slice(0,8).map(r=>`<p><b>${r.scenario}</b> <span class="dim">${new Date(r.when).toLocaleString()} · ${r.mode} · ${r.pairs} pairs · ${r.events} event(s) · run ${r.run}</span></p>`).join("");
+ div.innerHTML=`<h3>Recent runs</h3>`+runs.slice(0,8).map(r=>`<p><b>${htmlText(r.scenario)}</b> <span class="dim">${new Date(r.when).toLocaleString()} · ${htmlText(r.mode)} · ${htmlText(r.pairs)} pairs · ${htmlText(r.events)} event(s) · run ${htmlText(r.run)}</span></p>`).join("");
  host.appendChild(div);}
 
 // ---- onboarding checklist ----
@@ -1204,10 +1219,10 @@ async function loadOrg(){const card=$("org-card");if(!card)return;
  const out=await api("/api/org");
  if(out.status===401){card.textContent="Sign in to see your organisation.";return;}
  if(!out.body.org){card.textContent=out.body.note||"No organisation.";return;}
- card.innerHTML=`<b>${out.body.org}</b> · your role: ${out.body.role} · ${out.body.members.length} member(s)<br>`+
-  out.body.members.map(m=>`${m.email} (${m.role})`).join("<br>")+
-  (out.body.shared_scenes.length?`<br>Shared org scenes: ${out.body.shared_scenes.map(s=>s.name).join(", ")}`:"")+
-  (out.body.audit_log&&out.body.audit_log.length?`<br>Audit log (latest): ${out.body.audit_log.slice(0,5).map(a=>a.action).join(", ")}`:"");}
+ card.innerHTML=`<b>${htmlText(out.body.org)}</b> · your role: ${htmlText(out.body.role)} · ${out.body.members.length} member(s)<br>`+
+  out.body.members.map(m=>`${htmlText(m.email)} (${htmlText(m.role)})`).join("<br>")+
+  (out.body.shared_scenes.length?`<br>Shared org scenes: ${out.body.shared_scenes.map(s=>htmlText(s.name)).join(", ")}`:"")+
+  (out.body.audit_log&&out.body.audit_log.length?`<br>Audit log (latest): ${out.body.audit_log.slice(0,5).map(a=>htmlText(a.action)).join(", ")}`:"");}
 
 // ---- form system behaviours: password toggles, range fill, invalid states ----
 document.querySelectorAll('input[type="password"]').forEach(inp=>{
@@ -1632,12 +1647,12 @@ async function saveCustomObject(rec){
  }
  if(!state.customObjects.some(x=>x.id===rec.id))state.customObjects.unshift(rec);
  buildPalette();return rec;}
-$("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
+$("obj-gen").onclick=async()=>{if($("obj-gen").disabled)return;const desc=$("obj-desc").value.trim();
  if(desc.length<3){$("obj-status").textContent="Describe the object first (a few words).";return;}
  const btn=$("obj-gen");btn.disabled=true;btn.textContent="Designing…";
  $("obj-status").textContent="Muse Spark is designing the build spec, then Muse Image renders it (10–40s)…";
  try{
-  const resp=await fetch("/api/meta/object",{method:"POST",headers:{"Content-Type":"application/json"},
+  const resp=await fetch("/api/meta/object",{method:"POST",signal:AbortSignal.timeout(55_000),headers:{"Content-Type":"application/json"},
    body:JSON.stringify({description:desc,model:selectedModel()})});
   const out=await resp.json();
   if(!(resp.status===200&&out.spec)){throw new Error(out.error||out.detail||("HTTP "+resp.status));}
@@ -1646,11 +1661,11 @@ $("obj-gen").onclick=async()=>{const desc=$("obj-desc").value.trim();
   await saveCustomObject(rec);
   const placed=labAddCustom(rec);
   $("obj-preview").innerHTML=`<div class="card" style="margin-top:10px">
-   ${image?`<img src="${image}" alt="${out.spec.name} reference render" style="width:100%;border-radius:10px">`:""}
-   <p><b>${out.spec.name}</b> <span class="pill ghost">${out.source==="MODEL_DERIVED"?"Muse Spark + Muse Image":"offline procedural"}</span><br>
-   <span class="dim">${out.spec.description||""} Footprint radius ${out.spec.radius} m · height ${out.spec.height_m} m ·
-   ${out.spec.parts.length} construction parts · saved to ${rec.server?"your server profile":"this browser"} and placed in your scene as <b>${placed.id}</b>.</span></p>
-   ${out.image_note?`<p class="dim">${out.image_note}</p>`:""}</div>`;
+   ${image?`<img src="${image}" alt="${htmlText(out.spec.name)} reference render" style="width:100%;border-radius:10px">`:""}
+   <p><b>${htmlText(out.spec.name)}</b> <span class="pill ghost">${out.source==="MODEL_DERIVED"?"Muse Spark + Muse Image":"offline procedural"}</span><br>
+   <span class="dim">${htmlText(out.spec.description||"")} Footprint radius ${out.spec.radius} m · height ${out.spec.height_m} m ·
+   ${out.spec.parts.length} construction parts · saved to ${rec.server?"your server profile":"this browser"} and placed in your scene as <b>${htmlText(placed.id)}</b>.</span></p>
+   ${out.image_note?`<p class="dim">${htmlText(out.image_note)}</p>`:""}</div>`;
   $("obj-status").textContent="";
   toast(`“${out.spec.name}” created and saved — it is now in the component palette under My objects.`);
  }catch(e){$("obj-status").textContent="Could not create that object: "+e.message;}

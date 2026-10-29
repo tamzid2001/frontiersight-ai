@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { sceneryPlan, stagePoint } from './scenery-core.mjs';
 import { buildScenery } from './scenery-three.mjs';
+import { entityScale } from './entity-scale.mjs';
 
 const REALC = { forklift: 0xe9a13b, pedestrian: 0xff7847, robot: 0xaebfd2,
   vehicle: 0x4d8dff, cyclist: 0xb07fe8, shelf: 0x8a6f4d, object: 0x9aa7b8 };
@@ -99,7 +100,7 @@ function buildEntity(o) {
   // Fit the illustrative mesh to the declared disk footprint in metre space.
   const bounds = new THREE.Box3().setFromObject(g);
   const footprint = Math.max(...[bounds.min.x,bounds.max.x].flatMap(x=>[bounds.min.z,bounds.max.z].map(z=>Math.hypot(x,z))));
-  if (footprint > 0) g.scale.setScalar(Math.max(0, o.radius ?? BASER[o.category] ?? 0.6) / footprint);
+  if (footprint > 0) g.scale.setScalar(entityScale(o.category, o.radius ?? BASER[o.category] ?? 0.6, footprint, bounds.max.y - bounds.min.y));
   return g;
 }
 

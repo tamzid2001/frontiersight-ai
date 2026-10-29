@@ -7,6 +7,8 @@ The model must not invent detections, measurements, or verdicts — prompts say
 so, and the engine never reads its numbers back as measurements."""
 from __future__ import annotations
 import json, os, time, urllib.request, urllib.error, uuid
+from concurrent.futures import ThreadPoolExecutor, wait
+from threading import BoundedSemaphore, Lock
 
 BASE = os.environ.get("META_API_BASE", "https://api.meta.ai/v1")
 MODEL = os.environ.get("META_MODEL", "muse-spark-1.3")
@@ -31,6 +33,15 @@ def resolve_model(requested: str | None) -> str:
 
 class BlockedCredentials(RuntimeError): pass
 class ModelError(RuntimeError): pass
+class SceneTimeout(ModelError): pass
+class SceneBusy(ModelError): pass
+
+# One bounded batch per process; a slow upstream cannot accumulate queued work.
+SCENE_MAX_CANDIDATES = 8
+SCENE_DEADLINE_SECONDS = 28
+_SCENE_POOL = ThreadPoolExecutor(max_workers=SCENE_MAX_CANDIDATES, thread_name_prefix="scene")
+_SCENE_CAPACITY = BoundedSemaphore(1)
+MAX_MODEL_RESPONSE_BYTES = 1_048_576
 
 def configured() -> bool:
     return bool(os.environ.get("MODEL_API_KEY", "").strip())
@@ -48,7 +59,10 @@ def _call(prompt: str, timeout: int = 60, retries: int = 2, model: str | None = 
                      "X-Request-Id": req_id})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                out = json.loads(r.read().decode())
+                raw = r.read(MAX_MODEL_RESPONSE_BYTES + 1)
+                if len(raw) > MAX_MODEL_RESPONSE_BYTES:
+                    raise ModelError("Model response exceeded the size limit")
+                out = json.loads(raw.decode())
             text = out.get("output_text") or ""
             if not text:
                 for item in out.get("output", []):
@@ -59,10 +73,10 @@ def _call(prompt: str, timeout: int = 60, retries: int = 2, model: str | None = 
                     "usage": out.get("usage"), "response_id": out.get("id"), "model_used": model or MODEL}
             return text, meta
         except urllib.error.HTTPError as e:
-            last = ModelError(f"Meta Model API HTTP {e.code}: {e.read().decode()[:300]}")
+            last = ModelError(f"Meta Model API HTTP {e.code}")
             if e.code not in (429, 500, 502, 503) or attempt == retries: raise last
         except Exception as e:  # timeouts etc. — bounded retry, then surface
-            last = ModelError(f"Meta Model API error: {e}")
+            last = e if isinstance(e, ModelError) else ModelError("Meta Model API request failed or timed out")
             if attempt == retries: raise last
         time.sleep(1.5 * (attempt + 1))
     raise last
@@ -96,11 +110,15 @@ STAGE = (16.0, 14.0)
 def validate_scene(obj: dict) -> dict:
     """Strict validation of a model-generated scene. Any violation raises
     ModelError — a malformed scene is rejected, never repaired into place."""
+    if not isinstance(obj, dict):
+        raise ModelError("scene must be a JSON object")
     objs = obj.get("objects")
     if not isinstance(objs, list) or not 2 <= len(objs) <= 8:
         raise ModelError("scene must contain 2..8 objects")
     out = []
     for i, o in enumerate(objs):
+        if not isinstance(o, dict):
+            raise ModelError(f"object {i}: must be a JSON object")
         cat = o.get("category")
         if cat not in SCENE_CATEGORIES: raise ModelError(f"object {i}: unknown category {cat!r}")
         wps = o.get("waypoints")
@@ -161,10 +179,20 @@ def scene_quality(objects: list) -> dict:
             "has_close_interaction": bool(min_sep is not None and min_sep <= 2.0),
             "issues": issues, "warnings": warnings}
 
-def generate_scene(description: str, model: str | None = None) -> tuple[dict, dict]:
-    """Muse Spark generates a Create Lab scene as strict JSON (validated)."""
+def generate_scene(description: str, model: str | None = None, candidates: int = 3) -> tuple[dict, dict]:
+    """Generate a finite batch, select one valid scene, and never retry a candidate.
+
+    All candidates share a wall-clock deadline. Cancellation stops client waiting;
+    remote provider work may finish later. Capacity remains reserved until those
+    requests finish, preventing timeout-triggered accumulation.
+    """
+    if isinstance(candidates, bool) or not isinstance(candidates, int) or not 1 <= candidates <= SCENE_MAX_CANDIDATES:
+        raise ValueError(f"candidates must be an integer from 1 to {SCENE_MAX_CANDIDATES}")
+    selected_model = resolve_model(model)
     if not description or len(description) > 4000:
         raise ValueError(f"scene description must be 1..4000 characters (yours: {len(description)})")
+    if not configured():
+        raise BlockedCredentials("MODEL_API_KEY not set (server-side only)")
     prompt = ("You design scenes for a physical-AI safety workbench. Stage: 16 x 14 metres, "
               "x right, y up, origin bottom-left. Reply with ONLY a JSON object: "
               '{"name": str, "explanation": str (one sentence), "objects": [{"category": one of '
@@ -180,22 +208,50 @@ def generate_scene(description: str, model: str | None = None) -> tuple[dict, di
               "(5) Realistic speeds: forklift 1.2-1.8, pedestrian 1.1-1.6, robot 0.8-1.4, vehicle 2.0-3.0, "
               "cyclist 1.6-2.4 m/s. (6) A patrol that returns should use mode \"loop\" with a smooth curve. "
               "Do not claim any safety conclusion. Scene requested:\n" + description)
-    feedback = ""
-    for attempt in range(2):
-        text, meta = _call(prompt + feedback, timeout=45, retries=1, model=resolve_model(model))
+    if not _SCENE_CAPACITY.acquire(blocking=False):
+        raise SceneBusy("Scene generation is busy. Wait for the current batch to finish before trying again.")
+    futures = []
+    try:
+        for _ in range(candidates):
+            futures.append(_SCENE_POOL.submit(_call, prompt, timeout=20, retries=0, model=selected_model))
+    except BaseException:
+        # Executor shutdown can interrupt submission. Retain capacity for started work.
+        if not futures:
+            _SCENE_CAPACITY.release()
+            raise
+    remaining, lock = [len(futures)], Lock()
+    def finished(_future):
+        with lock:
+            remaining[0] -= 1
+            if remaining[0] == 0:
+                _SCENE_CAPACITY.release()
+    for future in futures:
+        future.add_done_callback(finished)
+    completed, pending = wait(futures, timeout=SCENE_DEADLINE_SECONDS)
+    valid = []
+    for index, future in enumerate(futures):
+        if future not in completed:
+            continue
         try:
-            obj = json.loads(text[text.index("{"): text.rindex("}") + 1])
-        except Exception as e:
-            raise ModelError(f"model did not return JSON: {e}") from e
-        scene = validate_scene(obj)
-        quality = scene_quality(scene["objects"])
-        scene["quality"] = quality
-        meta = {**meta, "attempt": attempt + 1, "quality": quality}
-        if not quality["issues"] or attempt == 1:
-            return scene, meta
-        feedback = ("\nYour previous attempt had these problems: " + "; ".join(quality["issues"])
-                    + ". Fix exactly these while keeping the same scene concept.")
-    return scene, meta
+            text, meta = future.result()
+            obj = json.loads(text[text.index("{"):text.rindex("}") + 1])
+            scene = validate_scene(obj)
+            quality = scene_quality(scene["objects"])
+            scene["quality"] = quality
+            # This is a geometry heuristic, not a learned or safety-certified rank.
+            rank = (len(quality["issues"]), not quality["has_close_interaction"], index)
+            valid.append((rank, scene, meta, index))
+        except (ModelError, ValueError, TypeError, KeyError, OverflowError):
+            continue
+    if not valid:
+        if pending:
+            raise SceneTimeout("Scene-generation deadline reached. No scene was changed; retry manually.")
+        raise ModelError("No candidate produced a valid scene. Try a clearer description; no automatic retry was made.")
+    _, scene, meta, index = min(valid, key=lambda candidate: candidate[0])
+    return scene, {**meta, "attempt": 1, "quality": scene["quality"],
+                   "candidates_requested": candidates, "candidates_completed": len(completed),
+                   "candidates_valid": len(valid), "selected_candidate": index + 1,
+                   "deadline_seconds": SCENE_DEADLINE_SECONDS, "automatic_retries": 0}
 
 def narrate(findings: dict) -> tuple[str, dict]:
     prompt = ("Explain these deterministic physical-scene findings to an industrial engineer in "
@@ -262,7 +318,7 @@ def design_custom_object(description: str, model: str | None = None) -> tuple[di
               "Use 3-8 parts that genuinely read as the object from the side and from above: a scissor lift "
               "needs a base, criss-cross lift arms and a platform basket; a traffic barrier needs posts and a "
               "striped arm. Keep the total footprint honest. Object requested:\n" + description)
-    text, meta = _call(prompt, timeout=45, retries=1, model=resolve_model(model))
+    text, meta = _call(prompt, timeout=20, retries=0, model=resolve_model(model))
     try:
         obj = json.loads(text[text.index("{"): text.rindex("}") + 1])
     except Exception as e:

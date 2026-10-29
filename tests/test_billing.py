@@ -339,6 +339,7 @@ def test_model_selection_validation(api, monkeypatch):
     assert s == 400 and "unknown model" in out["error"]
     # a valid non-default model reaches the ( stubbed ) generator path cleanly
     monkeypatch.setattr(spark, "generate_scene",
-                        lambda desc, model=None: ({"name": "T", "objects": [], "quality": {}}, {"model": model}))
+                        lambda desc, model=None, candidates=3: ({"name": "T", "objects": [], "quality": {}}, {"model": model, "candidates_requested": candidates}))
     s, out = call(api, "/api/meta/scene", {"prompt": "a forklift and a pedestrian in an aisle", "model": "muse-spark-1.1"})
-    assert s in (200, 400)  # 200 with stub content; never a crash
+    assert s == 200 and out["model_call"]["model"] == "muse-spark-1.1"
+    assert out["model_call"]["candidates_requested"] == 3
