@@ -31,7 +31,7 @@ def configure(base):
     coupon=next((c for c in coupons if c.get('id')=='frontiersight_first_period_half_v1'),None)
     if coupon is None:
         coupon=_req('POST','/coupons',{'id':'frontiersight_first_period_half_v1','percent_off':50,'duration':'once',
-            'name':'FrontierSight AI — first billing period 50% off','applies_to[products][0]':product['id']},idempotency='frontiersight_first_period_half_v1')
+            'name':'FrontierSight first period 50% off','applies_to[products][0]':product['id']},idempotency='frontiersight_first_period_half_v1')
     if coupon.get('percent_off')!=50 or coupon.get('duration')!='once' or not coupon.get('valid'):
         raise ValueError('existing coupon differs from the advertised offer')
     values['STRIPE_FIRST_PERIOD_COUPON']=coupon['id']

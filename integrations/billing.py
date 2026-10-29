@@ -33,6 +33,8 @@ def checkout_configuration() -> dict:
             and os.environ.get("CLERK_AUTHORIZED_PARTIES") and os.environ.get("FIRESTORE_PROJECT_ID")
             and (os.environ.get("FIRESTORE_SERVICE_ACCOUNT_JSON") or os.environ.get("FIRESTORE_USE_ADC") == "true")
             and len(os.environ.get("WORKSPACE_AUDIT_SECRET", "")) >= 32)
+        if production and not os.environ.get("CLERK_SECRET_KEY", "").startswith("sk_live_"):
+            durable_store = False
     common = bool(key and os.environ.get("STRIPE_WEBHOOK_SECRET") and durable_store
                   and (not production or live))
     periods = {period: bool(common and os.environ.get(name, "").startswith("price_"))

@@ -22,6 +22,7 @@ def test_catalog_prices_coupon_and_webhook_match_the_offer(monkeypatch):
     assert {p['unit_amount'] for p in prices}=={1900,19000}
     assert all(c[1] not in ('/charges','/payment_intents','/subscriptions','/checkout/sessions') for c in calls)
     coupon=next(c[2] for c in calls if c[0]=='POST' and c[1]=='/coupons')
+    assert len(coupon['name'])<=40
     assert coupon['percent_off']==50 and coupon['duration']=='once' and coupon['applies_to[products][0]']=='prod_frontier'
     with pytest.raises(ValueError):setup.configure('https://other.example')
 

@@ -140,3 +140,11 @@ def test_price_coupon_return_url_and_provider_response_fail_closed(provider,monk
     override({'/subscriptions?customer=cus_fixture&status=all&limit=100':{'data':[],'has_more':True}})
     with pytest.raises(billing.BillingNotConfigured):cb.subscriptions('cus_fixture')
     assert cb.subscriptions(None)==[]
+
+
+def test_live_checkout_requires_production_clerk_identity(provider,monkeypatch):
+    monkeypatch.setenv('VERCEL_ENV','production')
+    monkeypatch.setenv('STRIPE_SECRET_KEY','sk_live_fixture')
+    assert billing.checkout_configuration()['ready'] is False
+    monkeypatch.setenv('CLERK_SECRET_KEY','sk_live_fixture')
+    assert billing.checkout_configuration()['ready'] is True
