@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import math
+import re
 from .curves import Path
 
 
@@ -89,7 +90,7 @@ def validate_document(scene):
         if not isinstance(obj, dict):
             raise ValueError("each object must be an object")
         identity = obj.get("id", obj.get("object_id"))
-        if not isinstance(identity, str) or not 1 <= len(identity) <= 100 or identity in seen:
+        if not isinstance(identity, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", identity) or identity in seen:
             raise ValueError("objects need unique nonempty id or object_id values, at most 100 characters")
         if "id" in obj and "object_id" in obj and obj["id"] != obj["object_id"]:
             raise ValueError("id and object_id must agree")

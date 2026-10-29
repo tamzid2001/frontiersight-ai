@@ -19,6 +19,7 @@ class Identity:
     org_id: str | None
     org_role: str | None
     plan: str
+    token_scopes: tuple[str, ...] | None = None
 
     def __post_init__(self):
         if (not re.fullmatch(r"user_[A-Za-z0-9_-]{1,120}", self.user_id)

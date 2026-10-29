@@ -24,3 +24,20 @@ assert int(r.attrib['lines-valid'])>0 and float(r.attrib['line-rate'])>=.90
 assert int(r.attrib['branches-valid'])>0 and float(r.attrib['branch-rate'])>=.70
 print('Python Firestore coverage gates passed')
 PYCODE
+
+# The workbench must execute against real storage, not be silently skipped.
+python -m pytest -q tests/test_workbench.py tests/test_clerk_billing.py tests/test_path_automation.py \
+  --cov=services.api.workbench --cov=services.api.workbench_http --cov=services.api.workbench_contract \
+  --cov=services.api.access_keys --cov=engine.path_automation --cov=engine.scene_media \
+  --cov=integrations.clerk_billing --cov=integrations.meta.path_edit --cov=integrations.meta.credentials --cov-branch \
+  --cov-fail-under=90 --cov-report=xml:coverage/workbench-new.xml --cov-report=lcov:coverage/workbench-new.lcov
+python - <<'PYCODE'
+import xml.etree.ElementTree as ET
+report=ET.parse('coverage/workbench-new.xml').getroot()
+assert int(report.attrib['lines-covered'])>0
+assert float(report.attrib['line-rate'])>=.9 and float(report.attrib['branch-rate'])>=.7
+for source in report.findall('.//class'):
+    assert float(source.attrib['line-rate'])>=.9,source.attrib['filename']
+    assert float(source.attrib['branch-rate'])>=.7,source.attrib['filename']
+print('New workbench line/branch coverage gates passed')
+PYCODE

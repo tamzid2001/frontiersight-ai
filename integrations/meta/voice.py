@@ -11,6 +11,7 @@ Response: {sessionId, transcript, audioDurationMs, turns[]} — turns only
 carry data in ENDPOINTING/DIARIZATION modes; we use PUSH_TO_TALK.
 """
 from __future__ import annotations
+from .credentials import api_key
 import json, os, struct, time, urllib.request, urllib.error, uuid
 from .spark import BlockedCredentials, ModelError, BASE
 
@@ -33,7 +34,7 @@ def validate_wav(data: bytes) -> dict:
 
 def transcribe_wav(wav: bytes, mode: str = "PUSH_TO_TALK", language_bias: list | None = None,
                    keywords: list | None = None, timeout: int = 120) -> dict:
-    key = os.environ.get("MODEL_API_KEY", "").strip()
+    key = api_key()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
     facts = validate_wav(wav)
     if mode not in ("PUSH_TO_TALK", "ENDPOINTING", "DIARIZATION"):

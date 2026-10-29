@@ -56,3 +56,18 @@ test('generated paths fit the current floor before replacing any scene',()=>{
  for(const bad of [null,{objects:[]},{objects:Array(25).fill(original.objects[0])}])assert.throws(()=>requestCore.fitScene(bad,[9,8],stageEdit.resizePath));
  assert.throws(()=>requestCore.fitScene({...original,stage_metres:[0,8]},[9,8],stageEdit.resizePath));
 });
+
+test('editable scenes preserve identities and reject duplicate or unsafe IDs atomically',()=>{
+ const source={stage_metres:[8,6],objects:[{id:'robot-7',category:'robot',waypoints:[[2,2],[5,3]],radius:.4,speed:1,path_source:'PREDICTED',custom:{spec:{name:'Robot'}}}]};
+ const fit=(o,points)=>points.map(p=>[...p]);
+ const result=requestCore.editableScene(source,[16,14],fit);
+ assert.equal(result.objects[0].id,'robot-7');assert.equal(result.objects[0].path_source,'PREDICTED');
+ assert.deepEqual(result.stage_metres,[8,6]);result.objects[0].waypoints[0][0]=3;assert.equal(source.objects[0].waypoints[0][0],2);
+ for(const change of [{id:'<img>'},{id:'x',object_id:'y'},{speed:9},{radius:-1},{mode:'warp'},{curve:'unknown'},{waypoints:null}]){
+  assert.throws(()=>requestCore.editableScene({...source,objects:[{...source.objects[0],...change}]},[8,6],fit));
+ }
+ assert.throws(()=>requestCore.editableScene({...source,objects:[source.objects[0],source.objects[0]]},[8,6],fit));
+ assert.throws(()=>requestCore.editableScene({...source,stage_metres:[0,6]},[8,6],fit));
+ assert.throws(()=>requestCore.editableScene(null,[8,6],fit));
+ const legacy=requestCore.editableScene({objects:[{category:'robot',waypoints:[[1,1]]}]},[8,6],fit);assert.equal(legacy.objects[0].id,'robot-1');
+});

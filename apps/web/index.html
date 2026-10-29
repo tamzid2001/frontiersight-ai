@@ -88,7 +88,7 @@
     <div><b>Tested</b><span>CPU engine &amp; controls</span></div>
     <div><b>7</b><span>analytical validation cases</span></div>
     <div><b>5</b><span>curved-path scenarios</span></div>
-    <div><b>10</b><span>MCP tools exposed</span></div>
+    <div><b>38</b><span>API-connected MCP tools</span></div>
     <div><b>4</b><span>Meta models integrated</span></div>
    </div>
   </div>
@@ -144,7 +144,7 @@
   <article class="card tile"><div class="howico">◉</div><h3>Live Meta models</h3><p>Muse Spark hypotheses, SAM 3.1 segmentation and Muse Image — verified with real API calls, honestly labelled when offline.</p><button type="button" class="tilelink" data-goto="settings">Check the connection →</button></article>
   <article class="card tile"><div class="howico">🎙</div><h3>Voice dictation</h3><p>Speak your scene instead of typing: Muse Voice Transcribe turns speech into an editable prompt (browser-decoded to studio WAV first), then Muse Spark builds it.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="voice">Dictate a scene →</button></article>
   <article class="card tile"><div class="howico">✦</div><h3>Custom objects by Muse</h3><p>Describe any object — Muse Spark designs a buildable version, Muse Image renders it, and it becomes a real component in 2D and 3D, saved to your profile.</p><button type="button" class="tilelink" data-goto="create" data-lab-tool="object">Create an object →</button></article>
-  <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>The deterministic engine is an MCP server (HTTP + stdio): ten tools any agent can call for measured analysis and counterfactuals — no credits spent, no approvals bypassed.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
+  <article class="card tile"><div class="howico">⌘</div><h3>MCP server</h3><p>Connect your agent to scenes, reusable objects, media, path planning and deterministic analysis. Model tools use authenticated paid access; offline analysis remains available.</p><button type="button" class="tilelink" data-goto="settings">Connect an agent →</button></article>
  </div>
 
  <div class="card wide home-deferred" id="home-architecture"><h3>Architecture</h3>
@@ -331,6 +331,21 @@
    </div>
   </div>
   <aside class="card lab-inspector" tabindex="0" aria-label="Scene components and generators">
+<details class="lab-tools" id="lab-path-tools"><summary>Paths · plan, predict or describe</summary>
+ <p>Choose a component on the floor first. Every edit keeps the same object and floor in all views.</p>
+ <form id="lab-plan-form"><fieldset><legend>Automatic route</legend><div class="row">
+ <label for="path-goal-x">Goal X (metres)<input id="path-goal-x" name="x" type="number" step="0.1" required value="12"></label>
+ <label for="path-goal-y">Goal Y (metres)<input id="path-goal-y" name="y" type="number" step="0.1" required value="10"></label></div>
+ <button type="submit">Plan around static obstacles</button></fieldset></form>
+ <form id="lab-path-form"><label for="path-description">Describe the paths</label>
+ <textarea id="path-description" name="description" rows="3" maxlength="2000" required placeholder="robot-1 goes along the left aisle, pauses for two seconds, then returns to its starting point"></textarea>
+ <button type="submit">Apply one Muse path edit</button><p class="dim">Researcher API access · one request · no automatic retries.</p></form>
+ <details><summary>Predict from observed positions</summary><form id="lab-predict-form">
+ <label for="path-observations">Observations [seconds, X metres, Y metres]</label>
+ <textarea id="path-observations" name="observations" rows="3" required placeholder="[[0,2,3],[1,3,3],[2,4,3]]"></textarea>
+ <button type="submit">Preview 3-second predicted path</button></form><p class="dim">Constant-velocity fit; predictions are not observations. The floor boundary constrains the preview.</p></details>
+ <p id="path-status" role="status" aria-live="polite"></p><button type="button" id="path-open-studio" class="ghostbtn">View updated scene in Video Studio</button>
+</details>
 <h3 class="lab-generator-label">Create with AI</h3><details class="lab-tools" id="lab-scene-generator"><summary>✦ Generate a scene with Muse</summary>
    <textarea id="lab-prompt" rows="3" maxlength="4000" style="width:100%" placeholder="Describe a scene… e.g. Two forklifts working an aisle while a pedestrian crosses to the packing bench, and a robot patrolling the back wall"></textarea>
    <p class="dim" style="margin:2px 0 8px"><span id="lab-prompt-count">0</span> / 4000 characters</p>
@@ -460,10 +475,11 @@
 </section>
 
 
-<section id="view-pricing" class="view"><div class="pricing-intro"><span class="eyebrow">Build. Test. Share with confidence.</span><h2>Choose your next step.</h2>
+<section id="view-pricing" class="view"><div class="pricing-intro"><span class="eyebrow">Build. Test. Share with confidence.</span><h2>Choose your plan.</h2>
  <p class="sub">Start exploring physical-world scenarios for free. Upgrade for deeper simulation, more saved work and a workflow built around your research.</p>
  <div class="row billing-switch"><span id="billing-period-label">Billed monthly</span>
   <button id="bill-toggle" class="ghostbtn" aria-pressed="false">Choose annual billing</button><span class="pill ok">Save $38 with annual</span></div>
+ <p id="first-period-offer" class="pill ok" hidden></p>
  <p id="billing-availability" class="dim" role="status">Checking plan availability…</p></div>
  <div id="clerk-pricing" class="hidden" style="margin-bottom:14px"></div>
  <p id="team-quote-row" class="dim hidden">Building for a team? <button type="button" id="quote-open-2" class="flink">Request a Team / Enterprise quote</button> — shared org workspace, audit log, SSO scoped in contract.</p>
@@ -475,7 +491,7 @@
   <div class="card plan featured"><h3>Researcher</h3><p class="price"><span class="amt" data-m="$19" data-a="$190">$19</span><span class="per">/mo</span></p>
    <p class="dim">For researchers turning experiments into evidence</p>
    <ul><li>✓ Everything in Explorer</li><li>✓ Your own Meta API key (encrypted, server-side)</li>
-   <li>✓ SAM 3.1 video-mode tracking</li><li>✓ Unlimited server-saved scenes</li>
+   <li>✓ SAM 3.1 video-mode tracking</li><li>✓ Up to 5,000 saved scenes per workspace</li>
    <li>✓ Monte-Carlo up to 2,000 runs</li><li>✓ Priority support requests</li></ul>
    <button id="sub-btn"><span id="sub-action">Choose Researcher</span> — <span id="sub-amt">$19/month</span></button><p class="plan-footnote">Manage or cancel from your billing portal when subscribed.</p></div>
   <div class="card plan"><h3>Team / Enterprise</h3><p class="price">Custom</p><p class="dim">A tailored workspace for your team</p>
@@ -493,7 +509,7 @@
    <tr><td>Deterministic analysis &amp; counterfactuals</td><td>✓</td><td>✓</td><td>✓</td></tr>
    <tr><td>Meta calls</td><td>Host key, fair use</td><td>Your own key (BYOK)</td><td>Your own key (BYOK)</td></tr>
    <tr><td>SAM 3.1 video-mode tracking</td><td>—</td><td>✓</td><td>✓</td></tr>
-   <tr><td>Server-saved scenes</td><td>10</td><td>Unlimited</td><td>Unlimited + shared org library</td></tr>
+   <tr><td>Server-saved scenes</td><td>10</td><td>5,000</td><td>5,000 + shared org library</td></tr>
    <tr><td>Monte-Carlo runs / analysis</td><td>200</td><td>2,000</td><td>Scoped with your team</td></tr>
    <tr><td>Evidence export with approval record</td><td>✓</td><td>✓</td><td>✓ + org audit log</td></tr>
    <tr><td>Support</td><td>Standard queue</td><td>Priority queue</td><td>SLA (contract)</td></tr>
@@ -577,8 +593,8 @@
  <p>When you invoke generation, transcription, hypotheses or segmentation, the necessary prompt, image, audio or frame is sent from our server to the Meta Model API. Provider processing is governed by Meta’s terms. Loading a local file alone does not send it for inference. Deterministic scene preparation, resizing and simulation do not call a model.</p>
  <h3>Billing and infrastructure</h3>
  <p>When checkout is enabled, Stripe processes payment details and provides billing status to us. Card details do not pass through FrontierSight’s server. The hosting provider may retain ordinary request logs such as IP addresses, URLs and timestamps. Clerk and model client libraries may load from their service/CDN domains. The YouTube player loads after you press Play.</p>
- <h3>Storage and retention</h3>
- <p>Browser records remain until removed in Workspace, Settings or your browser. Server retention depends on the configured store; the current account store does not guarantee retention across redeployments. Export work you need to retain. Paid checkout on the Vercel deployment remains unavailable until durable billing persistence is implemented and verified.</p>
+ <h3>Storage and retention</h3><p>Deleting a saved record removes its content from the active library. Audit metadata and idempotency/model receipts are separate records and remain until the operator retention policy purges them; expiry does not itself delete a Firestore document. Contact hello@quantura.studio for a full data-deletion request. API key records store hashes and expiry, never raw tokens. Billing customer references live in Clerk private metadata; Stripe processes subscription and payment records.</p>
+ <p>Browser records remain until removed in Workspace, Settings or your browser. Cloud saving, when configured, stores private scenes, object recipes, selected frames and model-request receipts in the verified Clerk workspace in Firestore. The local legacy account store is per-instance. Export work you need to retain. Stripe Checkout is enabled only with durable workspace and billing configuration.</p>
  <h3>Sharing and deletion</h3>
  <p>A copied scene link contains the scene data: share it only with intended recipients. Signing out ends access on this device but does not itself delete saved records. Use the workspace deletion controls for your saved scenes, or contact us about account/server data. Clearing site data removes browser copies, not copies held by recipients or providers.</p>
  <h3>Sensitive data and contact</h3>
@@ -658,7 +674,7 @@
    <li><b>Explorer (free):</b> all built-in scenarios, Create Lab, prompt-to-scene, deterministic
    analysis, evidence export, 10 server-saved scenes, Monte-Carlo up to 200 runs.</li>
    <li><b>Researcher ($19/mo via Clerk/Stripe when enabled):</b> your own Meta API key (BYOK, encrypted),
-   SAM 3.1 video-mode tracking, unlimited server scenes, Monte-Carlo up to 2,000, priority support.</li>
+   SAM 3.1 video-mode tracking, up to 5,000 server scenes, Monte-Carlo up to 2,000, priority support.</li>
    <li><b>Team (custom):</b> shared org workspace and roles, org audit log, onboarding; SSO/SAML, VPC
    and SLA are scoped in the contract (Pricing → Request a quote).</li>
    <li>Seeing <b>402</b>? You hit a plan gate — the message names the limit and the plan that removes it.
@@ -666,17 +682,9 @@
   </ul></div>
 
  <div class="card wide help-block" id="help-mcp"><h3>API &amp; MCP</h3>
-  <p>The deterministic engine is exposed two ways:</p>
-  <ul>
-   <li><b>REST:</b> the same endpoints the UI uses (see Settings for the live <code>/api/me</code>,
-   scenarios, analysis, counterfactual, SAM and billing surfaces).</li>
-   <li><b>MCP server:</b> <code>POST /api/mcp</code> — connect Claude Code in one line:
-   <code>claude mcp add --transport http frontiersight https://frontiersight-ai.vercel.app/api/mcp</code>,
-   or run it offline from a clone: <code>python3 scripts/mcp_stdio.py</code>. Eight deterministic
-   tools (scenarios, measured analysis, path-following counterfactuals, curve sampling, scene
-   validation). By design, no MCP tool spends Meta credits or bypasses the human approval gate.
-   Full guide: <code>docs/MCP.md</code> in the repository.</li>
-  </ul></div>
+ <p><a href="/api-guide.html" target="_blank" rel="noopener">Read the complete API &amp; MCP guide</a> · <a href="/openapi.json" target="_blank" rel="noopener">OpenAPI specification</a></p>
+ <p>Use your Clerk Bearer session token for private scenes, objects and media. Create, list, load, update and delete records; reuse saved objects, plan routes, predict trajectories and prepare frames/tracks for all viewers. Model-backed tools require Researcher and an idempotency key.</p>
+ <p>MCP: <code>https://frontiersight-ai.vercel.app/api/mcp</code>. Clients must attach an Authorization header for authenticated tools. The local stdio server supports offline analysis only. No tool actuates physical hardware or bypasses evidence approval.</p></div>
 
  <div class="card wide help-block" id="help-trouble"><h3>Troubleshooting</h3>
   <ul>
@@ -710,17 +718,24 @@
  <input id="byok-key" type="password" placeholder="Paste key to enable BYOK" style="width:100%"></label>
  <button id="byok-delete" class="ghostbtn">Remove my key</button> <span id="byok-status" class="dim" role="status"></span>
  <h3>Meta Model API connection (deployment)</h3><div id="diag" class="mono dim">loading…</div>
- <p class="dim">The API key lives server-side only (<code>MODEL_API_KEY</code>) and is never sent to the browser. Model ids are configurable via <code>META_MODEL</code> / <code>META_SAM_MODEL</code> / <code>META_IMAGE_MODEL</code>. Retention: uploaded media is processed in-memory in this demo deployment; fixtures are synthetic and openly redistributable.</p>
+ <p class="dim">The API key lives server-side only (<code>MODEL_API_KEY</code>) and is never sent to the browser. Model ids are configurable via <code>META_MODEL</code> / <code>META_SAM_MODEL</code> / <code>META_IMAGE_MODEL</code>. Unsaved media is processed in memory. Explicit cloud saves retain selected frames or provider file references in your private workspace; provider files have their own retention policy.</p>
  <button id="live-test" class="ghostbtn">Test Muse Spark hypothesis (live call)</button><pre id="live-out" class="mono"></pre>
+ <h3>Agent API keys</h3><p>Create a revocable key for your personal workspace. Organization sessions use Clerk JWTs. Keys expire after 30 days and are shown once.</p>
+ <form id="agent-key-form"><label for="agent-key-name">Key name<input id="agent-key-name" name="name" maxlength="80" required placeholder="Claude desktop"></label>
+ <label><input id="agent-key-write" type="checkbox" name="write"> Allow saved-data changes</label>
+ <label><input id="agent-key-model" type="checkbox" name="model"> Allow model requests (Researcher required)</label>
+ <button type="submit">Create agent key</button></form><p id="agent-key-status" role="status"></p>
+ <pre id="agent-key-once" class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+ <button id="agent-keys-refresh" type="button" class="ghostbtn">Manage / revoke keys</button><div id="agent-key-list"></div>
  <h3>API &amp; MCP server</h3>
- <p class="dim">MCP endpoint: <code id="mcp-endpoint">/api/mcp</code> · also runnable offline over stdio:
+ <p class="dim">MCP endpoint: <code id="mcp-endpoint">/api/mcp</code> · <a href="/api-guide.html">Complete integration guide</a> · offline analysis over stdio:
  <code>python3 scripts/mcp_stdio.py</code> · docs: <code>docs/MCP.md</code></p>
  <div id="mcp-tools" class="mono dim">loading tool list…</div>
  <pre class="mono" style="white-space:pre-wrap">Claude Code:  claude mcp add --transport http frontiersight https://frontiersight-ai.vercel.app/api/mcp
 Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://frontiersight-ai.vercel.app/api/mcp"}}}</pre>
  <h3>Deployment &amp; limits</h3>
  <p class="dim">App version <b id="set-version">—</b> · ingest bound 12 MB per request · rate limit 120 POST/min per client ·
- retention: this demo stores scenes/runs only in your browser; the server keeps no uploaded media.</p>
+ Local work stays in this browser. Explicit authenticated cloud saves use the configured Firestore workspace; see the privacy policy for retention.</p>
  <h3>Organisation (Team)</h3><div id="org-card" class="mono dim">Loading organisation…</div>
  <h3>Support</h3>
  <label>Subject<input id="sup-subject" type="text" style="width:100%"></label>

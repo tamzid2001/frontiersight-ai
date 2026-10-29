@@ -236,5 +236,6 @@ def sample_tracks(objects: list, dt: float = 0.1, max_duration: float = 20.0) ->
                                                             str(o.get("category", "object")))))
             tt = round(tt + dt, 10)
         tracks.append(Track(str(o.get("object_id", "object")), str(o.get("category", "object")),
-                            "world", pts, float(o.get("radius", 0.5)), "USER_CREATED"))
+                            "world", pts, float(o.get("radius", 0.5)),
+                            o.get("path_source") if o.get("path_source") in ("PREDICTED", "DETERMINISTIC_PLAN", "MODEL_DERIVED_PLAN") else "USER_CREATED"))
     return tracks

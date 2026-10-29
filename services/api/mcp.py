@@ -1,11 +1,9 @@
-"""MCP (Model Context Protocol) server — FrontierSight's deterministic surface.
+"""MCP (Model Context Protocol) server — analysis and authenticated workbench.
 
 Shared by POST /api/mcp (Streamable-HTTP style JSON-RPC) and
 scripts/mcp_stdio.py (stdio bridge, same handlers, works offline).
-Model-backed tools are intentionally out of scope for MCP v1: this server
-exposes only deterministic, reproducible capabilities, so an agent calling
-it can never spend the host's Meta API credits or fabricate a measurement.
-Engine errors surface as MCP tool errors (isError) with the engine message.
+Model-backed/private tools require the HTTP adapter's verified workspace context.
+The offline stdio bridge cannot spend credits or access private storage.
 """
 from __future__ import annotations
 import json
@@ -18,8 +16,9 @@ from engine.kinematics import Calibration, analyse_pair
 from engine.pathsim import simulate_on_paths
 from integrations.meta.spark import validate_scene, ModelError
 
-PROTOCOL = "2024-11-05"
-SERVER = {"name": "frontiersight-ai", "version": "0.37.0"}
+PROTOCOL = "2025-11-25"
+SUPPORTED_PROTOCOLS = ("2024-11-05", "2025-03-26", "2025-06-18", PROTOCOL)
+SERVER = {"name": "frontiersight-ai", "version": "0.38.0"}
 
 def _scene_schema():
     schema = _editor_schema("PrepareRequest")
@@ -89,6 +88,17 @@ TOOLS = [
      "inputSchema": _schema({"scene": {"type": "object"}}, ["scene"])},
 ]
 
+from services.api.workbench_contract import schemas as workbench_schemas, DESCRIPTIONS
+WORKBENCH_SCHEMAS = workbench_schemas(_scene_schema())
+for _name, _input in WORKBENCH_SCHEMAS.items():
+    _schema_with_key = deepcopy(_input)
+    if _name.startswith(("create_", "update_", "delete_", "generate_", "segment_")) or _name == "describe_paths":
+        _schema_with_key['properties']['idempotency_key'] = {'type':'string','pattern':'^[A-Za-z0-9_-]{16,128}$'}
+        _schema_with_key['required'].append('idempotency_key')
+    TOOLS.append({'name': _name, 'description': DESCRIPTIONS[_name], 'inputSchema': _schema_with_key,
+                  'annotations': {'readOnlyHint': _name.startswith(('list_', 'get_', 'validate_', 'plan_', 'predict_', 'prepare_')),
+                     'destructiveHint': _name.startswith(('delete_', 'update_')), 'openWorldHint': _name.startswith(('generate_', 'segment_')) or _name == 'describe_paths'}})
+
 def _ok(result) -> dict:
     return {"content": [{"type": "text", "text": json.dumps(result, default=str)}],
             "structuredContent": result if isinstance(result, dict) else {"result": result}}
@@ -100,7 +110,7 @@ def call_tool(name: str, args: dict) -> dict:
         return _ok(reposition_scene(args.get("scene"),args.get("object_id"),args.get("x"),args.get("y")))
     if name == "server_info":
         return _ok({"server": SERVER, "protocol": PROTOCOL,
-                    "labels": {"deterministic_engine": True, "model_backed_tools": False,
+                    "labels": {"deterministic_engine": True, "model_backed_tools": True, "model_tools_require_authenticated_paid_workspace": True,
                                "real_video_evaluation_completed": False,
                                "no_safety_certification_claimed": True}})
     if name == "list_scenarios":
@@ -148,7 +158,7 @@ def call_tool(name: str, args: dict) -> dict:
         return _ok({"valid": True, "scene": validate_scene(args["scene"])})
     raise KeyError(f"unknown tool: {name}")
 
-def handle_jsonrpc(body: dict) -> dict | None:
+def handle_jsonrpc(body: dict, workbench=None) -> dict | None:
     """Returns the JSON-RPC response object, or None for notifications."""
     if not isinstance(body, dict) or body.get("jsonrpc") != "2.0":
         return {"jsonrpc": "2.0", "id": body.get("id") if isinstance(body, dict) else None,
@@ -161,7 +171,7 @@ def handle_jsonrpc(body: dict) -> dict | None:
         return None
     try:
         if method == "initialize":
-            result = {"protocolVersion": PROTOCOL, "capabilities": {"tools": {}},
+            result = {"protocolVersion": params.get("protocolVersion") if params.get("protocolVersion") in SUPPORTED_PROTOCOLS else PROTOCOL, "capabilities": {"tools": {}},
                       "serverInfo": SERVER}
         elif method == "ping":
             result = {}
@@ -169,14 +179,25 @@ def handle_jsonrpc(body: dict) -> dict | None:
             result = {"tools": TOOLS}
         elif method == "tools/call":
             try:
-                result = call_tool(params.get("name", ""), params.get("arguments") or {})
+                name, args = params.get("name", ""), params.get("arguments", {})
+                if not isinstance(args, dict): raise ValueError("arguments must be an object")
+                if name in WORKBENCH_SCHEMAS:
+                    from services.api.workbench import Workbench
+                    from services.api.clerk_auth import WorkspaceError
+                    if workbench is None:
+                        raise WorkspaceError(401, "Authenticated HTTP is required for workbench tools. Offline stdio exposes analysis only.")
+                    service = workbench() if callable(workbench) else workbench
+                    args = dict(args);key = args.pop('idempotency_key', '')
+                    result = _ok(service.execute(name, args, key))
+                else:
+                    result = call_tool(name, args)
             except Exception as e:
-                result = {"content": [{"type": "text", "text": f"tool error: {e}"}], "isError": True}
+                result = {"content": [{"type": "text", "text": str(e) if isinstance(e, (ValueError, KeyError)) else "Tool service unavailable; no automatic retry was made."}], "isError": True}
         else:
             return {"jsonrpc": "2.0", "id": mid,
                     "error": {"code": -32601, "message": f"method not found: {method}"}}
     except Exception as e:
-        return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32603, "message": f"internal error: {e}"}}
+        return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32603, "message": "Internal protocol error"}}
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 def catalog() -> dict:
@@ -184,4 +205,4 @@ def catalog() -> dict:
             "transport": {"http": "POST /api/mcp (JSON-RPC 2.0)", "stdio": "python3 scripts/mcp_stdio.py"},
             "tools": [{"name": t["name"], "description": t["description"]} for t in TOOLS],
             "docs": "docs/MCP.md",
-            "note": "Deterministic tools only: no Meta API credits are spent and no evidence export is possible via MCP (human approval is a UI boundary)."}
+            "note": "Analysis tools work offline. Workbench storage/model tools require authenticated HTTP; model calls require Researcher, durable idempotency and explicit invocation. No robot actuation or approval bypass."}

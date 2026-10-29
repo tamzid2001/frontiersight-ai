@@ -145,19 +145,26 @@ secret-pattern scan on every push.
 ## Deployment
 
 Deployed on Vercel as a zero-dependency Python serverless function:
-https://frontiersight-ai.vercel.app — deployed state, live latency, and end-to-end
-browser audits (39 checks: theming, auth, pricing, share links, prompt-to-scene,
-analysis flows, mobile) are run against production after each release.
+https://frontiersight-ai.vercel.app — deployment and browser validation evidence
+is recorded per release. See COVERAGE.md for executed tests and explicit limits;
+provider fixtures are not evidence of live model or hardware execution.
 
-## Auth & pricing (accurate for this build)
+## Workbench, authentication and pricing
 
-- **Sign-in** in this build creates *device-local profiles* (browser storage; no server
-  account, no password) — labelled as such in the UI. The production path
-  (Clerk/OIDC + server sessions + Postgres) is designed in
-  [`docs/AUTH_AND_BILLING.md`](docs/AUTH_AND_BILLING.md).
-- **Pricing** tiers are planned launch prices shown in-app; **billing is not enabled**,
-  the waitlist collects no payment, and Meta API usage in production is billed by Meta
-  under your own key.
+Clerk owns identity and organization selection; Stripe owns Researcher
+subscriptions ($19/month or $190/year, with a configured 50% first-period offer).
+The live catalog and webhook exist. Checkout remains gated until production Clerk
+DNS and durable Firestore credentials are verified; no live payment was tested.
+
+The authenticated REST/MCP workbench creates, saves, loads and versions scenes,
+object recipes and media; reuses saved objects; plans routes, predicts trajectories,
+accepts one-shot Muse path descriptions, and exports real PNG/GIF previews.
+All editors preserve exact object identities, floor dimensions and path provenance.
+
+- [Complete API/MCP guide](docs/WORKBENCH_API.md) and [served guide](https://frontiersight-ai.vercel.app/api-guide.html)
+- [Clerk CLI configuration and production handoff](docs/CLERK_SETUP.md)
+- [Stripe activation and durable identity binding](docs/BILLING_DEPLOYMENT.md)
+- [Coverage scope and measured validation](COVERAGE.md)
 
 ## Hackathon submission
 
