@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/scene-request-core.js",
+      "destination": "/api/index?ep=scenerequest"
+    },
+    {
+      "source": "/entity-scale.mjs",
+      "destination": "/api/index?ep=entityscale"
+    },
+    {
       "source": "/",
       "destination": "/api/index?ep=home"
     },

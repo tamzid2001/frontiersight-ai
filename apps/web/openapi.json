@@ -73,7 +73,7 @@
     "/api/scenes/reposition": {
       "post": {
         "operationId": "repositionScene",
-        "summary": "Move one object’s first waypoint toward x/y, translating its complete path. Clamps movement to keep the path and footprint inside the floor.",
+        "summary": "Move one object\u2019s first waypoint toward x/y, translating its complete path. Clamps movement to keep the path and footprint inside the floor.",
         "description": "Pure computation: no saved record, account or billing state is modified. Save the returned scene separately through the authenticated scene-storage API. Anonymous per-client POST rate limits apply.",
         "requestBody": {
           "required": true,
@@ -385,6 +385,70 @@
         "responses": {
           "200": {
             "description": "USD prices, supported periods and live/test/unavailable checkout mode. Availability does not claim a customer transaction was completed."
+          }
+        }
+      }
+    },
+    "/api/meta/scene": {
+      "post": {
+        "operationId": "generateScene",
+        "summary": "Generate a bounded candidate batch and select one scene",
+        "description": "1\u20138 parallel calls to the selected model. No automatic provider or quality-repair retries. Shared 28-second provider deadline; completed valid candidates are ranked by deterministic path-quality heuristics. Browser cancellation does not guarantee remote provider cancellation. A 503 indicates another batch still owns this process capacity. Existing offline templates are explicitly labelled. This model-generation endpoint is not exposed by the deterministic MCP server.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "prompt"
+                ],
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "model": {
+                    "type": "string",
+                    "enum": [
+                      "muse-spark-1.3",
+                      "muse-spark-1.2",
+                      "muse-spark-1.1",
+                      "muse-spark-1.3-contributor",
+                      "muse-spark-1.2-contributor",
+                      "muse-wonder-1.0"
+                    ]
+                  },
+                  "candidates": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8,
+                    "default": 3
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One validated scene and candidate metadata"
+          },
+          "202": {
+            "description": "Model credentials unavailable; no matching offline template"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "502": {
+            "description": "No valid candidate or provider failure"
+          },
+          "503": {
+            "description": "Generation capacity occupied"
+          },
+          "504": {
+            "description": "Deadline reached without a valid candidate"
           }
         }
       }

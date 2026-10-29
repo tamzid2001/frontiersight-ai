@@ -114,7 +114,7 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         if ep == "asset":
             return "/assets/" + parse_qs(u.query).get("file", [""])[0]
-        return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
+        return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "scenerequest": "/scene-request-core.js", "entityscale": "/entity-scale.mjs", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
                 "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
                 "samdefault": "/sam-default.jpg", "three": "/vendor/three.module.min.js", "orbit": "/vendor/addons/OrbitControls.js", "threeview": "/three-view.js",
@@ -412,7 +412,7 @@ class H(BaseHTTPRequestHandler):
                 from agents.scene_heuristic import match as _match
                 desc = str(body.get("prompt", ""))
                 try:
-                    scene, meta = spark.generate_scene(desc, body.get("model"))
+                    scene, meta = spark.generate_scene(desc, body.get("model"), candidates=body.get("candidates", 3))
                     return self._send(200, {"scene": scene, "source": "MODEL_DERIVED", "model_call": meta})
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
@@ -628,7 +628,7 @@ class H(BaseHTTPRequestHandler):
                     try:
                         img = _img.generate_illustration(
                             f"Clean isolated product render of {desc} ({spec['name']}), three-quarter view, "
-                            "plain dark studio background, photorealistic, no people, no text, no watermark")
+                            "plain dark studio background, photorealistic, no people, no text, no watermark", timeout=25)
                         row = (img.get("data") or [{}])[0]
                         if row.get("b64_json"): image_data = "data:image/webp;base64," + row["b64_json"]
                         elif row.get("url"): image_data = row["url"]
@@ -696,6 +696,10 @@ class H(BaseHTTPRequestHandler):
             return self._send(503, {"error": str(e), "code": e.code})
         except BlockedCredentials as e:
             return self._send(202, {"status": "BLOCKED_CREDENTIALS", "detail": str(e)})
+        except spark.SceneTimeout as e:
+            return self._send(504, {"status": "MODEL_TIMEOUT", "detail": str(e)})
+        except spark.SceneBusy as e:
+            return self._send(503, {"status": "MODEL_BUSY", "detail": str(e)})
         except (ModelError, RuntimeError) as e:
             return self._send(502, {"status": "MODEL_ERROR", "detail": str(e)[:300]})
         except Exception as e:

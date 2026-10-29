@@ -359,10 +359,14 @@
      </optgroup>
     </select></label>
    <p class="dim" id="model-hint" style="margin:2px 0 8px"></p>
-   <div class="row"><button id="lab-generate">Generate scene</button>
+   <label for="lab-candidates">Scene candidates (1–8)</label>
+   <input id="lab-candidates" type="number" min="1" max="8" step="1" value="3" aria-describedby="candidate-policy">
+   <p id="candidate-policy" class="dim">Candidates run in parallel using your selected model. One valid scene is selected; there are no automatic retries. More candidates use more model requests.</p>
+   <div class="row"><button type="button" id="lab-generate">Generate scene</button>
+    <button type="button" id="lab-cancel-generation" class="ghostbtn" hidden>Cancel generation</button>
     <button class="ghostbtn lab-chip">Warehouse near-miss with a robot</button>
     <button class="ghostbtn lab-chip">Busy intersection, cyclist and vehicle</button></div>
-   <p id="lab-gen-status" role="status" class="dim">Muse proposes the scene; you edit every waypoint before anything is analysed. Offline, a labelled keyword template is used instead — never passed off as a model call.</p>
+   <p id="lab-gen-status" role="status" aria-live="polite" class="dim">Muse proposes the scene; you edit every waypoint before anything is analysed. Offline, a labelled keyword template is used instead — never passed off as a model call.</p>
    </details><details class="lab-tools" id="lab-object-generator"><summary>✦ Create a custom object</summary>
    <p class="dim">Describe any object — Muse Spark designs a buildable version (footprint, palette,
    construction parts) and Muse Image renders a reference. It becomes a real component below and is
@@ -749,4 +753,4 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
  <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span>
 </footer>
 <div id="toasts" aria-live="polite"></div>
-<script src="stage-edit-core.js" defer></script><script src="app.js" defer></script></body></html>
+<script src="scene-request-core.js" defer></script><script src="stage-edit-core.js" defer></script><script src="app.js" defer></script></body></html>
