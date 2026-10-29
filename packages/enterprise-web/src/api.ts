@@ -1,4 +1,5 @@
 /** One authenticated service for both website and programmatic adapters. */
+import { modelCapabilities, prepareModelRequest, MODEL_REVIEW_DATE } from "./models.ts";
 import type { Firestore } from "@google-cloud/firestore";
 import { FirestoreWorkspace, type StoragePolicy } from "./firestore.ts";
 import { AccessError, requireFeature, requireWorkspaceAdmin, requireExpectedVersion, type Principal } from "./policy.ts";
@@ -33,7 +34,8 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
       const path = new URL(request.url).pathname;
       const programmatic = path.startsWith("/api/v1/");
       if (programmatic) requireFeature(principal, "api_access");
-      const prefix = programmatic ? "/api/v1/workflows" : "/api/workspace";
+      const modelPath = programmatic && (path === "/api/v1/models" || path.startsWith("/api/v1/models/"));
+      const prefix = modelPath ? "/api/v1/models" : programmatic ? "/api/v1/workflows" : "/api/workspace";
       if (path !== prefix && !path.startsWith(prefix + "/")) throw new AccessError(404, "endpoint_not_found");
       const store = new FirestoreWorkspace(dependencies.database(), config.siteId, principal,
         storagePolicy(principal, config.stages.length), dependencies.auditSecret);
@@ -42,6 +44,16 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
       const url = new URL(request.url);
       const limit = () => pageSize(url.searchParams.get("limit"));
       const key = () => request.headers.get("idempotency-key") ?? "";
+      if (modelPath) {
+        if (method === "GET" && suffix === "") return jsonResponse({ reviewedAt: MODEL_REVIEW_DATE,
+          execution: "request_preparation_only", models: modelCapabilities(config.siteId) });
+        if (method === "POST" && suffix === "/prepare") {
+          const body = await readJson(request, 64 * 1024);
+          try { return jsonResponse(prepareModelRequest(config.siteId, body)); }
+          catch (error) { if (error instanceof RangeError) throw new AccessError(400, error.message); throw error; }
+        }
+        throw new AccessError(405, "method_or_endpoint_not_supported");
+      }
       if (method === "GET" && suffix === "/context") {
         return jsonResponse({ product: config.name, principal, stages: config.stages, usage: await store.usage() });
       }

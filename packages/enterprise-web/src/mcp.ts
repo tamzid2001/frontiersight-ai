@@ -29,7 +29,17 @@ export function createWorkspaceMcp(config: WorkspaceConfiguration, dependencies:
           isError: !response.ok };
       }
       const uuid = z.string().uuid(), key = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/);
+      async function modelRequest(suffix: string, value?: unknown) {
+        const response = await api(new Request(new URL("/api/v1/models" + suffix, request.url), {
+          method: value === undefined ? "GET" : "POST", headers: {"content-type":"application/json"},
+          body: value === undefined ? undefined : JSON.stringify(value),
+        }));
+        return {content:[{type:"text" as const,text:JSON.stringify(await response.json())}],isError:!response.ok};
+      }
       const handler = createMcpHandler(server => {
+        server.registerTool("list_applicable_models", {description:"List this product's reviewed NVIDIA research model capabilities. No provider inference.",inputSchema:z.object({}).strict(),annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},async()=>modelRequest(""));
+        server.registerTool("prepare_model_request", {description:"Prepare one bounded provider payload with a placeholder key. Never invokes a model, sends data externally or grants execution approval.",inputSchema:z.object({model:z.string().max(128),prompt:z.string().min(1).max(4000).optional(),table:z.record(z.string(),z.unknown()).optional()}).strict(),annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},async input=>modelRequest("/prepare",input));
+
         server.registerTool("list_workflows", { description: `List the active ${config.name} workspace, at most 100 records.`,
           inputSchema: z.object({ limit: z.number().int().min(1).max(100).default(50), after: uuid.optional() }).strict(),
           annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },

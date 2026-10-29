@@ -1,0 +1,105 @@
+{"name": "Mistral Large 4", "url": "https://build.nvidia.com/mistralai/mistral-large-4-1t-a52b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-parse", "url": "https://build.nvidia.com/nvidia/nemotron-3.5-parse", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "Nemotron 3.5 Bolt E4B", "url": "https://build.nvidia.com/nvidia/nemotron-3.5-bolt-e4b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-rerank-8b", "url": "https://build.nvidia.com/nvidia/nemotron-3_5-rerank-8b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-embed-1b", "url": "https://build.nvidia.com/nvidia/nemotron-3_5-embed-1b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-embed-8b", "url": "https://build.nvidia.com/nvidia/nemotron-3_5-embed-8b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "minimax-m3.1-flash", "url": "https://build.nvidia.com/minimaxai/minimax-m3.1-flash", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "rfd4-proteina", "url": "https://build.nvidia.com/ipd/rfd4-proteina", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "flux-3-image-klein", "url": "https://build.nvidia.com/black-forest-labs/flux-3-image-klein", "free_endpoint": false, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-super-vl-120b-a12b", "url": "https://build.nvidia.com/nvidia/nemotron-3.5-super-vl-120b-a12b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "Step 5 Preview", "url": "https://build.nvidia.com/stepfun-ai/step-5-preview", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "Kumo Tabular", "url": "https://build.nvidia.com/nvidia/kumo-tabular", "free_endpoint": true, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "3D Body Pose", "url": "https://build.nvidia.com/nvidia/body-pose", "free_endpoint": true, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "deepseek-v4.1-flash", "url": "https://build.nvidia.com/deepseek-ai/deepseek-v4.1-flash", "free_endpoint": true, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "Kumo Relational", "url": "https://build.nvidia.com/nvidia/kumo-relational", "free_endpoint": true, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "glm-5-3-flash", "url": "https://build.nvidia.com/z-ai/glm-5-3-flash", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-parse-2.0", "url": "https://build.nvidia.com/nvidia/nemotron-parse-2.0", "free_endpoint": false, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-tdt-0.6b", "url": "https://build.nvidia.com/nvidia/parakeet-tdt-0_6b", "free_endpoint": false, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "wan2.2-animate-2-14b", "url": "https://build.nvidia.com/wan-ai/wan2.2-animate-2-14b", "free_endpoint": false, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-lightning-30b-a3b", "url": "https://build.nvidia.com/nvidia/nemotron-3.5-lightning-30b-a3b", "free_endpoint": true, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "muse-glimmer-30b", "url": "https://build.nvidia.com/meta/muse-glimmer-30b", "free_endpoint": true, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "riva-translate-4b-instruct-v2", "url": "https://build.nvidia.com/nvidia/riva-translate-4b-instruct-v2", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "ising-calibration-1.5-31b", "url": "https://build.nvidia.com/nvidia/ising-calibration-1.5-31b", "free_endpoint": true, "downloadable": false, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "Video Super Resolution NIM", "url": "https://build.nvidia.com/nvidia/vsr", "free_endpoint": false, "downloadable": true, "page": 1, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3-embed-1b", "url": "https://build.nvidia.com/nvidia/nemotron-3-embed-1b", "free_endpoint": true, "downloadable": false, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "laguna-xs-2.1", "url": "https://build.nvidia.com/poolside/laguna-xs-2.1", "free_endpoint": true, "downloadable": false, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "qwen-image-edit-nvpcb-ovsl2sl", "url": "https://build.nvidia.com/nvidia/qwen-image-edit-nvpcb-ovsl2sl", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-ocr-v2", "url": "https://build.nvidia.com/nvidia/nemotron-ocr-v2", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "diffusiongemma-26b-a4b-it", "url": "https://build.nvidia.com/google/diffusiongemma-26b-a4b-it", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3-ultra-550b-a55b", "url": "https://build.nvidia.com/nvidia/nemotron-3-ultra-550b-a55b", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "chatterbox-multilingual-tts", "url": "https://build.nvidia.com/resembleai/chatterbox-multilingual-tts", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3.5-content-safety", "url": "https://build.nvidia.com/nvidia/nemotron-3.5-content-safety", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "cosmos3-nano", "url": "https://build.nvidia.com/nvidia/cosmos3-nano", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "cosmos3-nano-reasoner", "url": "https://build.nvidia.com/nvidia/cosmos3-nano-reasoner", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "qwen-image", "url": "https://build.nvidia.com/qwen/qwen-image", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "qwen-image-edit", "url": "https://build.nvidia.com/qwen/qwen-image-edit", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-3-nano-omni-30b-a3b-reasoning", "url": "https://build.nvidia.com/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "Relighting", "url": "https://build.nvidia.com/nvidia/relighting", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "synthetic-video-detector", "url": "https://build.nvidia.com/nvidia/synthetic-video-detector", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "Active Speaker Detection", "url": "https://build.nvidia.com/nvidia/active-speaker-detection", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "LipSync", "url": "https://build.nvidia.com/nvidia/lipsync", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "ising-calibration-1-35b-a3b", "url": "https://build.nvidia.com/nvidia/ising-calibration-1-35b-a3b", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "gemma-4-31b-it", "url": "https://build.nvidia.com/google/gemma-4-31b-it", "free_endpoint": true, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "llama-nemotron-rerank-vl-1b-v2", "url": "https://build.nvidia.com/nvidia/llama-nemotron-rerank-vl-1b-v2", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-voicechat", "url": "https://build.nvidia.com/nvidia/nemotron-voicechat", "free_endpoint": true, "downloadable": false, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-asr-streaming", "url": "https://build.nvidia.com/nvidia/nemotron-asr-streaming", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "flux.2-klein-4b", "url": "https://build.nvidia.com/black-forest-labs/flux_2-klein-4b", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-ocr-v1", "url": "https://build.nvidia.com/nvidia/nemotron-ocr-v1", "free_endpoint": false, "downloadable": true, "page": 2, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-table-structure-v1", "url": "https://build.nvidia.com/nvidia/nemotron-table-structure-v1", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-page-elements-v3", "url": "https://build.nvidia.com/nvidia/nemotron-page-elements-v3", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-graphic-elements-v1", "url": "https://build.nvidia.com/nvidia/nemotron-graphic-elements-v1", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "cosmos-transfer2.5-2b", "url": "https://build.nvidia.com/nvidia/cosmos-transfer2_5-2b", "free_endpoint": true, "downloadable": false, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "llama-nemotron-embed-vl-1b-v2", "url": "https://build.nvidia.com/nvidia/llama-nemotron-embed-vl-1b-v2", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "evo2-40b-forward", "url": "https://build.nvidia.com/arc/evo2-40b-forward", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "evo2-7b-forward", "url": "https://build.nvidia.com/arc/evo2-7b-forward", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "streampetr", "url": "https://build.nvidia.com/nvidia/streampetr", "free_endpoint": true, "downloadable": false, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "nemotron-parse", "url": "https://build.nvidia.com/nvidia/nemotron-parse", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "llama-3.1-nemotron-safety-guard-8b-v3", "url": "https://build.nvidia.com/nvidia/llama-3_1-nemotron-safety-guard-8b-v3", "free_endpoint": true, "downloadable": false, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "openfold3", "url": "https://build.nvidia.com/openfold/openfold3", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-ctc-0.6b-zh-tw", "url": "https://build.nvidia.com/nvidia/parakeet-ctc-0_6b-zh-tw", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-ctc-0.6b-zh-cn", "url": "https://build.nvidia.com/nvidia/parakeet-ctc-0_6b-zh-cn", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-ctc-0.6b-es", "url": "https://build.nvidia.com/nvidia/parakeet-ctc-0_6b-es", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-ctc-0.6b-vi", "url": "https://build.nvidia.com/nvidia/parakeet-ctc-0_6b-vi", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "TRELLIS", "url": "https://build.nvidia.com/microsoft/trellis", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "stable-diffusion-3.5-large", "url": "https://build.nvidia.com/stabilityai/stable-diffusion-3_5-large", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "FLUX.1-Kontext-dev", "url": "https://build.nvidia.com/black-forest-labs/flux_1-kontext-dev", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "gpt-oss-20b", "url": "https://build.nvidia.com/openai/gpt-oss-20b", "free_endpoint": true, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-tdt-0.6b-v2", "url": "https://build.nvidia.com/nvidia/parakeet-tdt-0_6b-v2", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "nemoretriever-ocr", "url": "https://build.nvidia.com/nvidia/nemoretriever-ocr", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "llama-guard-4-12b", "url": "https://build.nvidia.com/meta/llama-guard-4-12b", "free_endpoint": true, "downloadable": false, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "riva-translate-1.6b", "url": "https://build.nvidia.com/nvidia/riva-translate-1_6b", "free_endpoint": false, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "Background Noise Removal", "url": "https://build.nvidia.com/nvidia/bnr", "free_endpoint": true, "downloadable": true, "page": 3, "reviewed_at": "2026-10-29"}
+{"name": "Boltz-2", "url": "https://build.nvidia.com/mit/boltz2", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "magpie-tts-zeroshot", "url": "https://build.nvidia.com/nvidia/magpie-tts-zeroshot", "free_endpoint": true, "downloadable": false, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "FLUX.1-schnell", "url": "https://build.nvidia.com/black-forest-labs/flux_1-schnell", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-1.1b-rnnt-multilingual-asr", "url": "https://build.nvidia.com/nvidia/parakeet-1_1b-rnnt-multilingual-asr", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "FLUX.1-dev", "url": "https://build.nvidia.com/black-forest-labs/flux_1-dev", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "sparsedrive", "url": "https://build.nvidia.com/nvidia/sparsedrive", "free_endpoint": true, "downloadable": false, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "bevformer", "url": "https://build.nvidia.com/nvidia/bevformer", "free_endpoint": true, "downloadable": false, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "magpie-tts-multilingual", "url": "https://build.nvidia.com/nvidia/magpie-tts-multilingual", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "msa-search", "url": "https://build.nvidia.com/colabfold/msa-search", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "openfold2", "url": "https://build.nvidia.com/openfold/openfold2", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "evo2-40b", "url": "https://build.nvidia.com/arc/evo2-40b", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "whisper-large-v3", "url": "https://build.nvidia.com/openai/whisper-large-v3", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "canary-1b-asr", "url": "https://build.nvidia.com/nvidia/canary-1b-asr", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "llama-3.1-nemoguard-8b-topic-control", "url": "https://build.nvidia.com/nvidia/llama-3_1-nemoguard-8b-topic-control", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "nemoguard-jailbreak-detect", "url": "https://build.nvidia.com/nvidia/nemoguard-jailbreak-detect", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "llama-3.1-nemoguard-8b-content-safety", "url": "https://build.nvidia.com/nvidia/llama-3_1-nemoguard-8b-content-safety", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "genmol", "url": "https://build.nvidia.com/nvidia/genmol-generate", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "paddleocr", "url": "https://build.nvidia.com/baidu/paddleocr", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "conformer-ctc-asr", "url": "https://build.nvidia.com/nvidia/conformer-ctc-asr", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "fourcastnet", "url": "https://build.nvidia.com/nvidia/fourcastnet", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "Studio Voice", "url": "https://build.nvidia.com/nvidia/studiovoice", "free_endpoint": true, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "llama-3.2-11b-vision-instruct", "url": "https://build.nvidia.com/meta/llama-3.2-11b-vision-instruct", "free_endpoint": true, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "llama-3.2-90b-vision-instruct", "url": "https://build.nvidia.com/meta/llama-3.2-90b-vision-instruct", "free_endpoint": true, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "megatron-1b-nmt", "url": "https://build.nvidia.com/nvidia/megatron-1b-nmt", "free_endpoint": false, "downloadable": true, "page": 4, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-ctc-1.1b-asr", "url": "https://build.nvidia.com/nvidia/parakeet-ctc-1_1b-asr", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "parakeet-ctc-0.6b-asr", "url": "https://build.nvidia.com/nvidia/parakeet-ctc-0_6b-asr", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "proteinmpnn", "url": "https://build.nvidia.com/ipd/proteinmpnn", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "eyecontact", "url": "https://build.nvidia.com/nvidia/eyecontact", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "rfdiffusion", "url": "https://build.nvidia.com/ipd/rfdiffusion", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "paligemma", "url": "https://build.nvidia.com/google/google-paligemma", "free_endpoint": true, "downloadable": false, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "molmim", "url": "https://build.nvidia.com/nvidia/molmim-generate", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "diffdock", "url": "https://build.nvidia.com/mit/diffdock", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
+{"name": "cuopt", "url": "https://build.nvidia.com/nvidia/nvidia-cuopt", "free_endpoint": false, "downloadable": true, "page": 5, "reviewed_at": "2026-10-29"}
