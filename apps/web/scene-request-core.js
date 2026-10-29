@@ -29,5 +29,13 @@
       }
     };
   }
-  return {create};
+  function fitScene(scene, stage, resizePath) {
+    if (!scene || !Array.isArray(scene.objects) || !scene.objects.length || scene.objects.length > 24)
+      throw new RangeError('Invalid generated scene');
+    const from = scene.stage_metres ?? [16, 14];
+    const objects = scene.objects.map(object => ({...object,
+      waypoints: resizePath(object.waypoints, from, stage, object.radius ?? .5)}));
+    return {...scene, stage_metres: [...stage], objects};
+  }
+  return {create, fitScene};
 });

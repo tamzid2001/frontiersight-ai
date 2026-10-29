@@ -248,6 +248,7 @@ def generate_scene(description: str, model: str | None = None, candidates: int =
             raise SceneTimeout("Scene-generation deadline reached. No scene was changed; retry manually.")
         raise ModelError("No candidate produced a valid scene. Try a clearer description; no automatic retry was made.")
     _, scene, meta, index = min(valid, key=lambda candidate: candidate[0])
+    scene["stage_metres"] = list(STAGE)
     return scene, {**meta, "attempt": 1, "quality": scene["quality"],
                    "candidates_requested": candidates, "candidates_completed": len(completed),
                    "candidates_valid": len(valid), "selected_candidate": index + 1,
