@@ -34,6 +34,7 @@ def _rate_ok(ip: str, limit: int = RATE_LIMIT) -> bool:
 from services.api import store as _store
 from integrations import billing as _billing
 from services.api import workspace_http as _workspace
+from services.api import workbench_http as _workbench
 
 def _auth_user(handler):
     auth = handler.headers.get("Authorization", "")
@@ -41,6 +42,9 @@ def _auth_user(handler):
     return _store.user_for_token(token)
 
 def _plan_of(user) -> str:
+    from integrations import clerk_billing
+    if user and user.get("clerk_id") and clerk_billing.enabled():
+        return clerk_billing.plan(user["clerk_id"])
     return _store.plan_for(user["id"]) if user else "explorer"
 
 def _fernet():
@@ -112,8 +116,15 @@ class H(BaseHTTPRequestHandler):
     def _route(self) -> str:
         u = urlparse(self.path)
         ep = parse_qs(u.query).get("ep", [None])[0]
+        if ep == "apiguide": return "/api-guide.html"
+        if ep == "path": return "/api/paths/" + parse_qs(u.query).get("operation", [""])[0]
+        if ep == "v1":
+            resource = parse_qs(u.query).get("resource", [""])[0]
+            return "/api/v1/" + resource
         if ep == "asset":
             return "/assets/" + parse_qs(u.query).get("file", [""])[0]
+        if ep == "appview" or u.path in ("/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help"):
+            return "/"
         return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "scenerequest": "/scene-request-core.js", "entityscale": "/entity-scale.mjs", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
                 "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
@@ -146,6 +157,8 @@ class H(BaseHTTPRequestHandler):
                           parse_constant=_bad_const)
     def do_GET(self):
         route = self._route()
+        if _workbench.handle(self, route, "GET"):
+            return
         if _workspace.handle(self, route, "GET"):
             return
         try:
@@ -163,10 +176,16 @@ class H(BaseHTTPRequestHandler):
                        '<image:image><image:loc>https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg</image:loc>'
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
+                xml=xml.replace('</urlset>', ''.join(f'<url><loc>{base}/{page}</loc><changefreq>weekly</changefreq></url>'
+                    for page in ('pricing','create','help','api-guide.html'))+'</urlset>')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.37.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.38.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
+                try: _workbench.check_origin(self)
+                except Exception: return self._send(403, {"error":"request_origin_not_allowed"})
+                if "text/event-stream" in self.headers.get("Accept", ""):
+                    return self._send(405, {"error":"no_server_initiated_stream"})
                 return self._send(200, _mcp.catalog())
             if route.startswith("/api/diagnostics"):
                 return self._send(200, {"meta_configured": spark.configured(), "spark_model": spark.MODEL,
@@ -239,11 +258,26 @@ class H(BaseHTTPRequestHandler):
             name = "index.html" if route in ("/", "") else route.lstrip("/").split("?")[0]
             f = (WEB / name).resolve()
             if f.is_file() and f.suffix in TYPES and f.is_relative_to(WEB.resolve()):
-                return self._send(200, f.read_bytes(), TYPES[f.suffix])
+                content=f.read_bytes()
+                if f.name=="index.html":
+                    import re, html
+                    view=parse_qs(urlparse(self.path).query).get("view",[urlparse(self.path).path.strip("/")])[0]
+                    titles={"pricing":"Pricing", "create":"Create Lab", "studio":"Video Studio", "counterfactual":"Counterfactuals", "settings":"Account Settings", "sign-in":"Sign In", "workspaces":"Workspaces", "help":"Help and Guides"}
+                    if view in titles:
+                        document=content.decode();title=html.escape(titles[view]+" | FrontierSight AI")
+                        document=re.sub(r"<title>.*?</title>","<title>"+title+"</title>",document,count=1)
+                        if view in ("settings","sign-in","workspaces"):
+                            document=document.replace("</head>",'<meta name="robots" content="noindex,nofollow"></head>')
+                        content=document.encode()
+                return self._send(200, content, TYPES[f.suffix])
             return self._send(404, {"error": "not found"})
         except Exception as e:
             return self._send(400, {"error": str(e)[:300]})
     def do_POST(self):
+        if self._route().startswith(("/api/v1/", "/api/paths/")) and not _rate_ok("workbench:"+self.client_address[0],limit=60):
+            return self._send(429,{"error":"workbench_request_rate_limit"})
+        if _workbench.handle(self, self._route(), "POST"):
+            return
         if _workspace.handle(self, self._route(), self.command):
             return
         route = self._route()
@@ -291,7 +325,13 @@ class H(BaseHTTPRequestHandler):
                 from services.api import mcp as _mcp
                 try: payload = self._body()
                 except Exception as e: return self._send(400, {"error": f"invalid JSON: {e}"})
-                resp = _mcp.handle_jsonrpc(payload)
+                try: _workbench.check_origin(self)
+                except Exception: return self._send(403, {"error":"request_origin_not_allowed"})
+                protocol = self.headers.get("MCP-Protocol-Version")
+                if protocol and protocol not in _mcp.SUPPORTED_PROTOCOLS:
+                    return self._send(400, {"error":"unsupported_mcp_protocol"})
+                from services.api.workbench import Workbench, actor
+                resp = _mcp.handle_jsonrpc(payload, workbench=lambda: Workbench(actor(self.headers.get("Authorization", ""))))
                 if resp is None: return self._send(202, b"", "application/json")
                 return self._send(200, resp)
             body = self._body()

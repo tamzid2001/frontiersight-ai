@@ -1,0 +1,236 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scene, Object, Media API &amp; MCP | FrontierSight AI</title>
+<meta name="description" content="Connect agents to FrontierSight AI: authenticated scene and object libraries, path planning, predictions, media, frames and MCP tools.">
+<link rel="canonical" href="https://frontiersight-ai.vercel.app/api-guide.html"><link rel="icon" href="/favicon-32.png"><link rel="stylesheet" href="/app.css">
+<style>body{display:block;margin:0;padding:24px}main{max-width:1080px;margin:auto}header{max-width:1080px;margin:0 auto 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}pre{overflow:auto;padding:16px;border:1px solid #526174;border-radius:12px}code{overflow-wrap:anywhere}table{display:block;max-width:100%;overflow:auto;border-collapse:collapse}th,td{padding:12px;border:1px solid #526174;text-align:left;vertical-align:top}p,li{line-height:1.7}h1{font-size:clamp(2rem,5vw,3rem)}a{color:#56bace}h2{margin-top:2.2rem}header a{font-weight:600}</style>
+</head><body><header><a href="/">FrontierSight AI</a><a href="/create">Create Lab</a><a href="/pricing">Pricing</a><a href="/settings">Agent keys</a><a href="/openapi.json">OpenAPI JSON</a></header><main><h1>FrontierSightAI workbench API and MCP</h1>
+<p>Version 0.38.0. Base URL: <code>https://frontiersight-ai.vercel.app</code>.
+The machine-readable contract is <a href="https://frontiersight-ai.vercel.app/openapi.json">OpenAPI</a>.
+The website, REST and authenticated MCP tools share the same simulation document,
+workspace identity and storage operations. No endpoint actuates a physical robot.</p>
+<h2>Connect an agent</h2>
+<p>Sign in at <code>/settings</code>, switch to your personal workspace, and create an agent
+key. Choose read access, optionally write/model, and copy the one-time value.
+Store it in a local secret environment variable, not a URL or source file.
+Keys expire within 90 days (the UI uses 30), can be revoked in Settings, and are
+stored only as SHA-256 digests. Creating/revoking keys requires a Clerk session;
+an agent key cannot mint another key or open billing. Personal keys never grant
+organization access. Organization clients use an active Clerk session JWT.</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;frontiersight&quot;: {
+      &quot;url&quot;: &quot;https://frontiersight-ai.vercel.app/api/mcp&quot;,
+      &quot;headers&quot;: {&quot;Authorization&quot;: &quot;Bearer &lt;your-private-agent-key&gt;&quot;}
+    }
+  }
+}
+</code></pre>
+<p>Use a client that supports secure header configuration. This is Bearer
+integration, not an OAuth authorization server; a connector that requires OAuth
+cannot use this configuration unchanged. Never share a configured token file.</p>
+<p>Browser clients can get a short-lived token with <code>await Clerk.session.getToken()</code>.
+Refresh it on expiry. The server verifies issuer, authorized party, signature,
+expiry, subject, and active organization. User IDs and plan names in JSON never
+authenticate a caller. An optional <code>X-Workspace-Organization</code> header (org ID or
+<code>personal</code>) rejects replies/writes from a stale workspace selection.</p>
+<h2>REST</h2>
+<p>Private operations are POST JSON under <code>/api/v1</code>. Include
+<code>Authorization: Bearer …</code>. List/get use POST to keep private identifiers out of
+URLs. <code>/api/v1/account</code> is GET. Request bodies are limited to 350KB; scene and
+stored-result JSON is limited to 256KiB. Errors use appropriate 400/401/402/403/
+404/409/413/415/429/502/503 statuses, without provider secrets.</p>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Endpoints</th>
+<th>Inputs / result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scenes</td>
+<td><code>/scenes/create</code>, <code>/list</code>, <code>/get</code>, <code>/update</code>, <code>/delete</code></td>
+<td><code>name</code>, <code>scene</code>; get/delete: <code>id</code>; update/delete: <code>expectedVersion</code>. Returns ID/version; get/list return records.</td>
+</tr>
+<tr>
+<td>Objects</td>
+<td><code>/objects/validate</code>, <code>/generate</code>, <code>/create</code>, <code>/list</code>, <code>/get</code>, <code>/update</code>, <code>/delete</code></td>
+<td>Generate: description/model; save: name/spec; a spec is a bounded parts recipe, not an arbitrary executable mesh.</td>
+</tr>
+<tr>
+<td>Reuse</td>
+<td><code>/objects/use</code></td>
+<td><code>scene</code>, <code>object_record_id</code>, new unique <code>object_id</code>, <code>x</code>, <code>y</code> in metres. Returns new unsaved scene with the exact saved recipe.</td>
+</tr>
+<tr>
+<td>Route</td>
+<td><code>/paths/plan</code></td>
+<td><code>scene</code>, moving <code>object_id</code>, <code>goal:[x,y]</code>; optional resolution/clearance/smooth.</td>
+</tr>
+<tr>
+<td>Prediction</td>
+<td><code>/paths/predict</code></td>
+<td><code>points:[[t,x,y],…]</code>, horizon/step, declared space and optional metre-space stage/radius.</td>
+</tr>
+<tr>
+<td>Describe paths</td>
+<td><code>/paths/describe</code></td>
+<td><code>scene</code>, <code>description</code>, optional approved Muse <code>model</code>. Existing exact object IDs only.</td>
+</tr>
+<tr>
+<td>Scene generation</td>
+<td><code>/scenes/generate</code></td>
+<td>description/model, candidates 1–8 (default 3); one selected scene then stop.</td>
+</tr>
+<tr>
+<td>Playback</td>
+<td><code>/scenes/prepare</code></td>
+<td>scene; returns floor dimensions, object definitions, timestamped tracks and digest used by Studio/Counterfactual.</td>
+</tr>
+<tr>
+<td>Media library</td>
+<td><code>/media/create</code>, <code>/list</code>, <code>/get</code>, <code>/update</code>, <code>/delete</code></td>
+<td>Frame: name/kind=frame/data_url/timestamp_s/optional source_video_id. Video: name/kind=video/provider_file_id.</td>
+</tr>
+<tr>
+<td>Segmentation</td>
+<td><code>/media/segment-frame</code>, <code>/media/segment-video</code></td>
+<td>owned media_id, concept; Meta SAM provider checks its own file access.</td>
+</tr>
+<tr>
+<td>Export a frame</td>
+<td><code>/media/render-frame</code></td>
+<td>scene, timestamp_s, width/height; real PNG data URL plus exact simulated metre-space poses.</td>
+</tr>
+<tr>
+<td>Export animation</td>
+<td><code>/media/render-preview</code></td>
+<td>scene, duration_s/fps/width/height; animated GIF, not MP4 or photorealistic 3D video.</td>
+</tr>
+<tr>
+<td>Model receipt</td>
+<td><code>/model-requests/get</code></td>
+<td>original <code>request_key</code>; returns running/completed/failed_or_unknown and saved result where available.</td>
+</tr>
+<tr>
+<td>Provider key</td>
+<td><code>/provider-key/save</code>, <code>/status</code>, <code>/delete</code></td>
+<td>Clerk paid workspace administrator only; save key encrypted at rest, return only last4/status. Model requests use a per-request context, never a shared environment mutation.</td>
+</tr>
+<tr>
+<td>Agent keys</td>
+<td><code>/keys/create</code>, <code>/keys/list</code>, <code>/keys/revoke</code></td>
+<td>Clerk personal session only; name/scopes/days or ID to revoke.</td>
+</tr>
+<tr>
+<td>Billing</td>
+<td><code>/billing/checkout</code>, <code>/billing/portal</code></td>
+<td>personal Clerk session only; period monthly/annual; server-created Stripe URL.</td>
+</tr>
+</tbody>
+</table>
+<p>The abbreviated paths above are relative to <code>/api/v1</code>. Every table operation also
+has a corresponding MCP tool except key administration and billing, which remain
+interactive account operations. Tool names are listed by <code>tools/list</code>.</p>
+<h3>Example: save, reuse, plan, render</h3>
+<pre><code class="language-python">import json, os, uuid, urllib.request
+BASE = &quot;https://frontiersight-ai.vercel.app&quot;
+def api(path, body, key=None):
+    request = urllib.request.Request(BASE + &quot;/api/v1/&quot; + path,
+        data=json.dumps(body).encode(), headers={
+            &quot;Content-Type&quot;: &quot;application/json&quot;,
+            &quot;Authorization&quot;: &quot;Bearer &quot; + os.environ[&quot;FRONTIERSIGHT_API_KEY&quot;],
+            &quot;Idempotency-Key&quot;: key or str(uuid.uuid4())})
+    with urllib.request.urlopen(request, timeout=40) as response:
+        return json.load(response)
+
+# A declared metre-space document. Paths and radii must fit the floor.
+scene = {&quot;stage_metres&quot;: [16,14], &quot;objects&quot;: [
+    {&quot;id&quot;:&quot;robot-7&quot;, &quot;category&quot;:&quot;robot&quot;, &quot;speed&quot;:1, &quot;radius&quot;:.5,
+     &quot;waypoints&quot;:[[2,7]], &quot;curve&quot;:&quot;straight&quot;, &quot;mode&quot;:&quot;stop&quot;},
+    {&quot;id&quot;:&quot;shelf-1&quot;, &quot;category&quot;:&quot;shelf&quot;, &quot;speed&quot;:0, &quot;radius&quot;:2,
+     &quot;waypoints&quot;:[[8,7]]}]}
+planned = api(&quot;paths/plan&quot;, {&quot;scene&quot;:scene,&quot;object_id&quot;:&quot;robot-7&quot;,&quot;goal&quot;:[14,7]})
+saved = api(&quot;scenes/create&quot;, {&quot;name&quot;:&quot;Warehouse route&quot;,&quot;scene&quot;:planned[&quot;scene&quot;]})
+loaded = api(&quot;scenes/get&quot;, {&quot;id&quot;:saved[&quot;id&quot;]})[&quot;record&quot;]
+prepared = api(&quot;scenes/prepare&quot;, {&quot;scene&quot;:loaded[&quot;payload&quot;]})
+frame = api(&quot;media/render-frame&quot;, {&quot;scene&quot;:loaded[&quot;payload&quot;],&quot;timestamp_s&quot;:3})
+</code></pre>
+<p>A save does not generate another scene, mutate another tenant, or invoke a model.
+Create a recipe with <code>objects/generate</code>, explicitly save its <code>spec</code> with
+<code>objects/create</code>, then call <code>objects/use</code> with that record's ID. Reuse returns a
+new scene; explicitly save it if desired. No implicit overwriting occurs.</p>
+<h2>Writes, retries and concurrency</h2>
+<p>Supply a fresh 16–128 character <code>Idempotency-Key</code> for each intended mutation or
+model invocation. Reuse the same key/body only when recovering that exact request.
+Same key/different body returns 409. Updating/deleting a stale <code>expectedVersion</code>
+returns 409, requiring a fresh read and an explicit user decision.</p>
+<p>Model invocations have durable reservations. Completed requests replay the saved
+result. Running or failed/uncertain attempts return 409; inspect the receipt,
+never automatically send a new key to repeat potentially charged work. Client
+cancellation stops waiting; it cannot guarantee provider-side cancellation.</p>
+<h2>Geometry and prediction semantics</h2>
+<p>A* uses an eight-neighbor bounded planar grid and radius-inflated static circular
+footprints. It validates line segments; smoothing is retained only if its sampled
+curve passes the same geometry checks. It does not reserve moving actors, solve
+robot joint constraints or certify a safe physical trajectory. Run analysis for
+moving interactions. It can reject a route because of resolution/work limits.</p>
+<p>Prediction is a least-squares constant-velocity fit over the most recent 20 of
+3–5,000 strictly ordered timestamped positions. Returned forecast points remain
+separate from observations. The optional floor-constrained display trajectory
+holds at a boundary; that is not predicted braking. Residual RMSE is not a calibrated
+uncertainty interval. Pixel predictions are not metres without calibration.
+Applying predicted geometry in Create Lab uses the component's acceleration and
+turn limits for playback, so playback timing can differ from extrapolation.</p>
+<p>Language edits use one Muse request (20-second socket timeout, no repair/retries).
+Unknown/repeated IDs, invalid settings or out-of-floor sampled curves are rejected
+before changing the scene. Browser revision guards discard stale replies.</p>
+<h2>Media limits</h2>
+<p>Saved frames: valid JPEG/PNG, &lt;=180,000 data-URL characters, &lt;=4 million pixels.
+Frame timestamps are source-video seconds. A source_video_id must belong to the
+same workspace. Video segmentation requires your own saved Meta key, so a shared host credential cannot access another tenant's provider file by a guessed ID. Video records reference a file already uploaded to Meta's file
+service; this API does not pretend to upload gigabytes into Firestore or accept
+arbitrary URL fetches with server credentials. Browser frame extraction remains
+available for local videos. Provider files have their own retention/access policy.</p>
+<p>PNG exports are top-down 2D simulation illustrations. GIF previews are bounded to
+60 frames / 20 million aggregate pixels / 2MB encoded output. GIF centisecond
+quantization is reported in the response; it is not falsely described as exact
+arbitrary-FPS MP4. WebGL 3D renderers are separate browser capabilities.</p>
+<h2>MCP protocol</h2>
+<p>Stateless JSON Streamable HTTP at <code>/api/mcp</code>; initialize negotiates a supported
+protocol (2024-11-05 compatibility, 2025-03-26, 2025-06-18 or 2025-11-25). POST
+JSON-RPC, advertise JSON/SSE Accept support, and send the negotiated
+<code>MCP-Protocol-Version</code> subsequently. Notifications return 202. No unsolicited SSE
+stream is offered (GET with SSE Accept returns 405). Origins are checked.</p>
+<p><code>tools/call</code> uses the same Workbench.execute dispatcher as REST. Mutating/model
+tools take <code>idempotency_key</code> in arguments. Failures return <code>isError</code>; no background
+model loop is started. The original offline stdio bridge exposes analysis only:
+private tools return an authentication error and cannot spend host credits.</p>
+<h2>Deployment prerequisites and current limitations</h2>
+<p>Firestore, restricted server credentials, Clerk and an audit secret are required
+for durable libraries, agent keys and model receipts. There is no SQLite fallback
+for those endpoints. Credentials are never returned in diagnostics. Explorer gets
+10 scene records, 12 object recipes, 25 media records, 100 mutations/month per
+library; Researcher gets up to 5,000 records and 20,000 mutations/month per library.
+Model API requests have an additional 10/minute workspace budget.</p>
+<p>Production credentials and live Stripe activation must be configured and verified
+before treating a deployment as fully operational. Tests use the real Firestore
+emulator and signed test Clerk JWTs; provider calls are fixtures, not measured live
+inference. See BILLING_DEPLOYMENT.md and COVERAGE.md for evidence and setup.</p>
+<h2>Python helper and stdio-only agent clients</h2>
+<p><code>sdk/frontiersight.py</code> is a dependency-free client. <code>FrontierSight</code> accepts a
+private key or a callable that returns a fresh Clerk JWT. Named helpers cover
+scene creation/loading, generation, path planning/prediction/descriptions, saving
+and reusing objects, rendering and receipt lookup. <code>call("resource/operation",
+body, request_key=...)</code> covers the remaining published operations. It validates
+the origin, supports HTTPS (HTTP only for localhost), and never automatically
+retries a potentially charged request. Save <code>client.last_request_key</code> after an uncertain request to inspect/recover it. For concurrent use, explicitly assign and retain a separate request_key per operation.</p>
+<p>For an agent that supports stdio but not HTTP headers:</p>
+<pre><code class="language-bash"># Set FRONTIERSIGHT_API_KEY in your local secret manager, not shell history.
+python3 scripts/mcp_stdio.py --url https://frontiersight-ai.vercel.app/api/mcp
+</code></pre>
+<p>Without <code>--url</code>, this command remains offline. Remote failures emit a JSON-RPC
+error without printing credentials, upstream bodies or making a second request.</p>
+<p>Saved Meta credentials apply to authenticated workbench generation, path edits and segmentation; paid Create Lab scene generation uses that same API when cloud workspace saving is enabled. Legacy guest demo requests use the host fair-use key. Candidate worker threads inherit only their own request context.</p>
+<p>The local key registry bounds each account to 10 active keys and 100 retained key records. Operators must purge expired/revoked history according to their retention policy before that history cap is reached; expiry alone is not a Firestore TTL deletion.</p></main><footer><a href="mailto:hello@quantura.studio">Contact support</a> · <a href="https://quantura.studio">Quantura</a></footer></body></html>

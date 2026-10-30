@@ -2,6 +2,50 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/help",
+      "destination": "/api/index?ep=appview&view=help"
+    },
+    {
+      "source": "/workspaces",
+      "destination": "/api/index?ep=appview&view=workspaces"
+    },
+    {
+      "source": "/sign-in",
+      "destination": "/api/index?ep=appview&view=sign-in"
+    },
+    {
+      "source": "/settings",
+      "destination": "/api/index?ep=appview&view=settings"
+    },
+    {
+      "source": "/counterfactual",
+      "destination": "/api/index?ep=appview&view=counterfactual"
+    },
+    {
+      "source": "/studio",
+      "destination": "/api/index?ep=appview&view=studio"
+    },
+    {
+      "source": "/create",
+      "destination": "/api/index?ep=appview&view=create"
+    },
+    {
+      "source": "/pricing",
+      "destination": "/api/index?ep=appview&view=pricing"
+    },
+    {
+      "source": "/api-guide.html",
+      "destination": "/api/index?ep=apiguide"
+    },
+    {
+      "source": "/api/paths/:operation",
+      "destination": "/api/index?ep=path&operation=:operation"
+    },
+    {
+      "source": "/api/v1/:resource*",
+      "destination": "/api/index?ep=v1&resource=:resource*"
+    },
+    {
       "source": "/scene-request-core.js",
       "destination": "/api/index?ep=scenerequest"
     },

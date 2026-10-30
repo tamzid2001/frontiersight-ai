@@ -6,7 +6,9 @@ local schema; invalid model JSON is rejected, never repaired into a claim.
 The model must not invent detections, measurements, or verdicts — prompts say
 so, and the engine never reads its numbers back as measurements."""
 from __future__ import annotations
+from .credentials import api_key
 import json, os, time, urllib.request, urllib.error, uuid
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, wait
 from threading import BoundedSemaphore, Lock
 
@@ -44,10 +46,10 @@ _SCENE_CAPACITY = BoundedSemaphore(1)
 MAX_MODEL_RESPONSE_BYTES = 1_048_576
 
 def configured() -> bool:
-    return bool(os.environ.get("MODEL_API_KEY", "").strip())
+    return bool(api_key())
 
 def _call(prompt: str, timeout: int = 60, retries: int = 2, model: str | None = None) -> tuple[str, dict]:
-    key = os.environ.get("MODEL_API_KEY", "").strip()
+    key = api_key()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
     req_id = str(uuid.uuid4())
     body = json.dumps({"model": model or MODEL, "input": prompt}).encode()
@@ -213,7 +215,7 @@ def generate_scene(description: str, model: str | None = None, candidates: int =
     futures = []
     try:
         for _ in range(candidates):
-            futures.append(_SCENE_POOL.submit(_call, prompt, timeout=20, retries=0, model=selected_model))
+            futures.append(_SCENE_POOL.submit(copy_context().run, _call, prompt, timeout=20, retries=0, model=selected_model))
     except BaseException:
         # Executor shutdown can interrupt submission. Retain capacity for started work.
         if not futures:

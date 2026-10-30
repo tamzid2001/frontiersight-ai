@@ -8,6 +8,7 @@ raster decoding is delegated to Meta's `meta-sam-parser` package when installed
 (we parse boxes, ids, confidences, and mask headers here, and record mask
 payloads opaquely — we never fabricate a raster we did not decode)."""
 from __future__ import annotations
+from .credentials import api_key
 import base64, json, math, os, re, struct, time, urllib.request, urllib.error, uuid, zlib
 from .spark import BlockedCredentials, ModelError, BASE
 
@@ -112,7 +113,7 @@ def segment_video(video_ref: str, concept: str, is_file_id: bool = False, timeou
     """SAM 3.1 video segmentation/tracking (documented input_video part).
     Researcher-gated at the API layer; this function performs the call and
     parses frames with the same documented-grammar parser as images."""
-    key = os.environ.get("MODEL_API_KEY", "").strip()
+    key = api_key()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
     if not concept or any(ch in concept for ch in ",;+\n"): raise ValueError("concept must be one short noun phrase")
     media = {"type": "input_video", "file_id": video_ref} if is_file_id else {"type": "input_video", "video_url": video_ref}
@@ -133,7 +134,7 @@ def segment_video(video_ref: str, concept: str, is_file_id: bool = False, timeou
                     except Exception: continue
                     if ev.get("type") == "response.output_text.delta": text_parts.append(ev.get("delta", ""))
     except urllib.error.HTTPError as e:
-        raise ModelError(f"SAM video HTTP {e.code}: {e.read().decode()[:300]}") from e
+        raise ModelError(f"SAM video HTTP {e.code}; provider details withheld") from None
     text = "".join(text_parts)
     parsed = parse_output_text(text)
     parsed.update({"model": MODEL, "concept": concept, "http_status": status,
@@ -142,7 +143,7 @@ def segment_video(video_ref: str, concept: str, is_file_id: bool = False, timeou
 
 def segment_image(image_data_url: str, concept: str, timeout: int = 50) -> dict:
     """One concept per request (documented constraint). Image as data URL."""
-    key = os.environ.get("MODEL_API_KEY", "").strip()
+    key = api_key()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
     if not isinstance(concept, str) or not 1 <= len(concept) <= 100 or any(ch in concept for ch in ",;+\n"): raise ValueError("concept must be one short noun phrase")
     if not isinstance(image_data_url, str) or len(image_data_url) > 3_500_000 or not re.match(r"^data:image/(jpeg|png);base64,", image_data_url):
@@ -189,7 +190,7 @@ def segment_image(image_data_url: str, concept: str, timeout: int = 50) -> dict:
                     elif ev.get("type") in ("response.failed", "response.incomplete", "error"):
                         raise ModelError("SAM did not complete the image segmentation")
     except urllib.error.HTTPError as e:
-        raise ModelError(f"SAM HTTP {e.code}: {e.read().decode()[:300]}") from e
+        raise ModelError(f"SAM HTTP {e.code}; provider details withheld") from None
     text = "".join(text_parts)
     if not completed: raise ModelError("SAM stream ended without completion")
     parsed = parse_output_text(text, decode_masks=True)

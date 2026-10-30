@@ -1,3 +1,4 @@
+let ClerkApp = null;
 const $=id=>document.getElementById(id);
 const state={scenario:null,data:null,t:0,playing:false,run:null,cf:null};
 let sceneryPainter=null;
@@ -70,7 +71,11 @@ function headingAt(track,t){const p0=posAt(track,t),p1=posAt(track,Math.min(t+0.
 const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc9ff",cyclist:"#c792ff",shelf:"#5b6b9f",person:"#f2b04a",object:"#e8edf6"};
 
 // tabs
-function showView(v){
+const VIEW_PATHS={home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
+function showView(v,history=true){
+ if(!$("view-"+v))v="home";
+ if(history&&VIEW_PATHS[v]&&location.pathname!==VIEW_PATHS[v])window.history.pushState({view:v},"",VIEW_PATHS[v]);
+ document.title=(v==="home"?"FrontierSight AI — Build, simulate and inspect physical-world scenes":v.charAt(0).toUpperCase()+v.slice(1)+" | FrontierSight AI");
  if(["create","studio","counterfactual"].includes(v))loadScenery();
  if(v==="studio"){$("studio-source-pill").textContent=state.data?.kind==="USER_UPLOADED"?"Your scene":"Fixture replay";}
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
@@ -197,7 +202,7 @@ function renderObjects(){if(!state.data)return;
  const context=$("studio-scene-size");if(context)context.textContent=floor?`${floor[0]} × ${floor[1]} m · ${state.data.tracks.length} components`:"";
  const tEnd=Math.max(1,...state.data.tracks.map(t=>t.points.length?t.points[t.points.length-1][0]:0));
  const sc=$("scrub");if(sc)sc.max=tEnd.toFixed(2);state.duration=tEnd;
- $("objects").innerHTML=state.data.tracks.map(t=>`<li class="objrow" data-id="${htmlText(t.object_id)}" title="Click to highlight this track"><b style="color:${COL[t.category]||"#fff"}">●</b> ${htmlText(t.object_id)} · ${htmlText(t.category)} · <span class="dim">${htmlText(t.source)}, ${t.points.length} obs${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");
+ $("objects").innerHTML=state.data.tracks.map(t=>`<li class="objrow" data-id="${htmlText(t.object_id)}" title="Click to highlight this track"><b style="color:${COL[t.category]||"#fff"}">●</b> ${htmlText(t.object_id)} · ${htmlText(t.category)} · <span class="dim">${htmlText(t.source)}, ${t.points.length} positions${t.occluded.length?", occluded "+t.occluded.map(o=>o.join("–")+"s").join(","):""}</span></li>`).join("");
  document.querySelectorAll(".objrow").forEach(el=>el.onclick=()=>{state.highlight=state.highlight===el.dataset.id?null:el.dataset.id;draw();});
  populateCfAgents();}
 
@@ -252,7 +257,7 @@ function renderInspector(r){const sc=r.scenario;const mpp=sc.calibration.metres_
   : `<b>Units:</b> pixels (uncalibrated) — <b>no metric claims</b>; declare a scale to convert`;
  $("inspector-body").innerHTML=
  `<p><b>Coordinate frame:</b> ${sc.calibration.frame} · ${unitsLine} · <b>Space:</b> ${sc.tracks[0]?sc.tracks[0].space:"—"}</p>`+
- sc.tracks.map(t=>`<p><b>${t.object_id}</b> (${t.category}) — ${t.points.length} observations, radius ${t.radius} m, source <code>${t.source}</code>${t.occluded.length?`, occluded ${t.occluded.map(o=>o.join("–"))}s (missing evidence, not numerical uncertainty)`:""}</p>`).join("")+
+ sc.tracks.map(t=>`<p><b>${htmlText(t.object_id)}</b> (${htmlText(t.category)}) — ${t.points.length} positions, radius ${t.radius} m, source <code>${htmlText(t.source)}</code>${t.occluded.length?`, occluded ${t.occluded.map(o=>o.join("–"))}s (missing evidence, not numerical uncertainty)`:""}</p>`).join("")+
  `<p class="dim">Assumption register: constant-velocity extrapolation for CPA/TTC; finite-difference velocities; smoothing (if applied) biases peaks downward and never overwrites ground truth, which is held separately in the evidence packet.</p>`+
  (r.run&&r.run.findings.pairs?`<h3>All pairs (${r.run.findings.pairs.length})</h3><table class="pairtable"><tr><th>Pair</th><th>Measured d_min (along paths)</th><th>CPA d_min (predicted)</th><th>Units</th><th>TTC</th><th>Event</th><th>Metric claims</th></tr>${r.run.findings.pairs.map(p=>`<tr><td>${p.pair.join(" ↔ ")}</td><td>${p.measured?p.measured.d_min:"—"}${p.measured&&p.measured.contact?" · contact":""}</td><td>${p.d_min??"—"}</td><td>${p.units}</td><td>${p.ttc_s??"—"}</td><td>${p.event?p.event.type:"—"}</td><td>${p.metric_claims?"yes":"no (pixel space)"}</td></tr>`).join("")}</table>`:"");}
 
@@ -493,7 +498,7 @@ state.lab={objects:[],selected:null,playing:false,t:0,nextId:{}};
 const LAB={w:Math.min(60,Math.max(6,Number(localStorage.getItem("fs-stage-w"))||16)),h:Math.min(60,Math.max(6,Number(localStorage.getItem("fs-stage-h"))||14))};
 const stageEdit=window.FrontierStageEdit;state.labEditMode="move";
 function labStatus(m){const e=$("lab-status");if(e)e.textContent=m;}
-function labId(cat){state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;return cat+"-"+state.lab.nextId[cat];}
+function labId(cat){let id;do{state.lab.nextId[cat]=(state.lab.nextId[cat]||0)+1;id=cat+"-"+state.lab.nextId[cat];}while(labObj(id));return id;}
 function labObj(id){return state.lab.objects.find(o=>o.id===id);}
 const LAB_SLOTS=[[3,3],[13,3],[3,11],[13,11],[8,7],[5,5],[11,9],[7,12]];
 function touchLab(){state.labUpdatedAt=Date.now();state.labRevision=(state.labRevision||0)+1;}
@@ -727,7 +732,7 @@ function buildPalette(){const sel=$("lab-new-cat");if(!sel)return;const cur=sel.
  sel.innerHTML=["forklift","pedestrian","robot","vehicle","cyclist","shelf"]
   .map(c=>`<option value="${c}">${c[0].toUpperCase()+c.slice(1)}${c==="shelf"?" (static)":""}</option>`).join("")+
   (state.customObjects&&state.customObjects.length
-   ?`<optgroup label="My objects">${state.customObjects.map(o=>`<option value="custom:${o.id}">✦ ${o.spec.name}</option>`).join("")}</optgroup>`:"");
+   ?`<optgroup label="My objects">${state.customObjects.map(o=>`<option value="custom:${o.id}">✦ ${htmlText(o.spec.name)}</option>`).join("")}</optgroup>`:"");
  if([...sel.options].some(o=>o.value===cur))sel.value=cur;}
 function labAddCustom(rec){const spec=rec.spec;
  const o=labAdd(spec.base_category,null,spec.base_category==="shelf"?0:1.2,spec.radius,0,"stop","straight");
@@ -804,7 +809,7 @@ function labSampleTracks(){const T=labDuration(),dt=0.1;const tracks=[];
   if(o.category!=="shelf"&&o.speed<=0&&o.waypoints.length>1)throw new Error(`${o.id} has a path but speed 0 — set a speed or make it a shelf.`);
   if(o.category!=="shelf"&&o.speed>0&&o.waypoints.length<2)throw new Error(`${o.id} is placed but has no path yet — choose Edit paths and add waypoints, or set its speed to 0 to keep it parked.`);
   const pts=[];for(let t=0;t<=T+1e-9;t=Math.round((t+dt)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
-  tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",points:pts});}
+  tracks.push({object_id:o.id,category:o.category,space:"world",radius:o.radius,source:["PREDICTED","DETERMINISTIC_PLAN","MODEL_DERIVED_PLAN"].includes(o.path_source)?o.path_source:"USER_CREATED",points:pts});}
  if(tracks.length<2)throw new Error("Create at least two components to analyse interactions.");
  return tracks;}
 function selectedModel(){const s=$("model-select");return s?s.value:"muse-spark-1.3";}
@@ -867,16 +872,18 @@ function labSetTitle(name,saved){state.labTitle=name||"Untitled scene";
 function suggestedName(base){if(base)return base;
  const cats=[...new Set(state.lab.objects.map(o=>o.category))].join(" + ")||"scene";
  return `${cats} · ${state.lab.objects.length} components · ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}`;}
-function labLoadScene(scene,label){state.labInitialized=true;
- if(Array.isArray(scene.stage_metres)&&scene.stage_metres.length===2&&scene.stage_metres.every(v=>Number.isFinite(v)&&v>=6&&v<=60)){
-  [LAB.w,LAB.h]=scene.stage_metres;$("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;$("lab-stage-label").textContent=`${LAB.w} × ${LAB.h}`;$("lab-canvas").setAttribute("aria-label",`Create Lab stage: components and paths on a ${LAB.w} by ${LAB.h} metre floor`);
-  localStorage.setItem("fs-stage-w",LAB.w);localStorage.setItem("fs-stage-h",LAB.h);
- }
- state.lab.objects=[];state.lab.selected=null;state.lab.nextId={};state.lab.t=0;state.labUpdatedAt=Date.now();
- labSetTitle(scene.name||"",false);
- (scene.objects||[]).forEach(o=>{const nl=labAdd(o.category,(o.waypoints||[]).map(w=>[+w[0],+w[1]]),+o.speed||0,+o.radius||0.5,+o.delay||0,o.mode||"stop",o.curve||"straight");
-  if(o.custom){nl.custom=o.custom;nl.displayName=o.displayName||o.custom.spec.name;}});
- labStatus(label);if(state.labView==="3d")setLabView("3d");labDraw();}
+function labLoadScene(scene,label){
+ // Prepare every component before touching current state: invalid imports or
+ // model replies cannot leave a half-loaded scene or rename saved references.
+ const ready=SceneRequest.editableScene(scene,[LAB.w,LAB.h],fitLabPath);
+ pauseLabEditing();state.labInitialized=true;[LAB.w,LAB.h]=ready.stage_metres;
+ $("lab-stage-w").value=LAB.w;$("lab-stage-h").value=LAB.h;$("lab-stage-label").textContent=`${LAB.w} × ${LAB.h}`;
+ $("lab-canvas").setAttribute("aria-label",`Create Lab stage: components and paths on a ${LAB.w} by ${LAB.h} metre floor`);
+ localStorage.setItem("fs-stage-w",LAB.w);localStorage.setItem("fs-stage-h",LAB.h);
+ state.lab.objects=ready.objects;state.lab.selected=ready.objects[0]?.id||null;state.lab.nextId={};state.lab.t=0;touchLab();
+ labSetTitle(ready.name||"",false);labRenderList();labStatus(label);
+ if(state.labView==="3d")setLabView("3d");labDraw();
+}
 document.querySelectorAll(".lab-chip").forEach(b=>b.onclick=()=>{$("lab-prompt").value=b.textContent;$("lab-generate").click();});
 $("lab-prompt").addEventListener("input",()=>{$("lab-prompt-count").textContent=$("lab-prompt").value.length;});
 const MODEL_HINTS={"muse-spark-1.3":"Latest Spark — balanced cost and quality for scene design and hypotheses.",
@@ -905,6 +912,10 @@ $("lab-generate").onclick=async()=>{
  status.textContent=`Designing ${count} candidate${count===1?"":"s"}… One scene will be selected. You can cancel.`;
  try{
   const r=await sceneRequest.run(async signal=>{
+   if(state.authConfig?.firestore_scenes_enabled&&ClerkApp?.session&&["researcher","team"].includes(state.me?.plan)){
+    const out=await api("/api/v1/scenes/generate",{method:"POST",signal,body:JSON.stringify({description:desc,model:selectedModel(),candidates:count})});
+    if(out.status!==200)throw Error(out.body.error||"Generation unavailable.");return out.body;
+   }
    const res=await fetch("/api/meta/scene",{method:"POST",signal,headers:{"Content-Type":"application/json"},
     body:JSON.stringify({prompt:desc,model:selectedModel(),candidates:count})});
    const body=await res.json();
@@ -933,6 +944,37 @@ $("lab-generate").onclick=async()=>{
   controls.forEach(control=>control.disabled=false);$("lab-cancel-generation").hidden=true;status.removeAttribute("aria-busy");
  }
 };
+// One path transaction at a time. Late replies cannot overwrite newer edits.
+const pathRequest=SceneRequest.create(35000);
+async function pathEditRequest(path,body,button,prediction=false){
+ const status=$("path-status"),revision=state.labRevision,selected=state.lab.selected;
+ if(pathRequest.busy){status.textContent="Wait for the current path request to finish.";return;}
+ button.disabled=true;status.textContent="Preparing one path update…";status.setAttribute("aria-busy","true");
+ try{
+  const reply=await pathRequest.run(signal=>api(path,{method:"POST",body:JSON.stringify(body),signal}));
+  if(reply.status!==200)throw Error(reply.body.error||"Path request failed.");
+  if(revision!==state.labRevision)throw Error("The scene changed while this request ran. The older result was discarded.");
+  let scene=reply.body.scene;
+  if(prediction){
+   const result=reply.body,points=result.staged_points||result.points;
+   scene=currentLabScene();const object=scene.objects.find(o=>o.id===selected);if(!object)throw Error("Choose an object first.");
+   object.waypoints=points.map(row=>row.slice(1));object.curve="straight";object.mode="stop";object.delay=0;
+   object.speed=Math.hypot(...result.velocity);object.path_source="PREDICTED";
+   if(object.speed>8)throw Error("Predicted speed exceeds this editor's 8 m/s limit. Check the observation units.");
+  }
+  labLoadScene(scene,"Path updated. The same floor, objects and paths will open in Video Studio and Counterfactuals.");
+  if(scene.objects.some(o=>o.id===selected)){state.lab.selected=selected;labRenderList();labDraw();}
+  status.textContent=[prediction?"Predicted route applied. Playback uses the component acceleration limits, so its timing may differ from constant-velocity extrapolation.":"One path update applied.",...(reply.body.warnings||[])].join(" ");
+ }catch(error){status.textContent=error.message+" No automatic retry was made.";}
+ finally{button.disabled=false;status.removeAttribute("aria-busy");}
+}
+$("lab-plan-form").onsubmit=event=>{event.preventDefault();if(!state.lab.selected){$("path-status").textContent="Choose a moving object first.";return;}
+ pathEditRequest("/api/paths/plan",{scene:currentLabScene(),object_id:state.lab.selected,goal:[Number($("path-goal-x").value),Number($("path-goal-y").value)]},event.submitter);};
+$("lab-path-form").onsubmit=event=>{event.preventDefault();pathEditRequest("/api/v1/paths/describe",{scene:currentLabScene(),description:$("path-description").value.trim(),model:selectedModel()},event.submitter);};
+$("lab-predict-form").onsubmit=event=>{event.preventDefault();try{const selected=labObj(state.lab.selected);if(!selected)throw Error("Choose an object first.");
+ pathEditRequest("/api/paths/predict",{points:JSON.parse($("path-observations").value),stage_metres:[LAB.w,LAB.h],radius:selected.radius,space:"world",horizon_s:3,step_s:.25},event.submitter,true);
+ }catch(error){$("path-status").textContent=error.message;}};
+$("path-open-studio").onclick=()=>goto("studio");
 // Build the starter only on first use; hidden Lab work must not block Overview.
 function ensureLabStarted(){if(state.labInitialized)return;state.labInitialized=true;if(!state.lab.objects.length)document.querySelector('[data-tpl="near-miss"]').click();}
 
@@ -959,7 +1001,7 @@ function toast(msg, kind="ok"){const host=$("toasts");if(!host)return;const d=do
 
 // ---- server accounts (first-party auth; Clerk/OIDC can replace the provider) ----
 function htmlText(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function sceneTenantKey(){return state.authConfig?.firestore_scenes_enabled ? (ClerkApp?.user?.id||"guest")+":"+(ClerkApp?.organization?.id||"personal") : null;}
+function sceneTenantKey(){return ClerkApp?.user ? ClerkApp.user.id+":"+(ClerkApp.organization?.id||"personal") : state.authConfig?.firestore_scenes_enabled ? "guest:personal" : null;}
 function hasSceneSession(){return state.authConfig?.firestore_scenes_enabled ? Boolean(ClerkApp?.session) : Boolean(sessionToken());}
 function sessionToken(){return localStorage.getItem("fs-session")||"";}
 function serverUser(){try{return JSON.parse(localStorage.getItem("fs-user")||"null");}catch(e){return null;}}
@@ -968,13 +1010,14 @@ function sceneStoreKey(){const p=serverUser();return "fs-my-scenes:"+(p?("u"+p.i
 function runsKey(){const p=serverUser();return "fs-runs:"+(p?("u"+p.id):"guest");}
 const uncertainSceneWrites=new Map();
 async function api(path, opts={}){
- const sceneRequest=path.startsWith("/api/scenes")||path.startsWith("/api/scene-context");
- if(sceneRequest)await initClerk();
- const cloud=sceneRequest&&state.authConfig?.firestore_scenes_enabled;
+ const modern=path.startsWith("/api/v1/");
+ const sceneRequest=modern||path.startsWith("/api/scenes")||path.startsWith("/api/objects")||path.startsWith("/api/scene-context");
+ if(sceneRequest&&!ClerkApp?.session)await initClerk();
+ const cloud=modern||(sceneRequest&&state.authConfig?.firestore_scenes_enabled);
  const tok=cloud?await ClerkApp?.session?.getToken():sessionToken();
  const scope=sceneTenantKey(), signature=path+String(opts.body||"");
  if(cloud&&opts.method){if(!uncertainSceneWrites.has(signature))uncertainSceneWrites.set(signature,crypto.randomUUID());
- opts={...opts,headers:{...(opts.headers||{}),"Idempotency-Key":uncertainSceneWrites.get(signature)},signal:AbortSignal.timeout(20000)};}
+ opts={...opts,headers:{...(opts.headers||{}),"Idempotency-Key":uncertainSceneWrites.get(signature)},signal:opts.signal||AbortSignal.timeout(35000)};}
  const r=await fetch(path,{...opts,headers:{"Content-Type":"application/json",...(tok?{"Authorization":"Bearer "+tok}:{}),...(cloud?{"X-Workspace-Organization":ClerkApp?.organization?.id||"personal"}:{}),...(opts.headers||{})}});
  let body={};try{body=await r.json();}catch(e){}
  if(cloud&&scope!==sceneTenantKey())throw new Error("Workspace changed; refresh before continuing.");
@@ -1008,7 +1051,7 @@ $("auth-signout").onclick=async()=>{if(ClerkApp?.user)await ClerkApp.signOut();a
  localStorage.removeItem("fs-session");localStorage.removeItem("fs-user");
  await refreshMe();renderMyScenes();toast("Signed out.","warn");goto("home");};
 $("auth-goto-app").onclick=()=>goto("workspace");
-async function manageBilling(){const out=await api("/api/billing/portal",{method:"POST"});
+async function manageBilling(){const out=await api("/api/v1/billing/portal",{method:"POST"});
  if(out.status===200&&out.body.url){location.href=out.body.url;return;}
  const el=$("auth-billing-status")||$("byok-status");
  if(el)el.textContent=out.body.error||"Billing portal unavailable.";
@@ -1017,11 +1060,11 @@ $("auth-billing").onclick=manageBilling;
 $("manage-billing").onclick=manageBilling;
 $("byok-save").onclick=async()=>{const key=$("byok-key").value.trim();
  if(!key){$("byok-status").textContent="Paste your Meta API key first.";return;}
- const out=await api("/api/keys/meta",{method:"PUT",body:JSON.stringify({key})});
+ const out=await api("/api/v1/provider-key/save",{method:"POST",body:JSON.stringify({key})});
  $("byok-status").textContent=out.status===200?`Saved (…${out.body.last4}). It will never be shown again.`
   :out.status===402?out.body.error+" — see Pricing.":(out.body.error||"Could not save the key.");
  if(out.status===200)$("byok-key").value="";refreshMe();};
-$("byok-delete").onclick=async()=>{const out=await api("/api/keys/meta",{method:"PUT",body:JSON.stringify({delete:true})});
+$("byok-delete").onclick=async()=>{const out=await api("/api/v1/provider-key/delete",{method:"POST",body:"{}"});
  $("byok-status").textContent=out.status===200?"Your key was removed.":(out.body.error||"Could not remove the key.");refreshMe();};
 
 // ---- run history ----
@@ -1058,19 +1101,23 @@ function updatePricing(){const annual=$("bill-toggle").getAttribute("aria-presse
  $("billing-period-label").textContent=annual?"Billed annually":"Billed monthly";
  $("bill-toggle").textContent=annual?"Choose monthly billing":"Choose annual billing";
  const available=state.billing?.periods?.[annual?"annual":"monthly"]===true;
- $("sub-action").textContent=available?"Choose Researcher":"Request Researcher access";
- $("billing-availability").textContent=available?(state.billing.mode==="live"?"Secure checkout with Stripe. Manage your subscription from your account.":"Checkout is in test mode; no live payments are collected."):"Researcher enrollment is opening soon. Contact us to arrange access; Explorer is ready to use.";
+ const intro=$("first-period-offer");intro.hidden=!(available&&state.billing?.first_period_discount_pct===50);
+ intro.textContent=annual?"New subscribers: $95 for the first year, then $190/year. 50% off the first billing period only.":"New subscribers: $9.50 for the first month, then $19/month. 50% off the first billing period only.";
+ $("sub-action").textContent=available?"Continue to Stripe Checkout":"Checkout unavailable";
+ $("billing-availability").textContent=available?(state.billing.mode==="live"?"Secure checkout with Stripe. Manage your subscription from your account.":"Checkout is in test mode; no live payments are collected."):"Checkout is temporarily unavailable. Please try again later.";
 }
 async function refreshBillingAvailability(){try{const response=await fetch("/api/billing/config");if(!response.ok)throw Error("unavailable");state.billing=await response.json();}catch(error){state.billing=null;}updatePricing();}
 $("bill-toggle").onclick=()=>{$("bill-toggle").setAttribute("aria-pressed",String($("bill-toggle").getAttribute("aria-pressed")!=="true"));updatePricing();};
 $("sub-btn").onclick=async()=>{
+ if($("sub-btn").disabled)return;$("sub-btn").disabled=true;try{
  await refreshBillingAvailability();const annual=$("bill-toggle").getAttribute("aria-pressed")==="true",period=annual?"annual":"monthly";
- if(!state.billing?.periods?.[period]){openQuote();$("q-needs").value=`Researcher ${period} access — ${annual?"$190/year":"$19/month"}.`;return;}
- const me=state.me||await refreshMe();
- if(!me.authenticated){toast("Sign in to continue with Researcher.","warn");goto("auth");return;}
- const out=await api("/api/billing/checkout",{method:"POST",body:JSON.stringify({period})});
+ if(!state.billing?.periods?.[period]){toast("Stripe Checkout is being configured. No payment was taken.","warn");return;}
+ await initClerk();
+ if(!ClerkApp?.session){toast("Sign in to continue with Researcher.","warn");goto("auth");return;}
+ const out=await api("/api/v1/billing/checkout",{method:"POST",body:JSON.stringify({period})});
  if(out.status===200&&out.body.url){location.href=out.body.url;return;}
  toast(out.body.code==="BILLING_NOT_CONFIGURED"?"Checkout is temporarily unavailable. No payment was taken.":out.body.error||"Checkout could not be started.","warn");
+}finally{$("sub-btn").disabled=false;}
 };
 function openQuote(){$("quote-card").classList.remove("hidden");$("quote-card").scrollIntoView({behavior:"smooth"});}
 $("quote-open").onclick=openQuote;
@@ -1397,7 +1444,6 @@ $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capt
 
 
 // ---- Clerk (identity + billing) — config-gated, first-party auth stays the fallback ----
-let ClerkApp = null;
 async function syncClerkSession() {
   if (!ClerkApp || !ClerkApp.user) return;
   try {
@@ -1462,7 +1508,7 @@ async function loadClerk() {
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
       renderClerkSignIn(user);
       const currentTenant=sceneTenantKey();
-      if(currentTenant!==previousTenant){previousTenant=currentTenant;state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();
+      if(currentTenant!==previousTenant){previousTenant=currentTenant;$("agent-key-once").textContent="";$("agent-key-list").replaceChildren();$("byok-key").value="";sceneRequest.cancel();pathRequest.cancel();state.customObjects=[];buildPalette();state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();
         if(state.lab){state.lab.objects=[];state.lab.running=false;touchLab();resetRunState();state.data=null;state.scenario=null;$("objects").replaceChildren();$("studio-scene-size").textContent="";$("cf-scene-size").textContent="";const canvas=$("stage");canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);window.__studio3dSync?.([],0);window.__cf3dSync?.(null,0);labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
       if (user) syncClerkSession();
       else if (localStorage.getItem("fs-auth-provider") === "clerk") {
@@ -1600,7 +1646,7 @@ $("voice-fallback").onclick = () => {
 // ---- custom objects: Muse-designed, Muse Image-rendered, saved to your profile ----
 state.customObjects = state.customObjects || [];
 state._sprites = state._sprites || {};
-function objStoreKey(){const u=(typeof serverUser==="function")?serverUser():null;return "fs-custom-objects:"+(u?("u"+u.id):"guest");}
+function objStoreKey(){if(sceneTenantKey())return "fs-custom-objects:"+sceneTenantKey();const u=(typeof serverUser==="function")?serverUser():null;return "fs-custom-objects:"+(u?("u"+u.id):"guest");}
 function drawCustom2D(x,o,cx,cy,r,hd){
  const spec=o.custom.spec;
  const img=o.custom.image?getSprite(o.custom.id,o.custom.image):null;
@@ -1629,7 +1675,7 @@ async function resizeImageForSave(dataUrl,max=256){
 async function loadCustomObjects(){
  let local=[];try{local=JSON.parse(localStorage.getItem(objStoreKey())||"[]");}catch(e){}
  let server=[];
- if(sessionToken()){try{const out=await api("/api/objects");
+ if(hasSceneSession()){try{const out=await api("/api/objects");
    if(out.status===200)server=out.body.objects.map(o=>({id:o.id,name:o.name,spec:o.spec,image:o.image,server:true}));}catch(e){}}
  const byId=new Map();
  for(const o of server)byId.set(o.id,o);
@@ -1637,7 +1683,7 @@ async function loadCustomObjects(){
  state.customObjects=[...byId.values()];
  buildPalette();}
 async function saveCustomObject(rec){
- if(sessionToken()){
+ if(hasSceneSession()){
   const out=await api("/api/objects",{method:"POST",body:JSON.stringify({spec:rec.spec,image:rec.image})});
   if(out.status===201){rec.id=out.body.id;rec.server=true;}
   else if(out.status===402){toast(out.body.error+" — saved in this browser instead.","warn");}
@@ -1677,3 +1723,21 @@ loadCustomObjects();
 $("workspace-more")?.addEventListener("click",loadMoreWorkspaces);
 
 $("scene-environment").onchange=event=>{window.frontierSceneryChoice=event.target.value;draw();labDraw();drawCfMap();};
+
+// API keys are shown once, never persisted to browser storage or URLs.
+$("agent-key-form").onsubmit=async event=>{event.preventDefault();const button=event.submitter;button.disabled=true;
+ try{const scopes=["read"];if($("agent-key-write").checked)scopes.push("write");if($("agent-key-model").checked)scopes.push("model");
+ const result=await api("/api/v1/keys/create",{method:"POST",body:JSON.stringify({name:$("agent-key-name").value.trim(),scopes,days:30})});
+ if(result.status!==200)throw Error(result.body.error||"Key creation failed.");
+ $("agent-key-once").textContent=result.body.key;$("agent-key-status").textContent="Copy this key now. It expires "+result.body.expiresAt+". Keep it private.";
+ }catch(error){$("agent-key-status").textContent=error.message;}finally{button.disabled=false;}};
+$("agent-keys-refresh").onclick=async()=>{const host=$("agent-key-list");host.replaceChildren();try{
+ const result=await api("/api/v1/keys/list",{method:"POST",body:"{}"});if(result.status!==200)throw Error(result.body.error);
+ for(const key of result.body.keys){const row=document.createElement("p");row.append(document.createTextNode(key.name+" · "+key.prefix+"… · "+key.scopes.join(", ")+" · "+(key.revoked?"revoked":key.expiresAt)+" "));
+ if(!key.revoked){const revoke=document.createElement("button");revoke.type="button";revoke.className="ghostbtn";revoke.textContent="Revoke";revoke.onclick=async()=>{revoke.disabled=true;const response=await api("/api/v1/keys/revoke",{method:"POST",body:JSON.stringify({id:key.id})});if(response.status===200)$("agent-keys-refresh").click();else{revoke.disabled=false;$("agent-key-status").textContent=response.body.error;}};row.append(revoke);}host.append(row);}
+ }catch(error){$("agent-key-status").textContent=error.message;}};
+
+window.addEventListener("popstate",()=>showView(Object.keys(VIEW_PATHS).find(key=>VIEW_PATHS[key]===location.pathname)||"home",false));
+const initialView=Object.keys(VIEW_PATHS).find(key=>VIEW_PATHS[key]===location.pathname);
+if(initialView&&initialView!=="home")showView(initialView,false);
+if(new URLSearchParams(location.search).get("billing")==="success")toast("Checkout returned. Your plan is verified directly with Stripe when you use paid features.");

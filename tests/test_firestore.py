@@ -194,3 +194,19 @@ def test_http_rejects_malformed_bodies_methods_and_dependency_failures(http_serv
             patch.setattr(workspace_http,'database',unavailable)
             response=transport.get(base+'/api/scenes',headers=headers)
             assert response.status_code==503 and 'provider-details' not in response.text
+
+
+def test_local_contention_is_bounded_and_releases_after_failure():
+    from services.api.firestore_scenes import _local_guard, _transaction_error
+    from google.api_core.exceptions import Aborted
+    with _local_guard('tenant-example'):
+        with pytest.raises(WorkspaceError) as busy:
+            with _local_guard('tenant-example',timeout=0):pass
+        assert busy.value.status==429
+    with pytest.raises(ValueError):
+        with _local_guard('tenant-example'):raise ValueError('validation failed')
+    with _local_guard('tenant-example',timeout=0):pass
+    exhausted=ValueError('transaction failed');exhausted.__cause__=Aborted('lock timeout')
+    with pytest.raises(WorkspaceError) as retry:_transaction_error(exhausted)
+    assert retry.value.status==503
+    with pytest.raises(ValueError):_transaction_error(ValueError('ordinary validation error'))

@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-29",
+  "python_tests_passed": 246,
+  "python_test_warnings": 12,
+  "node_tests_passed": 28,
+  "provider_tests": "fixtures; live Stripe catalog configured, no live payment or inference claim",
+  "hardware": "not required for planar CPU algorithms; no physical/GPU validation claimed",
+  "coverage": {
+    "full": {
+      "line_pct": 89.44,
+      "branch_pct": 76.98,
+      "lines_covered": 3186,
+      "lines_valid": 3562
+    },
+    "workbench-new": {
+      "line_pct": 97.98,
+      "branch_pct": 90.93,
+      "lines_covered": 824,
+      "lines_valid": 841
+    },
+    "workbench-release": {
+      "line_pct": 100.0,
+      "branch_pct": 96.67,
+      "lines_covered": 220,
+      "lines_valid": 220
+    }
+  },
+  "source_sha256": {
+    "agents/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "agents/scene_heuristic.py": "9c0777a98faebcb7a855137d288491d3cd0f4d5011ced29cca8b7c3f1a17b51c",
+    "agents/workflow.py": "df019f0d3870c7038544bdf5459eeba9a1eccdd67c0be7be73913c90eb83d621",
+    "engine/counterfactual.py": "825319ed4a819f7516d4db3f629037bb7309daa870aa69bf50529cb528312996",
+    "engine/curves.py": "cd368ee15a7cab047a5c4a4c996914bb9bd4fb46ee379e58d31e7a4e015a5427",
+    "engine/geometry.py": "6e2be687b8fa1ec0716e78cfe26d583e4f133aadd85f5f2958ae44e132e07680",
+    "engine/iou_tracking.py": "82609ef02228826b4645383050d8b07c61019c91d8fed87c4ab1786e31052da6",
+    "engine/kinematics.py": "d7e9db0bc26ff2ad48414f0482994fbd5686d96d8192274097b4d0d0f3f3dd06",
+    "engine/multi.py": "60aaf286bf856cb1a64e1d89562d213628ed40b70ef12deef19ac7d9cdaa74c5",
+    "engine/path_automation.py": "11571f1d5821db4df5e26952be7c1a10e0b156f00715b5ef5d00b6b327f9e80e",
+    "engine/pathsim.py": "5b0c6a71eceb05f0ce5fa9d193dccede474f970d5870f98b1bb929b4c686fd50",
+    "engine/scenarios.py": "73f32d2e3532e6a2dbdc09a23752228aba0e5b9522d1e6e944b4ccb6bfb0e0df",
+    "engine/scene_edit.py": "6833a32fc2d4728aed387d824aa1a8603c24dbc22940e5935667120fb79e210a",
+    "engine/scene_media.py": "bb9c50fd7f7ed877958e0443b184da2ff2d4a76a37dae030a2d769d8ba0e64f7",
+    "engine/tracking.py": "f09275a2f9b73f1b774e30647da5f71a8945394e027005720a1b758a971bbcd0",
+    "engine/uncertainty.py": "9f68f7de9a7e65ebd5c67d478727a74c6ca7f6facabb28bb33efdb4735e9e49b",
+    "engine/validation.py": "9e70dc799ceb2f0c4f29dac18df83dc5bf5c6c4cee7394ee43c414f4bc7ea6e8",
+    "integrations/billing.py": "cd5419d191a8c799c24e702d44acba88cad16c06f04d2218716f3c9bc28d54aa",
+    "integrations/clerk_auth.py": "2bc67bce17c0d4837d7cfb272a7da27472ad7861812fa8aab8e7dec2ea190dea",
+    "integrations/clerk_billing.py": "6eea9891cd4fc2254eb97799ddf3e393e2d309d99853e81a973c50ab459ba895",
+    "integrations/meta/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "integrations/meta/credentials.py": "fb798e21f46b184c898d3c002aeafe40a1fb2c2d90c5f3a0da14f74baab6a316",
+    "integrations/meta/image.py": "d12119ccef2db29f32c9ba31d281bfd5d85bf09b7fc559ba3dd231eb36c2ca47",
+    "integrations/meta/path_edit.py": "72e7f92290519ddff81e1c2332994004c15c64272b3c3570febd5e00a5de3adf",
+    "integrations/meta/sam.py": "b5c9e1ff7cdf531b21ec4877bcb9b56502f80f51332b7c51813e2de5086a49c5",
+    "integrations/meta/spark.py": "936605fefaa2a7f02dac11ea0bdfce22c42e71e118c79a6789e3dc3c93c87ef9",
+    "integrations/meta/voice.py": "2a1ce81831714386e1ca63a6d70f35d916499b08362396941b3c6ed4c70049a9",
+    "services/api/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "services/api/access_keys.py": "adce24094fecf2b6200bbccfbf4e013e27346fc71fd94ccc2a389c6a906d5154",
+    "services/api/clerk_auth.py": "78a6f830e8d844e7dce35a60595f44e9abdfa9f7e5ab753489a073dc9d7270c3",
+    "services/api/firestore_scenes.py": "73ae428035cf9a0324ec85a6d353e07253c883955a990058b323506944da9101",
+    "services/api/mcp.py": "2f2c8046c12f8350efbf589f44f5534f651ce075ca5290edf7ca5cd73c85ac53",
+    "services/api/server.py": "16f0e3ad86d89ce1d769a12f3372722c884f3bb698fc99b3a2957e7f77e61b12",
+    "services/api/store.py": "77d57c233d3cd7e59a680cc77509ef1d03a90a3224e11a7704a7fbfd4008f311",
+    "services/api/workbench.py": "a3096bec916e3d4733289f8e19304da7a1670220d7e131c086f10d25e38b187e",
+    "services/api/workbench_contract.py": "6ca039fe68942d072b33a67bf34f0a5167bd9b6c852df417d52b2f2a54df00ed",
+    "services/api/workbench_http.py": "6fddf9fba4b9245a7cb0dbf7ede1ddd6df75ea4b2c0edc69527cd891ad4be8ce",
+    "services/api/workspace_http.py": "3904182eecf809adc2686ae6b439c4af344775eec97200f6d5558237e2288a20"
+  }
+}

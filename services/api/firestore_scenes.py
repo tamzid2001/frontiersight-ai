@@ -13,6 +13,29 @@ import math
 import os
 import re
 import uuid
+from threading import Lock
+from contextlib import contextmanager
+
+_LOCAL_LOCKS = tuple(Lock() for _ in range(64))
+
+
+@contextmanager
+def _local_guard(path, timeout=2):
+    """Bound same-process contention; Firestore remains the cross-process authority."""
+    lock = _LOCAL_LOCKS[int(hashlib.sha256(path.encode()).hexdigest()[:8],16) % len(_LOCAL_LOCKS)]
+    if not lock.acquire(timeout=timeout):
+        raise WorkspaceError(429, "workspace_busy_retry_same_request")
+    try:
+        yield
+    finally:
+        lock.release()
+
+
+def _transaction_error(error):
+    from google.api_core.exceptions import Aborted
+    if isinstance(error.__cause__, Aborted):
+        raise WorkspaceError(503, "transaction_contention_retry_same_request") from None
+    raise error
 
 from services.api.clerk_auth import Identity, WorkspaceError
 
@@ -23,6 +46,13 @@ def _canonical(value):
 
 def _digest(value):
     return hashlib.sha256(_canonical(value).encode()).hexdigest()
+
+
+def decode_row(row):
+    if 'payloadJson' in row:
+        row = {**row, 'payload': json.loads(row['payloadJson'])}
+        row.pop('payloadJson')
+    return row
 
 
 def validate_payload(payload):
@@ -83,7 +113,7 @@ def client(env=None):
 
 
 class Scenes:
-    def __init__(self, database, identity: Identity, secret: str, *, clock=None):
+    def __init__(self, database, identity: Identity, secret: str, *, clock=None, resource="scenes"):
         if not isinstance(identity, Identity):
             raise WorkspaceError(401, "verified_identity_required")
         if len(secret) < 32:
@@ -91,8 +121,12 @@ class Scenes:
         self.db, self.identity, self.secret = database, identity, secret
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.root = database.collection("quantura_web").document("frontiersight-ai").collection("tenants").document(identity.tenant)
+        if resource not in ("scenes", "objects", "media"):
+            raise WorkspaceError(400, "unsupported_resource")
+        if resource != "scenes":
+            self.root = self.root.collection("libraries").document(resource)
         self.records = self.root.collection("records")
-        self.maximum, self.mutations = (25, 100) if identity.plan == "explorer" else (5000, 20000)
+        self.maximum, self.mutations = ((12 if resource == "objects" else 25 if resource == "media" else 10), 100) if identity.plan == "explorer" else (5000, 20000)
 
     @staticmethod
     def _id(value):
@@ -106,7 +140,14 @@ class Scenes:
         if after:
             self._id(after)
             query = query.start_after({"id": after})
-        return [row.to_dict() for row in query.stream(timeout=10)]
+        return [decode_row(row.to_dict()) for row in query.stream(timeout=10)]
+
+    def get(self, record_id):
+        self._id(record_id)
+        row = self.records.document(record_id).get(timeout=10)
+        if not row.exists:
+            raise WorkspaceError(404, "record_not_found")
+        return decode_row(row.to_dict())
 
     def consume_request(self, maximum=None):
         maximum = maximum or (60 if self.identity.plan == "explorer" else 300)
@@ -121,7 +162,9 @@ class Scenes:
             if count >= maximum:
                 raise WorkspaceError(429, "request_rate_limit")
             tx.set(ref, {"used": count + 1, "expiresAt": now + timedelta(days=2)})
-        consume(self.db.transaction(max_attempts=5))
+        with _local_guard(self.root.path):
+            try: consume(self.db.transaction(max_attempts=5))
+            except ValueError as error: _transaction_error(error)
 
     def mutate(self, operation, body, key):
         if operation not in ("create", "update", "delete") or not isinstance(body, dict):
@@ -171,7 +214,7 @@ class Scenes:
                 raise WorkspaceError(429, "workspace_record_limit")
             if operation != "create" and not prior.exists:
                 raise WorkspaceError(404, "scene_not_found")
-            old = prior.to_dict() or {}
+            old = decode_row(prior.to_dict() or {})
             if operation != "create" and old["version"] != body["expectedVersion"]:
                 raise WorkspaceError(409, "scene_version_conflict")
             row = {"id": record_id, "title": body.get("name", old.get("title")),
@@ -189,7 +232,12 @@ class Scenes:
             if operation == "delete":
                 transaction.delete(ref)
             else:
-                transaction.set(ref, row)
+                # Firestore forbids arrays directly containing arrays. Preserve
+                # exact JSON geometry (including waypoint matrices) as a bounded
+                # canonical string instead of lossy flattening or coordinate maps.
+                encoded = dict(row)
+                encoded['payloadJson'] = _canonical(encoded.pop('payload'))
+                transaction.set(ref, encoded)
             transaction.set(self.root, {"period": period, "mutations": used + 1,
                 "recordCount": count + (1 if operation == "create" else -1 if operation == "delete" else 0),
                 "auditSequence": sequence + 1, "auditHead": digest}, merge=True)
@@ -198,4 +246,6 @@ class Scenes:
                 "expiresAt": now + timedelta(days=7), "createdAt": timestamp})
             return {**result, "replayed": False}
 
-        return apply(self.db.transaction(max_attempts=5))
+        with _local_guard(self.root.path):
+            try: return apply(self.db.transaction(max_attempts=5))
+            except ValueError as error: _transaction_error(error)

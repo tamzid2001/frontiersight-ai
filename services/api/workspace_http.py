@@ -26,7 +26,7 @@ def identity(handler):
 
 def handle(handler, route, method):
     """True means this adapter sent a response; legacy SQL is never a fallback."""
-    supported = ("/api/scenes", "/api/scenes/update", "/api/scenes/delete", "/api/scene-context")
+    supported = ("/api/scenes", "/api/scenes/update", "/api/scenes/delete", "/api/scene-context", "/api/objects", "/api/objects/delete")
     if not enabled() or route not in supported:
         return False
     try:
@@ -42,7 +42,38 @@ def handle(handler, route, method):
             handler._send(200, {"userId": actor.user_id, "orgId": actor.org_id,
                 "orgRole": actor.org_role, "plan": actor.plan, "storage": "firestore"})
             return True
-        store = Scenes(database(), actor, os.environ.get("WORKSPACE_AUDIT_SECRET", ""))
+        from integrations import clerk_billing
+        if clerk_billing.enabled() and not actor.org_id:
+            from dataclasses import replace
+            actor = replace(actor, plan=clerk_billing.plan(actor.user_id))
+        object_library = route.startswith("/api/objects")
+        store = Scenes(database(), actor, os.environ.get("WORKSPACE_AUDIT_SECRET", ""), resource="objects" if object_library else "scenes")
+        if object_library:
+            store.consume_request()
+            if method == "GET" and route == "/api/objects":
+                query = parse_qs(urlparse(handler.path).query)
+                rows = store.list(limit=100, after=query.get("after", [None])[0])
+                handler._send(200, {"objects": [{"id":row["id"],"name":row["title"],"spec":row["payload"]["spec"],
+                    "image":row["payload"].get("image"),"version":row["version"]} for row in rows],
+                    "next":rows[-1]["id"] if len(rows)==100 else None})
+                return True
+            if method != "POST": raise WorkspaceError(405,"post_required")
+            from services.api.workbench_http import body as read_body
+            body = read_body(handler, maximum=300000)
+            if route.endswith("delete"):
+                request = {"id":body.get("id"), "expectedVersion":body.get("expectedVersion")}
+                operation = "delete"
+            else:
+                from integrations.meta.spark import validate_custom_object
+                from services.api.workbench import decode_frame
+                spec = validate_custom_object(body.get("spec") or {})
+                image = body.get("image")
+                if image: decode_frame(image)
+                request = {"name":spec["name"],"payload":{"spec":spec,"image":image}}
+                operation = "create"
+            result = store.mutate(operation, request, handler.headers.get("Idempotency-Key", ""))
+            handler._send(201 if operation=="create" else 200, result)
+            return True
         store.consume_request()
         if route == "/api/scenes" and method == "GET":
             query = parse_qs(urlparse(handler.path).query)

@@ -1,13 +1,14 @@
 """Muse Image — illustrative concept visuals ONLY. Generated imagery is never
 evidence and never substitutes for verified simulation or observed video."""
 from __future__ import annotations
+from .credentials import api_key
 import json, os, urllib.request, urllib.error
 from .spark import BlockedCredentials, BASE
 
 MODEL = os.environ.get("META_IMAGE_MODEL", "muse-image-1.0")
 
 def generate_illustration(prompt: str, timeout: int = 90) -> dict:
-    key = os.environ.get("MODEL_API_KEY", "").strip()
+    key = api_key()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
     req = urllib.request.Request(BASE + "/images/generations", method="POST",
         data=json.dumps({"model": MODEL, "prompt": prompt}).encode(),

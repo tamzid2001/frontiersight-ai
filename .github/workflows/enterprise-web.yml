@@ -1,9 +1,9 @@
 name: Enterprise web and Firestore verification
 on:
   push:
-    paths: ['packages/enterprise-web/**', 'services/api/clerk_auth.py', 'services/api/firestore_scenes.py', 'services/api/workspace_http.py', 'tests/test_firestore.py', 'scripts/verify-firestore-emulator.sh', '.github/workflows/enterprise-web.yml']
+    paths: ['packages/enterprise-web/**', 'services/api/clerk_auth.py', 'services/api/firestore_scenes.py', 'services/api/workspace_http.py', 'services/api/workbench*.py', 'services/api/access_keys.py', 'integrations/clerk_billing.py', 'integrations/meta/path_edit.py', 'engine/path_automation.py', 'engine/scene_media.py', 'tests/test_workbench.py', 'tests/test_clerk_billing.py', 'tests/test_path_automation.py', 'tests/test_firestore.py', 'scripts/verify-firestore-emulator.sh', '.github/workflows/enterprise-web.yml']
   pull_request:
-    paths: ['packages/enterprise-web/**', 'services/api/**', 'tests/test_firestore.py']
+    paths: ['packages/enterprise-web/**', 'services/api/**', 'integrations/**', 'engine/**', 'tests/test_workbench.py', 'tests/test_clerk_billing.py', 'tests/test_path_automation.py', 'tests/test_firestore.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,3 +40,5 @@ jobs:
             packages/enterprise-web/coverage/cobertura-coverage.xml
             packages/enterprise-web/coverage/lcov.info
             coverage/firestore.xml
+            coverage/workbench-new.xml
+            coverage/workbench-new.lcov
