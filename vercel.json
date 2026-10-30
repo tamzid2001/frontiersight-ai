@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/request-scope-core.mjs",
+      "destination": "/api/index?ep=scopejs"
+    },
+    {
       "source": "/edge-studio.mjs",
       "destination": "/api/index?ep=edgejs"
     },

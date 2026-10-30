@@ -120,6 +120,7 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         if ep == "apiguide": return "/api-guide.html"
         if ep == "path": return "/api/paths/" + parse_qs(u.query).get("operation", [""])[0]
+        if ep == "scopejs": return "/request-scope-core.mjs"
         if ep == "edgejs": return "/edge-studio.mjs"
         if ep == "physicaljs": return "/physical-intelligence.mjs"
         if ep == "physicalcss": return "/physical-intelligence.css"

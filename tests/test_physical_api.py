@@ -29,7 +29,7 @@ def test_actual_http_mcp_and_direct_parity(http_server):
     assert result==direct==json.loads(mcp_result['content'][0]['text'])
     capabilities=json.load(urllib.request.urlopen(http_server+'/api/v2/capabilities'))
     assert capabilities['physical_actuation'] is False
-    for path in ('/physical-intelligence','/physical-intelligence.mjs','/physical-intelligence.css'):
+    for path in ('/physical-intelligence','/physical-intelligence.mjs','/physical-intelligence.css','/request-scope-core.mjs'):
         with urllib.request.urlopen(http_server+path) as response: assert response.status==200
     bad=deepcopy(scene);bad['schema_version']='0'
     with pytest.raises(urllib.error.HTTPError) as e:
