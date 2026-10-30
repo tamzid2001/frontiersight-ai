@@ -104,6 +104,7 @@ function showView(v,history=true){
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
  if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
  if(v==="physical")ensurePhysical().catch(error=>{$("pi-status").textContent=error.message;});
+ if(v==="settings")loadMcpTools();
  if(v==="auth")initClerk();
  if(v==="pricing")refreshBillingAvailability();
  if(v==="workspace"){loadScenarioCounts();loadWorkspaces();}
@@ -1459,12 +1460,13 @@ $("sam-save-ws").onclick=async()=>{if(!state.samCaptures.length){samStatus("Capt
  if(await persistWorkspace(w)){toast(`Frame workspace saved${w.server?" on the server":" in this browser"}${image?"":" (frame image too large to store — captures kept)"}.`);loadWorkspaces();}};
 
 // ---- MCP server card (Settings) ----
-(async()=>{const el=$("mcp-tools");if(!el)return;
+let mcpToolsLoaded=false;
+async function loadMcpTools(){const el=$("mcp-tools");if(!el||mcpToolsLoaded)return;mcpToolsLoaded=true;
  try{const r=await fetch("/api/mcp");const d=await r.json();
   $("mcp-endpoint").textContent=location.origin+"/api/mcp";
   el.innerHTML=`<b>${d.name} v${d.version}</b> · protocol ${d.protocol} · ${(d.tools||[]).length} tools<br>`+
    (d.tools||[]).map(t=>`<code>${t.name}</code>`).join(" · ");
- }catch(e){el.textContent="MCP endpoint unreachable from this browser.";}})();
+ }catch(e){mcpToolsLoaded=false;el.textContent="MCP endpoint unreachable from this browser.";}}
 
 
 // ---- Clerk (identity + billing) — config-gated, first-party auth stays the fallback ----

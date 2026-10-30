@@ -24,7 +24,7 @@ jobs:
           print("TBT:", d["audits"]["total-blocking-time"].get("displayValue"))
           requests = d["audits"]["network-requests"]["details"]["items"]
           assert not any("/assets/sam-gallery/" in r["url"] or "/image-scene.mjs" in r["url"] for r in requests), "Hidden segmentation views must load on demand"
-          assert not any(any(asset in r["url"] for asset in ("/physical-intelligence.mjs", "/physical-intelligence.css", "/edge-studio.mjs", "/vendor/three")) for r in requests), "Hidden 3D/video workbenches must load on demand"
+          assert not any(any(asset in r["url"] for asset in ("/physical-intelligence.mjs", "/physical-intelligence.css", "/edge-studio.mjs", "/vendor/three", "/api/mcp")) for r in requests), "Hidden 3D/video workbenches must load on demand"
           limits = {"performance": 90}
           failing = {k: v for k, v in scores.items() if v < limits.get(k, 95)}
           if failing:
