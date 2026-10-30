@@ -42,14 +42,15 @@ JOINT=obj({"type":{"const":"prismatic_z"},"start_s":num(0,30),"initial_m":num(0,
 BODY=obj({"id":IDENTITY,"label":TEXT,"pose":POSE,"velocity_mps":vec(-200,200),
           "acceleration_mps2":vec(-100,100),"angular_velocity_radps":vec(-20,20),
           "geometry":GEOMETRY,"physics":PROFILE,"parent_id":IDENTITY,"joint":JOINT,
-          "attachment":{"const":"rigid_assumption"},"provenance":{"enum":["MODEL_DERIVED","DETERMINISTIC","FIXTURE","ASSUMPTION","HARDWARE_OBSERVATION"]},
+          "load_bearing_payload":{"type":"boolean"},"attachment":{"const":"rigid_assumption"},"provenance":{"enum":["MODEL_DERIVED","DETERMINISTIC","FIXTURE","ASSUMPTION","HARDWARE_OBSERVATION"]},
+          "waypoints":{ "type":"array","items":obj({"t_s":num(0,30),"position_m":vec()},["t_s","position_m"]),"minItems":2,"maxItems":16},
           "uncertainty_radius_m":num(0,100)},["id","pose","geometry","physics","provenance"])
 CALIBRATION=obj({"status":{"enum":["ASSUMPTION_3D","CALIBRATED_METRIC_3D","ESTIMATED_3D"]},
                  "method":{"enum":["simulation","declared_scale","depth_sensor","stereo","surveyed_geometry"]},
                  "evidence_id":TEXT,"uncertainty_m":num(0,100),"assumptions":LABELS},
                 ["status","method","uncertainty_m","assumptions"])
 SCENE=obj({"schema_version":{"const":"2.0"},"coordinate_frame":{"const":"world_enu"},"units":{"const":"SI"},
-           "name":TEXT,"calibration":CALIBRATION,"duration_s":num(.01,30),"step_s":num(.01,.25),
+           "source_time_s":num(0,1e12),"name":TEXT,"calibration":CALIBRATION,"duration_s":num(.01,30),"step_s":num(.01,.25),
            "objects":{"type":"array","items":BODY,"minItems":1,"maxItems":16},
            "excluded_pairs":{"type":"array","items":{"type":"array","items":IDENTITY,"minItems":2,"maxItems":2},"maxItems":32},
            "assumptions":LABELS},["schema_version","coordinate_frame","units","name","calibration","duration_s","step_s","objects","assumptions"])

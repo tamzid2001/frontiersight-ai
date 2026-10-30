@@ -109,3 +109,19 @@ def sweep(a, pa0, pa1, b, pb0, pb1, margin=0.):
             entry=max(entry,t0);exit=min(exit,t1)
             if entry>exit: return None,'swept_aabb'
     return entry,('exact_linear_aabb' if exact else 'conservative_swept_aabb')
+
+
+def closest_approach(position_a,velocity_a,radius_a,position_b,velocity_b,radius_b,horizon_s):
+    """Exact constant-linear-velocity sphere CPA/TTC in declared SI units."""
+    from .spatial3d import finite
+    pa,pb=V.read(position_a),V.read(position_b);va,vb=V.read(velocity_a),V.read(velocity_b)
+    ra=finite(radius_a,'radius_a',0,100);rb=finite(radius_b,'radius_b',0,100)
+    horizon=finite(horizon_s,'horizon_s',.001,30)
+    delta=pb-pa;relative=vb-va;speed2=relative.dot(relative)
+    at_s=max(0.,min(horizon,-delta.dot(relative)/speed2)) if speed2 else 0.
+    clearance=(delta+relative*at_s).norm()-ra-rb
+    shape_a={'kind':'sphere','radius_m':ra};shape_b={'kind':'sphere','radius_m':rb}
+    fraction,_=sweep(shape_a,Pose3D(pa),Pose3D(pa+va*horizon),shape_b,Pose3D(pb),Pose3D(pb+vb*horizon))
+    return {'closest_approach_s':at_s,'clearance_m':clearance,'relative_velocity_mps':relative.array(),
+            'time_to_contact_s':None if fraction is None else fraction*horizon,'method':'exact_constant_velocity_spheres',
+            'provenance':'DETERMINISTIC','input_status':'user_declared_SI_not_independently_measured'}

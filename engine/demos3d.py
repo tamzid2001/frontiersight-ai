@@ -28,23 +28,21 @@ def base(name,objects,duration=12):
 def warehouse():
     chassis=body('chassis',[2,4,.65],[.85,.55,.65],'ground',velocity_mps=[.4,0,0],
                  physics=profile('ground',mass_kg=3500,max_payload_kg=1000,elevated_above_m=.8,elevated_speed_limit_mps=.3))
-    # Approach stops at x=4; ground acceleration makes it stop after five seconds.
-    # A stopped chassis baseline uses an explicit maximum travel command through
-    # the demo fixture's initial state rather than any fake height animation.
-    chassis['velocity_mps']=[0,0,0];chassis['pose']['position_m']=[4,4,.65]
+    chassis['velocity_mps']=[0,0,0]
+    chassis['waypoints']=[{'t_s':0,'position_m':[2,4,.65]},{'t_s':4,'position_m':[4,4,.65]}]
     mast=body('mast',[.7,0,1.5],[.12,.5,1.5],parent_id='chassis',attachment='rigid_assumption')
     forks=body('forks',[1.3,0,-.5],[.65,.45,.06],'prismatic',parent_id='chassis',
-               joint={'type':'prismatic_z','start_s':1.,'initial_m':0.,'target_m':2.6,'max_travel_m':4.,'speed_mps':.35,'acceleration_mps2':.5})
-    payload=body('payload',[0,0,.36],[.6,.45,.3],parent_id='forks',attachment='rigid_assumption',physics=profile(mass_kg=900))
+               joint={'type':'prismatic_z','start_s':4.,'initial_m':0.,'target_m':2.6,'max_travel_m':4.,'speed_mps':.35,'acceleration_mps2':.5})
+    payload=body('payload',[0,0,.36],[.6,.45,.3],parent_id='forks',attachment='rigid_assumption',physics=profile(mass_kg=900),load_bearing_payload=True)
     shelf=body('shelf-deck',[6.65,4,2.6],[.65,.75,.1])
     beam=body('overhead-beam',[5.3,4,3.8],[.3,.9,.1])
     person=body('person',[5.3,6,.85],[.25,.25,.85])
-    result=base('Warehouse vertical lift (attached-payload assumption)',[chassis,mast,forks,payload,shelf,beam,person])
+    result=base('Warehouse vertical lift (attached-payload assumption)',[chassis,mast,forks,payload,shelf,beam,person],16)
     # Collision exclusions are explicit and evidence-exported, only for mechanically
     # connected components. Payload/shelf/beam contacts remain evaluated.
     result['excluded_pairs']=[['chassis','mast'],['chassis','forks'],['chassis','payload'],['mast','forks'],['mast','payload'],['forks','payload']]
     result['assumptions']+=['Payload remains rigidly attached: release/placement is not simulated.',
-                            'Chassis is already aligned and stationary in the baseline; compare an approach velocity as an intervention.']
+                            'Chassis follows a bounded C2 approach then stops before lifting; pallet release/placement is not implemented.']
     return validate_scene(result)
 
 
@@ -78,6 +76,7 @@ def upgrade_2d(value):
     scene=validate_document(value);objects=[]
     for obj in scene['objects']:
         points=obj['waypoints'];r=max(.01,obj.get('radius',.3))
+        if not points:raise ValueError('2D object requires an initial waypoint for conversion')
         first=points[0];velocity=[0.,0.,0.]
         for point in points[1:]:
             dx,dy=point[0]-first[0],point[1]-first[1];distance=(dx*dx+dy*dy)**.5

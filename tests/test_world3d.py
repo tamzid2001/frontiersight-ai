@@ -60,7 +60,8 @@ def test_articulated_forks_remain_independent():
     scene=warehouse();result=simulate(scene)
     first={o['id']:o for o in result['frames'][0]['objects']}
     last={o['id']:o for o in result['frames'][-1]['objects']}
-    assert first['chassis']['position_m']==last['chassis']['position_m']
+    assert first['chassis']['position_m'][2]==last['chassis']['position_m'][2]==.65
+    assert last['chassis']['position_m'][0]==4
     assert last['forks']['position_m'][2]-first['forks']['position_m'][2]==pytest.approx(2.6)
     assert last['payload']['position_m'][2]-last['forks']['position_m'][2]==pytest.approx(.36)
     changed=copy.deepcopy(scene['objects'][2]['joint']);changed['target_m']=3.5
@@ -71,7 +72,7 @@ def test_articulated_forks_remain_independent():
 
 
 def test_joint_rest_to_rest_and_descending():
-    joint=warehouse()['objects'][2]['joint']
+    joint=warehouse()['objects'][2]['joint'];joint['start_s']=1.
     assert joint_at(joint,0)==(0,0,0)
     assert joint_at(joint,1.2)[1]==pytest.approx(.1)
     assert joint_at(joint,20)==(2.6,0,0)
@@ -89,7 +90,7 @@ def test_flying_counterfactual_and_limits():
     assert any(e['code']=='speed_limit' for e in result['constraints'])
     report=compare(scene,[{'object_id':'flying-vehicle','acceleration_mps2':[0,0,0]}])
     assert any(e['kind']=='CONTACT' for e in report['counterfactual']['events'])
-    scene=warehouse();scene['objects'][0]['velocity_mps']=[.4,0,0]
+    scene=warehouse();scene['objects'][0].pop('waypoints');scene['objects'][0]['velocity_mps']=[.4,0,0]
     assert any(e['code']=='elevated_load_speed' for e in simulate(scene)['constraints'])
 
 

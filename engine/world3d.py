@@ -48,7 +48,7 @@ def validate_scene(value):
         raise ValueError('metric calibration requires non-simulation evidence')
     if cal['status']=='ESTIMATED_3D' and cal['uncertainty_m']<=0:
         raise ValueError('estimated depth requires positive uncertainty')
-    seen={};ordered=[]
+    seen={};ordered=[];world_orientations={}
     for body in scene['objects']:
         if body['id'] in seen: raise ValueError('duplicate 3D identity')
         profile=validate_profile(body['physics'])
@@ -61,6 +61,11 @@ def validate_scene(value):
         if accel.norm()>profile['max_acceleration_mps2']+1e-9: raise ValueError('acceleration exceeds profile')
         if V.read(body.get('angular_velocity_radps',[0,0,0])).norm()>profile.get('max_angular_speed_radps',0)+1e-9:
             raise ValueError('angular velocity exceeds profile')
+        if body.get('waypoints'):
+            from .trajectory3d import validate as validate_trajectory
+            if profile['motion_model'] not in ('ground','constant_acceleration'): raise ValueError('waypoints require ground or constant_acceleration kinematic profile')
+            if body.get('parent_id') or velocity.norm() or accel.norm(): raise ValueError('waypoints cannot combine with attachment or free initial motion')
+            validate_trajectory(body['waypoints'],profile,pose['position_m'],profile['motion_model']=='ground')
         parent=body.get('parent_id')
         if parent and parent not in seen: raise ValueError('parents must precede children; cycles and missing parents forbidden')
         if body.get('joint'):
@@ -70,7 +75,7 @@ def validate_scene(value):
             if joint['speed_mps']>profile['max_vertical_speed_mps'] or joint['acceleration_mps2']>profile['max_acceleration_mps2']:
                 raise ValueError('joint exceeds actuator profile')
             parent_pose=seen[parent]['pose']
-            if Q.read(parent_pose.get('orientation_wxyz',[1,0,0,0])).rotate(V(0,0,1)).z<1-1e-9:
+            if world_orientations[parent].rotate(V(0,0,1)).z<1-1e-9:
                 raise ValueError('prismatic_z requires upright parent')
         elif profile['motion_model']=='prismatic': raise ValueError('prismatic profile requires joint')
         if parent and not body.get('joint') and body.get('attachment')!='rigid_assumption': raise ValueError('child attachment must be explicit')
@@ -80,6 +85,7 @@ def validate_scene(value):
         if body['provenance']=='HARDWARE_OBSERVATION' and cal['status']=='ASSUMPTION_3D': raise ValueError('hardware metric pose requires calibration or estimated-depth metadata')
         if not parent and profile['motion_model']=='ground' and abs(p.z-extent(body['geometry'],Pose3D(p,Q.read(pose.get('orientation_wxyz',[1,0,0,0])))).z)>1e-6:
             raise ValueError('ground body centre must place its collision bottom on z=0')
+        world_orientations[body['id']]=(world_orientations[parent].compose(Q.read(pose.get('orientation_wxyz',[1,0,0,0]))) if parent else Q.read(pose.get('orientation_wxyz',[1,0,0,0])))
         seen[body['id']]=body;ordered.append(body)
     parent_ids={b['parent_id'] for b in ordered if b.get('parent_id')}
     for key in parent_ids:
@@ -126,14 +132,37 @@ def _advance(p,v,a,dt,profile):
     return candidate,V(end.x*scale,end.y*scale,zspeed),h>hlimit or zspeed!=end.z
 
 
+def _acceleration_bound(body,by_id):
+    if body.get('parent_id'):
+        return _acceleration_bound(by_id[body['parent_id']],by_id)+body.get('joint',{}).get('acceleration_mps2',0.)
+    if body.get('waypoints'):
+        return max(10*math.sqrt(3)/3*(V.read(b['position_m'])-V.read(a['position_m'])).norm()/(b['t_s']-a['t_s'])**2
+                   for a,b in zip(body['waypoints'],body['waypoints'][1:]))
+    p=body['physics']
+    if p['motion_model']=='static': return 0.
+    acceleration=V.read(body.get('acceleration_mps2',[0,0,0]))
+    if p['motion_model'] in ('ballistic','ground_air_hybrid'):
+        acceleration=acceleration+V.read(p.get('thrust_n',[0,0,0]))*(1/p['mass_kg'])-V(0,0,p['gravity_mps2'])
+    return min(p['max_acceleration_mps2'],acceleration.norm()+p.get('linear_drag_per_s',0)*math.hypot(p['max_horizontal_speed_mps'],p['max_vertical_speed_mps']))
+
+
 def simulate(value):
     scene=validate_scene(value)
-    bodies=scene['objects'];states={};frames=[];events=[];constraints=[];minimum={};previous=None
+    bodies=scene['objects'];by_id={b['id']:b for b in bodies};states={};frames=[];events=[];constraints=[];minimum={};previous=None
     excluded={frozenset(p) for p in scene.get('excluded_pairs',[])}
     for body in bodies:
         states[body['id']]={'pose':Pose3D(V.read(body['pose']['position_m']),Q.read(body['pose'].get('orientation_wxyz',[1,0,0,0]))),
                             'velocity':V.read(body.get('velocity_mps',[0,0,0])),'acceleration':V()}
     count=math.ceil(scene['duration_s']/scene['step_s'])
+    for carrier in bodies:
+        limit=carrier['physics'].get('max_payload_kg')
+        if limit is not None:
+            load=0.
+            for candidate in bodies:
+                ancestor=candidate.get('parent_id')
+                while ancestor and ancestor!=carrier['id']:ancestor=by_id[ancestor].get('parent_id')
+                if ancestor==carrier['id'] and candidate.get('load_bearing_payload'):load+=candidate['physics']['mass_kg']
+            if load>limit:constraints.append({'object_id':carrier['id'],'t_s':0.,'code':'payload_capacity','load_kg':load,'limit_kg':limit})
     for index in range(count+1):
         t=min(index*scene['step_s'],scene['duration_s']);dt=0 if index==0 else t-frames[-1]['t_s']
         current={}
@@ -152,6 +181,10 @@ def simulate(value):
                 # declared parent linear velocity plus prismatic velocity.
                 velocity=(pose.position-previous[key]['pose'].position)*(1/dt) if dt else parent['velocity']+parent['pose'].orientation.rotate(V(0,0,speed))
                 acceleration=(velocity-previous[key]['velocity'])*(1/dt) if dt else V()
+            elif body.get('waypoints'):
+                from .trajectory3d import at
+                p,velocity,acceleration=at(body['waypoints'],t)
+                pose=Pose3D(p,pose.orientation.advance(V.read(body.get('angular_velocity_radps',[0,0,0])),dt))
             elif index and model!='static':
                 acceleration=V.read(body.get('acceleration_mps2',[0,0,0]))
                 if model in ('ballistic','ground_air_hybrid'):
@@ -191,9 +224,8 @@ def simulate(value):
                 if previous:
                     # Curved-centre uncertainty bound; use profile maximums for
                     # articulated/rotating centres and exact zero for linear paths.
-                    margin=(sa['acceleration'].norm()+sb['acceleration'].norm())*dt*dt/8
-                    if a.get('parent_id') or b.get('parent_id'):
-                        margin=max(margin,.5*dt*dt*sum(x['physics']['max_acceleration_mps2'] for x in (a,b)))
+                    margin=(_acceleration_bound(a,by_id)+_acceleration_bound(b,by_id))*dt*dt/8
+                    margin+=a.get('uncertainty_radius_m',0)+b.get('uncertainty_radius_m',0)+2*scene['calibration']['uncertainty_m']
                     for rotating in (a,b):
                         omega=V.read(rotating.get('angular_velocity_radps',[0,0,0])).norm()
                         margin+=radius(rotating['geometry'])*min(2.,omega*dt)
@@ -212,7 +244,7 @@ def simulate(value):
     return {'schema_version':'2.0','coordinate_frame':'world_enu','units':'SI','source_digest':digest(scene),'scene':scene,
             'provenance':'DETERMINISTIC','calibration':scene['calibration'],'frames':frames,'events':events,'constraints':constraints,
             'minimum_clearances':list(minimum.values()),'labels':{'simulation_only':True,'physical_actuation':False,
-            'contact_response':False,'clearances_include_conservative_bounds':True},
+            'contact_response':False,'clearances_include_conservative_bounds':True,'clearance_sampling':'minimum_of_emitted_frames; continuous contacts reported separately'},
             'assumptions':scene['assumptions']+['Fixed-step kinematic prediction; no contact response, tipping, structural compliance or aerodynamic validation.']}
 
 
@@ -221,7 +253,7 @@ def compare(scene,changes):
     if not isinstance(changes,list) or not 1<=len(changes)<=16: raise ValueError('1..16 object changes required')
     altered=deepcopy(validate_scene(scene));seen=set();by_id={o['id']:o for o in altered['objects']}
     for change in changes:
-        if not isinstance(change,dict) or set(change)-{'object_id','physics','joint','pose','velocity_mps','acceleration_mps2'}:
+        if not isinstance(change,dict) or set(change)-{'object_id','physics','joint','pose','velocity_mps','acceleration_mps2','waypoints','geometry','angular_velocity_radps'}:
             raise ValueError('unsupported intervention')
         identity=change.get('object_id')
         if identity not in by_id or identity in seen: raise ValueError('unknown or duplicate intervention object')
