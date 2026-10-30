@@ -4,7 +4,7 @@
 Firestore-emulator tests. **30 Node helper tests passed**. JavaScript module syntax,
 OpenAPI 3.1 (65 paths), generated-contract drift and whitespace checks passed.
 
-Application Python coverage: **90.61% lines / 75.41% branches**, 61 first-party
+Application Python coverage: **90.61% lines / 75.41% branches**, 62 first-party
 files. Changed production executable lines versus baseline `06e29d9`: **1,302 of
 1,421 covered (91.63%)**. Raw Cobertura/LCOV artifacts are in `coverage/` and CI.
 Scope: engine, agents, integrations, services, edge and SDK. Tests, developer
@@ -76,3 +76,9 @@ ROS/hardware validation.
 Production activation also needs FrontierSight DNS records and restricted
 Firestore runtime credentials. Existing Quantura user data/billing is not reused.
 No paid compute, cloud resource, IAM grant or physical actuation was created.
+
+Release packaging checks built a wheel and imported its SDK with Python isolated mode
+from `/tmp`, outside the checkout. The Linux edge container built and passed its
+authenticated no-actuation health check on GitHub Actions. An initial Lighthouse
+performance score of 88 failed the preserved 90 gate; the new hidden workbenches
+were moved to on-demand loading. Final CI results are recorded by the release PR.

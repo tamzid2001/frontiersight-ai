@@ -24,3 +24,6 @@ Account reads and sync now use the same app-owned Firestore profile in Firestore
 Guest account reads remain backward compatible. Session/scoped-key OpenAPI schemes
 are valid. Pending browser requests are invalidated on Clerk workspace changes,
 preventing a previous workspace response from restoring private scene state.
+
+The SDK is included in the built distribution and checked outside the source tree.
+New 3D/video modules and styles load on demand to preserve homepage performance.

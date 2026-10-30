@@ -3,6 +3,19 @@ const $=id=>document.getElementById(id);
 const state={scenario:null,data:null,t:0,playing:false,run:null,cf:null};
 let sceneryPainter=null;
 function paintSceneContext(context,w,h,items){if(sceneryPainter)sceneryPainter(context,w,h,items,window.frontierSceneryChoice||'auto');}
+// Keep hidden 3D and local-camera workbenches off the homepage's critical path.
+let physicalLoad, physicalStyles, edgeLoad, physicalWorkspaceEpoch=0;
+function ensureWorkbenchStyles(){
+ physicalStyles??=new Promise((resolve,reject)=>{const link=document.createElement('link');link.rel='stylesheet';link.href='/physical-intelligence.css';link.onload=resolve;link.onerror=()=>{link.remove();physicalStyles=null;reject(Error('3D styles unavailable. Try again.'));};document.head.append(link);});
+ return physicalStyles;
+}
+function ensurePhysical(){
+ physicalLoad??=Promise.all([ensureWorkbenchStyles(),import('/physical-intelligence.mjs')]).catch(error=>{physicalLoad=null;throw error;});
+ return physicalLoad;
+}
+window.ensurePhysical=ensurePhysical;
+async function openPhysicalScene(scene){const ticket=physicalWorkspaceEpoch;await ensurePhysical();if(ticket!==physicalWorkspaceEpoch)return;await window.frontierPhysical.load(scene);if(ticket===physicalWorkspaceEpoch)goto('physical');}
+$('edge-studio-panel').addEventListener('toggle',()=>{if(!$('edge-studio-panel').open)return;edgeLoad??=Promise.all([ensureWorkbenchStyles(),import('/edge-studio.mjs')]).catch(error=>{edgeLoad=null;$('edge-status').textContent='Local video controls unavailable: '+error.message;});});
 let sceneryLoad;
 function loadScenery(){sceneryLoad??=import('/scenery-core.mjs').then(module=>{sceneryPainter=module.paintScenery2D;draw();labDraw();drawCfMap();}).catch(()=>{});}
 
@@ -87,6 +100,7 @@ function showView(v,history=true){
    if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
  if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
+ if(v==="physical")ensurePhysical().catch(error=>{$("pi-status").textContent=error.message;});
  if(v==="auth")initClerk();
  if(v==="pricing")refreshBillingAvailability();
  if(v==="workspace"){loadScenarioCounts();loadWorkspaces();}
@@ -151,7 +165,7 @@ async function objectsToTracks(objects){
   for(let t=0;t<=T+1e-9;t=Math.round((t+0.1)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
   return {object_id:o.id||o.object_id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",occluded:[],points:pts};});}
 async function loadWorkspaceIntoStudio(w){
- if(w.scene3d){await window.frontierPhysical.load(w.scene3d);goto("physical");return;}
+ if(w.scene3d){await openPhysicalScene(w.scene3d);return;}
  let tracks=w.tracks;
  if(!tracks&&w.objects)tracks=await objectsToTracks(w.objects);
  if(!tracks||!tracks.length){toast("That workspace has no analysable tracks yet.","warn");return;}
@@ -1402,7 +1416,7 @@ async function deleteWorkspace(w){
  if(state.openWorkspace&&state.openWorkspace.key===w.key)state.openWorkspace=null;
  toast(`Workspace "${w.name}" deleted.`);}
 function openWorkspace(w){state.openWorkspace=w;
- if(w.scene3d){window.frontierPhysical.load(w.scene3d).then(()=>goto("physical"));return;}
+ if(w.scene3d){openPhysicalScene(w.scene3d).catch(error=>toast(error.message,"err"));return;}
  if(w.kind==="frames"){
   state.samCaptures=w.captures||[];
   const cnt=$("sam-count");if(cnt)cnt.textContent=state.samCaptures.length;
@@ -1512,7 +1526,7 @@ async function loadClerk() {
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
       renderClerkSignIn(user);
       const currentTenant=sceneTenantKey();
-      if(currentTenant!==previousTenant){previousTenant=currentTenant;$("agent-key-once").textContent="";$("agent-key-list").replaceChildren();$("byok-key").value="";sceneRequest.cancel();pathRequest.cancel();state.customObjects=[];buildPalette();state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();window.frontierPhysical?.reset();window.frontierEdge?.reset();
+      if(currentTenant!==previousTenant){physicalWorkspaceEpoch++;previousTenant=currentTenant;$("agent-key-once").textContent="";$("agent-key-list").replaceChildren();$("byok-key").value="";sceneRequest.cancel();pathRequest.cancel();state.customObjects=[];buildPalette();state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();window.frontierPhysical?.reset();window.frontierEdge?.reset();
         if(state.lab){state.lab.objects=[];state.lab.running=false;touchLab();resetRunState();state.data=null;state.scenario=null;$("objects").replaceChildren();$("studio-scene-size").textContent="";$("cf-scene-size").textContent="";const canvas=$("stage");canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);window.__studio3dSync?.([],0);window.__cf3dSync?.(null,0);labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
       if (user) syncClerkSession();
       else if (localStorage.getItem("fs-auth-provider") === "clerk") {

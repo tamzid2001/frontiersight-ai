@@ -21,6 +21,18 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: pip install -e '.[dev,edge]'
+      - name: Verify SDK distribution outside the source checkout
+        run: |
+          python -m pip wheel --no-deps . -w /tmp/frontier-wheels
+          python - <<'PYSDK'
+          import pathlib,subprocess,sys,zipfile
+          wheel=next(pathlib.Path('/tmp/frontier-wheels').glob('frontiersight_ai-*.whl'))
+          with zipfile.ZipFile(wheel) as package:
+              assert 'sdk/__init__.py' in package.namelist()
+              assert 'sdk/frontiersight.py' in package.namelist()
+          code="import sys;sys.path.insert(0,sys.argv[1]);from sdk import FrontierSight;assert FrontierSight(token='').base_url.startswith('https://')"
+          subprocess.run([sys.executable,'-I','-c',code,str(wheel)],cwd='/tmp',check=True)
+          PYSDK
       - name: Local Firestore emulator
         run: |
           curl --fail --silent --show-error https://storage.googleapis.com/firebase-preview-drop/emulator/cloud-firestore-emulator-v1.20.2.jar -o /tmp/firestore.jar
