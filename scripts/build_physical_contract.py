@@ -29,6 +29,10 @@ def build(spec):
                          '403':{'description':'Origin denied'},'429':{'description':'Per-instance request limit; no automatic retry'}}}}
     spec['paths']['/api/v2/capabilities']={'get':{'operationId':'physical_capabilities','summary':'Supported software capabilities, budgets and unverified hardware status',
                                                 'responses':{'200':{'description':'Capability record'}}}}
+    complete=deepcopy(OUTPUT_SCHEMAS['compare_scene_documents_3d'])
+    for key in ('baseline','counterfactual'):complete['properties'][key]={'$ref':'#/components/schemas/SimulationResult3D'}
+    spec['components']['schemas']['CompleteSceneComparison3D']=complete
+    spec['paths']['/api/v2/counterfactuals/scenes']['post']['responses']['200']['content']['application/json']['schema']={'$ref':'#/components/schemas/CompleteSceneComparison3D'}
     published=schemas({'$ref':'#/components/schemas/EditableScene'})
     for name,request_schema in published.items():
         spec['components']['schemas']['Workbench_'+name]=request_schema

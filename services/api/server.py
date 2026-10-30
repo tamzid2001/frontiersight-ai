@@ -120,6 +120,9 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         if ep == "apiguide": return "/api-guide.html"
         if ep == "path": return "/api/paths/" + parse_qs(u.query).get("operation", [""])[0]
+        if ep == "labasset":
+            file = parse_qs(u.query).get("file", [""])[0]
+            return "/" + file if file in ("lab-store-core.mjs", "unified-lab.mjs", "unified-lab.css", "vendor/addons/TransformControls.js") else "/missing-asset"
         if ep == "scopejs": return "/request-scope-core.mjs"
         if ep == "edgejs": return "/edge-studio.mjs"
         if ep == "physicaljs": return "/physical-intelligence.mjs"
@@ -131,7 +134,7 @@ class H(BaseHTTPRequestHandler):
             return "/api/v1/" + resource
         if ep == "asset":
             return "/assets/" + parse_qs(u.query).get("file", [""])[0]
-        if ep == "appview" or u.path in ("/physical-intelligence","/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help"):
+        if ep == "appview" or u.path in ("/devices","/evidence","/physical-intelligence","/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help"):
             return "/"
         return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "scenerequest": "/scene-request-core.js", "entityscale": "/entity-scale.mjs", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
                 "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
