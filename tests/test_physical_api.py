@@ -95,3 +95,16 @@ def test_simulation_output_schema_matches_actual_rest_and_mcp_results():
         assert validate(physical.OUTPUT_SCHEMAS[operation],result)==result
         tool=next(t for t in mcp.TOOLS if t['name']==operation)
         assert tool['outputSchema']==physical.OUTPUT_SCHEMAS[operation]
+
+
+def test_every_openapi_security_requirement_names_a_real_scheme():
+    from pathlib import Path
+    spec=json.loads((Path(__file__).resolve().parents[1]/'apps/web/openapi.json').read_text())
+    names=set(spec['components']['securitySchemes'])
+    for path in spec['paths'].values():
+        for method,operation in path.items():
+            if method not in ('get','post','put','patch','delete','head','options','trace'):continue
+            for requirement in operation.get('security',spec.get('security',[])):
+                assert set(requirement)<=names
+    assert spec['paths']['/api/v1/physics/propose']['post']['security']==[{'ClerkSession':[]},{'FrontierAgentKey':[]}]
+    assert spec['paths']['/api/v1/profile/sync']['post']['security']==[{'ClerkSession':[]}]

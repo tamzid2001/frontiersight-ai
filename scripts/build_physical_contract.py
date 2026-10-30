@@ -10,6 +10,7 @@ from engine.world3d_schema import SCENE,PROFILE,RESULT,FRAME,CALIBRATION
 
 def build(spec):
     spec['info']['version']='0.39.0'
+    spec['components']['securitySchemes']['FrontierAgentKey']={'type':'http','scheme':'bearer','bearerFormat':'fsa_ personal key','description':'Scoped FrontierSight personal key. Read/write/model scopes, expiry and revocation are enforced server-side; session-only operations reject keys.'}
     spec['components']['schemas'].update(Scene3D=SCENE,PhysicsProfile3D=PROFILE,WorldState3D=FRAME,Calibration3D=CALIBRATION)
     result_schema=deepcopy(RESULT)
     result_schema['properties']['scene']={'$ref':'#/components/schemas/Scene3D'}
@@ -34,9 +35,10 @@ def build(spec):
     for route,name in WORKBENCH_ROUTES.items():
         if route not in spec['paths']:
             spec['paths'][route]={'post':{'operationId':name,'summary':WORKBENCH_DESCRIPTIONS[name],
-                'security':[{'ClerkBearer':[]}],'parameters':[{'in':'header','name':'Idempotency-Key','schema':{'type':'string'},'required':True}],
+                'security':[{'ClerkSession':[]}],'parameters':[{'in':'header','name':'Idempotency-Key','schema':{'type':'string'},'required':True}],
                 'responses':{'200':{'description':'Validated proposal, no scene mutation'},'400':{'description':'Invalid request'},'401':{'description':'Authentication required'},
                              '402':{'description':'Researcher plan required'},'409':{'description':'Previously attempted; inspect receipt'},'503':{'description':'Provider/storage unavailable'}}}}
+        spec['paths'][route]['post']['security']=([{'ClerkSession':[]}] if name=='sync_profile' else [{'ClerkSession':[]},{'FrontierAgentKey':[]}])
         spec['paths'][route]['post']['requestBody']={'required':True,'content':{'application/json':{'schema':published[name]}}}
     return spec
 

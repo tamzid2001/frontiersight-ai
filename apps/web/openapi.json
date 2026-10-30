@@ -463,6 +463,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -550,6 +553,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -642,6 +648,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -715,6 +724,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -816,6 +828,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -930,6 +945,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1020,6 +1038,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1092,6 +1113,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1184,6 +1208,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1270,6 +1297,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1342,6 +1372,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1431,6 +1464,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1517,6 +1553,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1603,6 +1642,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1680,6 +1722,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -1753,6 +1798,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -2335,6 +2383,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -2927,6 +2978,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3014,6 +3068,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3091,6 +3148,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3164,6 +3224,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3251,6 +3314,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3348,6 +3414,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3435,6 +3504,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3512,6 +3584,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3585,6 +3660,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3693,6 +3771,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -3811,6 +3892,9 @@
         "security": [
           {
             "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -7259,7 +7343,10 @@
         "summary": "One Muse request (20s, no retries) produces a schema-validated physics proposal. Paid authenticated workspace, model key and idempotency receipt required. Does not apply changes or authorize actuation.",
         "security": [
           {
-            "ClerkBearer": []
+            "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -7503,7 +7590,10 @@
         "summary": "Read only your FrontierSight-owned user profile; no Quantura profile lookup.",
         "security": [
           {
-            "ClerkBearer": []
+            "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -7557,7 +7647,7 @@
         "summary": "Sync your own name/email from the configured Clerk application to the FrontierSight namespace. Session-only; cannot change entitlements.",
         "security": [
           {
-            "ClerkBearer": []
+            "ClerkSession": []
           }
         ],
         "parameters": [
@@ -7611,7 +7701,10 @@
         "summary": "Save only your locale, timezone and reduced-motion preferences in FrontierSight. Cannot change identity, org role or billing.",
         "security": [
           {
-            "ClerkBearer": []
+            "ClerkSession": []
+          },
+          {
+            "FrontierAgentKey": []
           }
         ],
         "parameters": [
@@ -11403,6 +11496,12 @@
         "scheme": "bearer",
         "bearerFormat": "Clerk short-lived session JWT",
         "description": "Clerk session JWT or revocable fsa_ personal agent key. Session-only billing and key administration reject agent keys."
+      },
+      "FrontierAgentKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "fsa_ personal key",
+        "description": "Scoped FrontierSight personal key. Read/write/model scopes, expiry and revocation are enforced server-side; session-only operations reject keys."
       }
     }
   }
