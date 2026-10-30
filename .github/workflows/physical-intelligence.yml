@@ -21,6 +21,10 @@ jobs:
           distribution: temurin
           java-version: '21'
       - run: pip install -e '.[dev,edge]'
+      - name: Verify universal dependency resolution
+        run: |
+          pip install uv==0.13.5
+          uv lock --check
       - name: Verify SDK distribution outside the source checkout
         run: |
           python -m pip wheel --no-deps . -w /tmp/frontier-wheels

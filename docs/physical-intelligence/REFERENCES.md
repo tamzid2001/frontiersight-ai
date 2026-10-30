@@ -12,7 +12,7 @@ API compatibility is constrained to the following inspected contracts.
 | [ROS 2 Jazzy QoS source](https://github.com/ros2/rclpy/blob/jazzy/rclpy/rclpy/qos.py), [PoseStamped definition](https://github.com/ros2/common_interfaces/blob/jazzy/geometry_msgs/msg/PoseStamped.msg) | Best-effort volatile bounded state topics; publication and observation timestamps kept distinct. Official hosted Jazzy QoS web documentation returned access denied; source used instead. Actual ROS publisher is NOT RUN. |
 | [Clerk CLI](https://clerk.com/docs/guides/development/clerk-cli) | Official CLI 4.1.0 doctor verified the FrontierSight application/instances and pending DNS. User selected FrontierSight's own application, not the supplied Quantura application. |
 
-Dependency isolation: PyAV/OpenCV are optional `edge` extras for Python 3.11+.
+Dependency isolation: PyAV/OpenCV are optional `edge` extras for Python 3.12+.
 The Vercel API does not install/import native camera dependencies. ROS comes from
 its supported host installation, not an invented pip package. Original source
 remains MIT. Dependencies and bundled codecs retain their respective licenses;

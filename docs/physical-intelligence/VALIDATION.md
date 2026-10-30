@@ -82,3 +82,7 @@ from `/tmp`, outside the checkout. The Linux edge container built and passed its
 authenticated no-actuation health check on GitHub Actions. An initial Lighthouse
 performance score of 88 failed the preserved 90 gate; the new hidden workbenches
 were moved to on-demand loading. Final CI results are recorded by the release PR.
+
+The first hosted build exposed PyAV 19’s Python >=3.12 requirement. The optional
+edge-extra markers now match that requirement while the base application retains
+Python >=3.10 support. The edge image explicitly includes the packaged SDK.

@@ -48,7 +48,7 @@ python3 -m pytest -q                                     # no GPU or model key r
 PYTHONPATH=. python3 -m services.api.server --port 8000  # → http://127.0.0.1:8000
 ```
 
-Python ≥3.10; declared dependencies install via `pyproject.toml`. Optional local video/camera extras require Python ≥3.11. Docker also works: `docker compose up`.
+Python ≥3.10; declared dependencies install via `pyproject.toml`. Optional local video/camera extras require Python ≥3.12. Docker also works: `docker compose up`.
 
 Add a Meta Model API key (server-side only) to unlock live AI features:
 

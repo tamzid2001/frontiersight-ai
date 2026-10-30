@@ -1,6 +1,6 @@
 # Local video and shadow runtime
 
-Python 3.11+ for optional PyAV 19/OpenCV 4.14 wheels. Linux x86-64 deployment is
+Python 3.12+ for optional PyAV 19/OpenCV 4.14 wheels. Linux x86-64 deployment is
 the primary camera target. Actual local validation ran on macOS ARM64, including
 MP4 decoding and replay. USB/RTSP cameras, Jetson, ROS 2 and Docker execution
 require their own integration verification; none is implied by CPU tests.

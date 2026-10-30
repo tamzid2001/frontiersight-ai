@@ -6,6 +6,7 @@ COPY agents ./agents
 COPY integrations ./integrations
 COPY services ./services
 COPY edge ./edge
+COPY sdk ./sdk
 COPY apps/web/openapi.json ./apps/web/openapi.json
 RUN pip install --no-cache-dir '.[edge]' && useradd --uid 10001 --create-home edgeuser && mkdir /data && chown edgeuser /data
 USER edgeuser
