@@ -13,7 +13,7 @@ def generate(destination):
     timestamps=[0,100,230,400,550,710,850,1000]
     lines=[]
     with av.open(str(path),'w',format='mp4') as output:
-        stream=output.add_stream('mpeg4',rate=10);stream.width=160;stream.height=120;stream.pix_fmt='yuv420p';stream.codec_context.time_base=Fraction(1,1000)
+        stream=output.add_stream('libx264',rate=10,options={'preset':'ultrafast','tune':'zerolatency'});stream.width=160;stream.height=120;stream.pix_fmt='yuv420p';stream.codec_context.time_base=Fraction(1,1000)
         for index,pts in enumerate(timestamps):
             image=Image.new('RGB',(160,120),(25,40,55));draw=ImageDraw.Draw(image);x=20+index*5;draw.rectangle((x,40,x+16,60),fill=(56,198,217))
             frame=av.VideoFrame.from_image(image);frame.pts=pts;frame.time_base=Fraction(1,1000)

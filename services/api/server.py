@@ -187,7 +187,7 @@ class H(BaseHTTPRequestHandler):
                 xml=xml.replace('</urlset>', ''.join(f'<url><loc>{base}/{page}</loc><changefreq>weekly</changefreq></url>'
                     for page in ('physical-intelligence','pricing','create','help','api-guide.html'))+'</urlset>')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.38.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.39.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 try: _workbench.check_origin(self)
@@ -274,6 +274,11 @@ class H(BaseHTTPRequestHandler):
                     if view in titles:
                         document=content.decode();title=html.escape(titles[view]+" | FrontierSight AI")
                         document=re.sub(r"<title>.*?</title>","<title>"+title+"</title>",document,count=1)
+                        base=os.environ.get('APP_BASE_URL','https://frontiersight-ai.vercel.app').rstrip('/')
+                        canonical=html.escape(base+'/'+view,quote=True)
+                        document=re.sub(r'<link rel="canonical" href="[^"]*">','<link rel="canonical" href="'+canonical+'">',document,count=1)
+                        document=re.sub(r'<meta property="og:url" content="[^"]*">','<meta property="og:url" content="'+canonical+'">',document,count=1)
+                        document=re.sub(r'<meta property="og:title" content="[^"]*">','<meta property="og:title" content="'+title+'">',document,count=1)
                         if view in ("settings","sign-in","workspaces"):
                             document=document.replace("</head>",'<meta name="robots" content="noindex,nofollow"></head>')
                         content=document.encode()

@@ -110,3 +110,39 @@ def test_shadow_snapshot_stale_and_declared_pose_semantics(tmp_path):
     live=snapshot(path,now=100.5)
     assert live['fresh'] and len(live['poses'])==3 and live['pose_provenance']=='ASSUMPTION_3D'
     assert not snapshot(path,now=105)['fresh'] and snapshot(path,now=105)['poses']==[]
+
+
+def test_replay_with_provider_fixture_computes_assumed_prediction(tmp_path,monkeypatch):
+    pytest.importorskip('av')
+    from integrations.meta import sam
+    path=tmp_path/'source.mp4';generate(path);calls=[]
+    def segment(*args,**kwargs):
+        calls.append(True);x=len(calls)*5
+        return {'frames':[{'frame':0,'records':[{'object_id':1,'box':{'x1':x,'x2':x+10,'y1':20,'y2':30,'frame_w':160,'frame_h':120},'confidence':.8}]}],'source':'FIXTURE'}
+    monkeypatch.setattr(sam,'segment_image',segment)
+    state=run('file',str(path),tmp_path/'state.json',fps=2,sample_s=.5,model=True,frames=4,assumed_scale=.01)
+    assert len(calls)>=2 and state['prediction'] is not None
+    assert state['prediction']['calibration']['status']=='ASSUMPTION_3D'
+    assert not state['physical_actuation']
+    # Provider fixture latency is not treated as a live inference benchmark.
+
+
+def test_reconnect_budget_backoff_and_stale_state_are_software_fixtures(tmp_path,monkeypatch):
+    import edge.runtime as runtime
+    attempts=[];backoffs=[]
+    class Channel(queue.Queue):
+        def close(self):pass
+    class Process:
+        def start(self):attempts.append(True)
+        def join(self,timeout=None):pass
+        def is_alive(self):return False
+    class Context:
+        def Queue(self,maxsize):
+            channel=Channel(maxsize);channel.put({'error':'fixture_disconnected'});return channel
+        def Event(self):return threading.Event()
+        def Process(self,**kwargs):return Process()
+    monkeypatch.setattr(runtime.multiprocessing,'get_context',lambda kind:Context())
+    monkeypatch.setattr(runtime,'_backoff',lambda seconds:backoffs.append(seconds))
+    result=runtime.run('usb',0,tmp_path/'state.json')
+    assert len(attempts)==4 and backoffs==[1,2,4]
+    assert result['reconnect_attempts']==3 and result['stale'] and not result['source_connected']

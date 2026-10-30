@@ -125,10 +125,19 @@ class Tracker:
         return updated
 
 
+def _start_source(ctx,kind,value,fps):
+    channel=ctx.Queue(maxsize=2);stop=ctx.Event()
+    process=ctx.Process(target=acquire,args=(kind,value,channel,stop,fps));process.start()
+    return channel,stop,process
+
+
+def _backoff(seconds):time.sleep(seconds)
+
+
 def run(kind,value,output_path,*,fps=15,sample_s=2.,model=False,concept='person',frames=0,assumed_scale=None):
     if not 1<=fps<=30 or not .5<=sample_s<=60:raise ValueError('capture/sample rate out of range')
-    ctx=multiprocessing.get_context('spawn');channel=ctx.Queue(maxsize=2);stop=ctx.Event()
-    process=ctx.Process(target=acquire,args=(kind,value,channel,stop,fps));process.start()
+    ctx=multiprocessing.get_context('spawn');channel,stop,process=_start_source(ctx,kind,value,fps)
+    reconnects=0;timeouts=0
     tracker=Tracker();latencies=deque(maxlen=1000);inference=deque(maxlen=1000);count=0;last_index=-1;dropped=0;last_sample=-math.inf;tracks=[]
     last_observation_capture=None
     state={'schema_version':'2.0','mode':'OFFLINE_REPLAY' if kind=='file' else 'SHADOW','physical_actuation':False,
@@ -138,10 +147,21 @@ def run(kind,value,output_path,*,fps=15,sample_s=2.,model=False,concept='person'
             try:frame=channel.get(timeout=5)
             except queue.Empty:
                 state.update(source_connected=False,stale=True,error='source_timeout',updated_unix_s=time.time());write_state(output_path,state)
-                if not process.is_alive():break
-                continue
+                timeouts+=1
+                if process.is_alive() and timeouts<2:continue
+                frame={'error':'source_timeout'}
             if frame.get('end') or frame.get('error'):
-                state.update(source_connected=False,stale=True,error=frame.get('error','replay_completed'),updated_unix_s=time.time());write_state(output_path,state);break
+                state.update(source_connected=False,stale=True,error=frame.get('error','replay_completed'),updated_unix_s=time.time());write_state(output_path,state)
+                if kind!='file' and reconnects<3:
+                    stop.set();process.join(timeout=.2)
+                    if process.is_alive():process.terminate();process.join(timeout=2)
+                    channel.close();_backoff(2**reconnects);reconnects+=1
+                    channel,stop,process=_start_source(ctx,kind,value,fps)
+                    tracker=Tracker();tracks=[];last_observation_capture=None;last_index=-1;timeouts=0
+                    state['reconnect_attempts']=reconnects
+                    continue
+                break
+            timeouts=0
             now=time.monotonic();age=now-frame['captured_monotonic_s'];latencies.append(age*1000)
             dropped+=max(0,frame['index']-last_index-1);last_index=frame['index'];count+=1
             t=frame['source_pts_s'];inference_age=None

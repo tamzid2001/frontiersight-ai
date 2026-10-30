@@ -1011,7 +1011,8 @@ function sceneStoreKey(){const p=serverUser();return "fs-my-scenes:"+(p?("u"+p.i
 function runsKey(){const p=serverUser();return "fs-runs:"+(p?("u"+p.id):"guest");}
 const uncertainSceneWrites=new Map();
 async function api(path, opts={}){
- const modern=path.startsWith("/api/v1/");
+ const profileAlias=path==="/api/me"&&state.authConfig?.firestore_scenes_enabled;
+ const modern=path.startsWith("/api/v1/")||profileAlias;
  const sceneRequest=modern||path.startsWith("/api/scenes")||path.startsWith("/api/objects")||path.startsWith("/api/scene-context");
  if(sceneRequest&&!ClerkApp?.session)await initClerk();
  const cloud=modern||(sceneRequest&&state.authConfig?.firestore_scenes_enabled);

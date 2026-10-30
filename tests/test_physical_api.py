@@ -80,3 +80,18 @@ def test_sdk_v2_and_openapi_roundtrip(http_server):
     assert build(deepcopy(spec))==spec
     for route,name in physical.ROUTES.items():
         assert spec['paths'][route]['post']['requestBody']['content']['application/json']['schema']==physical.SCHEMAS[name]
+
+
+def test_response_budget_is_shared_and_cannot_exceed_transport_limit(monkeypatch):
+    monkeypatch.setattr(physical,'_execute',lambda *a:{'data':'x'*1_500_001})
+    with pytest.raises(ValueError,match='result budget'):physical.execute('fixture',{})
+
+
+def test_simulation_output_schema_matches_actual_rest_and_mcp_results():
+    from engine.world3d_schema import validate
+    scene=warehouse()
+    for operation,request in [('simulate_scene_3d',{'scene':scene}),('simulate_counterfactual_3d',{'scene':scene,'changes':[{'object_id':'payload','physics':scene['objects'][3]['physics']}]})]:
+        result=physical.execute(operation,request)
+        assert validate(physical.OUTPUT_SCHEMAS[operation],result)==result
+        tool=next(t for t in mcp.TOOLS if t['name']==operation)
+        assert tool['outputSchema']==physical.OUTPUT_SCHEMAS[operation]

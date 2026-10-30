@@ -49,17 +49,19 @@ ROUTES={
 }
 
 
+OUTPUT_SCHEMAS={'simulate_scene_3d':s.RESULT,'simulate_counterfactual_3d':s.obj({'schema_version':{'const':'2.0'},'baseline':s.RESULT,'counterfactual':s.RESULT,'changes':{'type':'array','items':CHANGE,'minItems':1,'maxItems':16},'interpretation':s.TEXT},['schema_version','baseline','counterfactual','changes','interpretation'])}
+
 def capabilities():
     return {'schema_version':'2.0','coordinate_frame':'world_enu','units':'SI','physical_actuation':False,
             'geometry':['sphere','box_obb','capsule'],'compound_bodies':'explicit_parent_child_hierarchy',
             'continuous_collision':'exact_linear_sphere_and_axis_aligned_box; conservative_other_sweeps',
             'models':['static','constant_acceleration','ground','ballistic','ground_air_hybrid','prismatic'],
-            'maximum_objects':16,'maximum_steps':600,'maximum_pair_intervals':50000,
+            'maximum_result_json_bytes':1_500_000,'maximum_objects':16,'maximum_steps':600,'maximum_pair_intervals':50000,
             'metric_depth':'requires_supplied_depth_or_declared_plane; no_monocular_depth_estimation',
             'cloud_video_jobs':False,'camera_access':'local_edge_only','hardware_validation':'NOT RUN — HARDWARE UNAVAILABLE'}
 
 
-def execute(name,request):
+def _execute(name,request):
     if name not in SCHEMAS: raise ValueError('unknown physical intelligence operation')
     request=s.validate(SCHEMAS[name],request)
     if name=='closest_approach_3d':
@@ -80,6 +82,14 @@ def execute(name,request):
         return sam_tracks(request['segmentation'],request['frame_timestamps_s'],reference=request.get('reference','box_center'),camera_stabilized=request.get('camera_stabilized',False))
     result=world3d.simulate(request['scene'])
     return {'packet':result,'packet_sha256':world3d.digest(result),'signature':None,'authenticity':'unsigned_integrity_only'}
+
+
+def execute(name,request):
+    import json
+    result=_execute(name,request)
+    if len(json.dumps(result,allow_nan=False).encode())>1_500_000:
+        raise ValueError('result budget exceeded; reduce objects, duration or sampling frequency')
+    return result
 
 
 def handle(handler,route,method):

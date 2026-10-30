@@ -18,7 +18,7 @@ from integrations.meta.spark import validate_scene, ModelError
 
 PROTOCOL = "2025-11-25"
 SUPPORTED_PROTOCOLS = ("2024-11-05", "2025-03-26", "2025-06-18", PROTOCOL)
-SERVER = {"name": "frontiersight-ai", "version": "0.38.0"}
+SERVER = {"name": "frontiersight-ai", "version": "0.39.0"}
 
 def _scene_schema():
     schema = _editor_schema("PrepareRequest")
@@ -106,7 +106,8 @@ def _ok(result) -> dict:
 from services.api import physical as physical_service
 for _name, _schema in physical_service.SCHEMAS.items():
     TOOLS.append({'name':_name,'description':physical_service.DESCRIPTIONS[_name],'inputSchema':_schema,
-                  'annotations':{'readOnlyHint':True,'destructiveHint':False,'idempotentHint':True,'openWorldHint':False}})
+                  'annotations':{'readOnlyHint':True,'destructiveHint':False,'idempotentHint':True,'openWorldHint':False},
+                  **({'outputSchema':physical_service.OUTPUT_SCHEMAS[_name]} if _name in physical_service.OUTPUT_SCHEMAS else {})})
 
 def call_tool(name: str, args: dict) -> dict:
     if name in physical_service.SCHEMAS: return _ok(physical_service.execute(name,args))

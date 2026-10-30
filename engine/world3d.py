@@ -260,5 +260,7 @@ def compare(scene,changes):
         seen.add(identity)
         for key,value in change.items():
             if key!='object_id': by_id[identity][key]=deepcopy(value)
+        if 'physics' in change:by_id[identity]['physics_provenance']='ASSUMPTION'
+        if any(k in change for k in ('pose','geometry','velocity_mps','acceleration_mps2','waypoints','joint')):by_id[identity]['provenance']='ASSUMPTION'
     return {'schema_version':'2.0','baseline':simulate(scene),'counterfactual':simulate(altered),'changes':deepcopy(changes),
             'interpretation':'Conditional simulations under declared assumptions, not causal proof or hardware authorization.'}

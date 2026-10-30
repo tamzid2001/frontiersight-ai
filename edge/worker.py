@@ -8,10 +8,12 @@ from .media import inspect_video
 
 def process_job(root,identity):
     ledger=Jobs(root);job=ledger.get(identity);uploaded=None
+    if job['state']!='running':return
     try:
         def checkpoint(*args):
             if ledger.get(identity)['state']!='running': raise InterruptedError('job_not_running')
-        metadata=job['metadata'] or inspect_video(ledger.path(identity),checkpoint)
+            if args:ledger.update(identity,progress={'phase':'decode','frames_decoded':args[0],'source_time_s':args[1]})
+        metadata=(job['metadata'] if job['metadata'] and job['metadata'].get('upload_name') else None) or inspect_video(ledger.path(identity),checkpoint)
         ledger.update(identity,metadata=metadata)
         checkpoint()
         if job['mode']=='inspect':
@@ -24,10 +26,10 @@ def process_job(root,identity):
         from integrations.meta.video_upload import upload_video,delete_upload
         from integrations.meta.sam import segment_video
         from engine.observations3d import sam_tracks
-        uploaded=upload_video(ledger.path(identity),job['name'])
+        uploaded=upload_video(ledger.path(identity),metadata.get('upload_name','video.mp4'))
         results=[]
         for index,concept in enumerate(job['concepts']):
-            checkpoint();parsed=segment_video(uploaded,concept,is_file_id=True,timeout=45)
+            checkpoint();ledger.update(identity,progress={'phase':'model','concept_index':index,'concept_count':len(job['concepts'])});parsed=segment_video(uploaded,concept,is_file_id=True,timeout=45)
             if any(d.get('code') in ('frame_limit','frame_record_limit') for d in parsed.get('diagnostics',[])): raise ValueError('model_output_truncated')
             result=sam_tracks(parsed,metadata['frame_timestamps_s'])
             for track in result['tracks']:track['object_id']=f'c{index}-'+track['object_id'];track['concept']=concept
@@ -43,6 +45,7 @@ def process_job(root,identity):
         if uploaded:
             from integrations.meta.video_upload import delete_upload
             delete_upload(uploaded)
+        ledger.release(identity)
 
 
 class Supervisor:
@@ -53,11 +56,14 @@ class Supervisor:
             while not self.stop.wait(.2):
                 if self.active:
                     identity,process,started=self.active
-                    current=self.ledger.get(identity)
+                    try:current=self.ledger.get(identity)
+                    except KeyError:
+                        if process.is_alive():process.terminate()
+                        process.join(timeout=3);self.active=None;continue
                     if current['state']!='running' or time.monotonic()-started>360:
                         if process.is_alive():process.terminate()
                     if not process.is_alive():
-                        process.join()
+                        process.join();self.ledger.release(identity)
                         if current['state']=='running':self.ledger.update(identity,state='failed_or_unknown' if current['model_started'] else 'failed',error='worker_exit_or_timeout')
                         self.active=None
                 else:
@@ -70,5 +76,6 @@ class Supervisor:
                 identity,process,_=self.active
                 if process.is_alive():process.terminate()
                 process.join(timeout=5)
+                self.ledger.release(identity)
                 current=self.ledger.get(identity)
                 self.ledger.update(identity,state='failed_or_unknown' if current['model_started'] else 'paused',error='operator_shutdown')

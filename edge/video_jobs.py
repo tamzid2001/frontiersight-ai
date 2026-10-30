@@ -24,6 +24,9 @@ class Jobs:
         with self.db() as db:
             db.execute('PRAGMA journal_mode=WAL')
             db.execute('CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,name TEXT,size INTEGER,offset INTEGER,state TEXT,created REAL,expires REAL,mode TEXT,concepts TEXT,sha TEXT,metadata TEXT,result TEXT,error TEXT,model_started INTEGER DEFAULT 0)')
+            columns={row[1] for row in db.execute('PRAGMA table_info(jobs)')}
+            if 'worker_active' not in columns:db.execute('ALTER TABLE jobs ADD COLUMN worker_active INTEGER DEFAULT 0')
+            if 'progress' not in columns:db.execute('ALTER TABLE jobs ADD COLUMN progress TEXT')
         os.chmod(self.root/'jobs.sqlite3',0o600)
 
     @contextmanager
@@ -42,7 +45,7 @@ class Jobs:
         with self.db() as db: row=db.execute('SELECT * FROM jobs WHERE id=?',(identity,)).fetchone()
         if row is None: raise KeyError('job_not_found')
         result=dict(row)
-        for key in ('concepts','metadata','result'): result[key]=json.loads(result[key]) if result[key] else None
+        for key in ('concepts','metadata','result','progress'): result[key]=json.loads(result[key]) if result[key] else None
         return result
 
     def create(self,name,size,concepts,mode='inspect'):
@@ -89,7 +92,7 @@ class Jobs:
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT * FROM jobs WHERE id=?',(identity,)).fetchone()
             if row is None: raise KeyError('job_not_found')
-            if action=='cancel': target='cancelled'
+            if action=='cancel': target='failed_or_unknown' if row['model_started'] else 'cancelled'
             elif action=='pause' and row['state'] in ('queued','running') and not row['model_started']: target='paused'
             elif action in ('resume','retry') and row['state'] in ('paused','failed') and not row['model_started']:target='queued'
             else: raise ValueError('unsupported_job_transition; uncertain model requests cannot be replayed')
@@ -98,32 +101,38 @@ class Jobs:
         return self.get(identity)
 
     def update(self,identity,**fields):
-        allowed={'state','metadata','result','error','model_started'}
+        allowed={'state','metadata','result','error','model_started','progress'}
         if not fields or set(fields)-allowed: raise ValueError('invalid_job_update')
         if 'state' in fields and fields['state'] not in STATES: raise ValueError('invalid_job_state')
-        values={key:json.dumps(value,allow_nan=False) if key in ('metadata','result') else value for key,value in fields.items()}
+        for field,limit in (('result',8*1024*1024),('metadata',256*1024),('progress',16*1024)):
+            if field in fields and len(json.dumps(fields[field],allow_nan=False).encode())>limit:raise ValueError('job_result_budget_exceeded')
+        values={key:json.dumps(value,allow_nan=False) if key in ('metadata','result','progress') else value for key,value in fields.items()}
         with self.db() as db:
             db.execute('UPDATE jobs SET '+','.join(k+'=?' for k in values)+" WHERE id=? AND state='running'",(*values.values(),identity))
 
     def claim(self):
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE');row=db.execute("SELECT id FROM jobs WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
-            if row: db.execute("UPDATE jobs SET state='running' WHERE id=?",(row['id'],))
+            if row: db.execute("UPDATE jobs SET state='running',worker_active=1 WHERE id=?",(row['id'],))
             db.commit()
         return row['id'] if row else None
 
     def recover(self):
         with self.db() as db:
-            db.execute("UPDATE jobs SET state=CASE WHEN model_started=1 THEN 'failed_or_unknown' ELSE 'queued' END,error='worker_interrupted' WHERE state='running'")
+            db.execute("UPDATE jobs SET state=CASE WHEN model_started=1 THEN 'failed_or_unknown' ELSE 'queued' END,error='worker_interrupted',worker_active=0 WHERE state='running'")
+            db.execute('UPDATE jobs SET worker_active=0')
+
+    def release(self,identity):
+        with self.db() as db:db.execute('UPDATE jobs SET worker_active=0 WHERE id=?',(identity,))
 
     def delete(self,identity):
         row=self.get(identity)
-        if row['state']=='running': raise ValueError('cancel_running_job_before_delete')
+        if row['state']=='running' or row['worker_active']: raise ValueError('cancel_running_job_before_delete')
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE');self.path(identity).unlink(missing_ok=True);db.execute('DELETE FROM jobs WHERE id=?',(identity,));db.commit()
         return {'deleted':True,'provider_retention':'Provider copies may remain; see model provider retention policy.'}
 
     def expire(self):
-        with self.db() as db: ids=[r['id'] for r in db.execute("SELECT id FROM jobs WHERE expires<? AND state!='running'",(self.clock(),))]
+        with self.db() as db: ids=[r['id'] for r in db.execute("SELECT id FROM jobs WHERE expires<? AND state!='running' AND worker_active=0",(self.clock(),))]
         for identity in ids:self.delete(identity)
         return len(ids)

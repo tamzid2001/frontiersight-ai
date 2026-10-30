@@ -82,3 +82,32 @@ def test_source_gate_tracking_and_latency(tmp_path):
     assert percentile([1,2,3],.5)==2 and percentile([], .5) is None
     write_state(tmp_path/'live.json',{'physical_actuation':False})
     assert json.loads((tmp_path/'live.json').read_text())['physical_actuation'] is False
+
+
+def test_cancel_delete_waits_for_worker_acknowledgment(tmp_path):
+    ledger=Jobs(tmp_path);row=upload(ledger);identity=ledger.claim()
+    ledger.control(identity,'cancel')
+    with pytest.raises(ValueError):ledger.delete(identity)
+    ledger.release(identity)
+    assert ledger.delete(identity)['deleted']
+
+
+def test_provider_fixture_path_is_not_retried_after_uncertain_failure(tmp_path,monkeypatch):
+    pytest.importorskip('av')
+    from integrations.meta import video_upload,sam
+    path=tmp_path/'synthetic.mp4';sidecar=generate(path)
+    monkeypatch.setenv('MODEL_API_KEY','fixture-not-a-live-model-key')
+    calls=[]
+    monkeypatch.setattr(video_upload,'upload_video',lambda *a:calls.append('upload') or 'file-fixture')
+    monkeypatch.setattr(video_upload,'delete_upload',lambda *a:calls.append('delete') or True)
+    parsed=sam.parse_output_text(sidecar['segmentation_text']);parsed['source']='FIXTURE'
+    monkeypatch.setattr(sam,'segment_video',lambda *a,**k:parsed)
+    ledger=Jobs(tmp_path/'sam');row=upload(ledger,path.read_bytes(),mode='sam_video');ledger.claim();process_job(str(ledger.root),row['id'])
+    result=ledger.get(row['id']);assert result['state']=='completed' and len(result['result']['tracks'])==1
+    assert calls==['upload','delete']
+    process_job(str(ledger.root),row['id']);assert calls==['upload','delete']
+    def failure(*a,**k):raise RuntimeError('upstream private data must not leak')
+    monkeypatch.setattr(sam,'segment_video',failure)
+    row=upload(ledger,path.read_bytes(),mode='sam_video');ledger.claim();process_job(str(ledger.root),row['id'])
+    result=ledger.get(row['id']);assert result['state']=='failed_or_unknown' and result['error']=='video_worker_failed'
+    with pytest.raises(ValueError):ledger.control(row['id'],'retry')

@@ -42,7 +42,7 @@ JOINT=obj({"type":{"const":"prismatic_z"},"start_s":num(0,30),"initial_m":num(0,
 BODY=obj({"id":IDENTITY,"label":TEXT,"pose":POSE,"velocity_mps":vec(-200,200),
           "acceleration_mps2":vec(-100,100),"angular_velocity_radps":vec(-20,20),
           "geometry":GEOMETRY,"physics":PROFILE,"parent_id":IDENTITY,"joint":JOINT,
-          "load_bearing_payload":{"type":"boolean"},"attachment":{"const":"rigid_assumption"},"provenance":{"enum":["MODEL_DERIVED","DETERMINISTIC","FIXTURE","ASSUMPTION","HARDWARE_OBSERVATION"]},
+          "physics_provenance":{"enum":["MODEL_DERIVED","DETERMINISTIC","FIXTURE","ASSUMPTION"]},"load_bearing_payload":{"type":"boolean"},"attachment":{"const":"rigid_assumption"},"provenance":{"enum":["MODEL_DERIVED","DETERMINISTIC","FIXTURE","ASSUMPTION","HARDWARE_OBSERVATION"]},
           "waypoints":{ "type":"array","items":obj({"t_s":num(0,30),"position_m":vec()},["t_s","position_m"]),"minItems":2,"maxItems":16},
           "uncertainty_radius_m":num(0,100)},["id","pose","geometry","physics","provenance"])
 CALIBRATION=obj({"status":{"enum":["ASSUMPTION_3D","CALIBRATED_METRIC_3D","ESTIMATED_3D"]},
@@ -63,3 +63,24 @@ def validate(schema, value):
         location=".".join(str(p) for p in error.absolute_path)
         raise ValueError(f"invalid 3D contract at {location or 'root'}: {error.validator}") from None
     return deepcopy(value)
+
+# Executable output contracts: sharing these avoids UI/API/MCP shape drift.
+STATE=obj({'id':IDENTITY,'position_m':vec(-1e6,1e6),'orientation_wxyz':QUAT,
+           'velocity_mps':vec(-1e6,1e6),'acceleration_mps2':vec(-1e6,1e6),'ground_clearance_m':num(-1e6,1e6)},
+          ['id','position_m','orientation_wxyz','velocity_mps','acceleration_mps2','ground_clearance_m'])
+FRAME=obj({'t_s':num(0,30),'objects':{'type':'array','items':STATE,'minItems':1,'maxItems':16}},['t_s','objects'])
+PAIR={'type':'array','items':IDENTITY,'minItems':2,'maxItems':2}
+EVENT=obj({'objects':PAIR,'kind':{'enum':['CONTACT','POSSIBLE_CONTACT']},'t_s':num(0,30),'clearance_m':num(-1e6,1e6),'method':TEXT},['objects','kind','t_s','method'])
+CLEARANCE=obj({'objects':PAIR,'clearance_m':num(-1e6,1e6),'at_s':num(0,30),'method':TEXT},['objects','clearance_m','at_s','method'])
+CONSTRAINT=obj({'object_id':IDENTITY,'t_s':num(0,30),'code':{'enum':['speed_limit','elevated_load_speed','payload_capacity']},
+                'height_m':num(0,1e6),'speed_mps':num(0,1e6),'load_kg':num(0,1e9),'limit_kg':num(0,1e9)},['object_id','t_s','code'])
+RESULT=obj({'schema_version':{'const':'2.0'},'coordinate_frame':{'const':'world_enu'},'units':{'const':'SI'},
+            'source_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'scene':SCENE,'provenance':{'const':'DETERMINISTIC'},
+            'calibration':CALIBRATION,'frames':{'type':'array','items':FRAME,'minItems':2,'maxItems':601},
+            'events':{'type':'array','items':EVENT,'maxItems':240},'constraints':{'type':'array','items':CONSTRAINT,'maxItems':64},
+            'minimum_clearances':{'type':'array','items':CLEARANCE,'maxItems':120},
+            'labels':obj({'simulation_only':{'const':True},'physical_actuation':{'const':False},'contact_response':{'const':False},
+                          'clearances_include_conservative_bounds':{'const':True},'clearance_sampling':TEXT},
+                         ['simulation_only','physical_actuation','contact_response','clearances_include_conservative_bounds','clearance_sampling']),
+            'assumptions':{'type':'array','items':TEXT,'maxItems':25}},
+           ['schema_version','coordinate_frame','units','source_digest','scene','provenance','calibration','frames','events','constraints','minimum_clearances','labels','assumptions'])

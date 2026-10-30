@@ -19,12 +19,16 @@ def inspect_video(path,checkpoint=lambda *a:None):
         if not set(container.format.name.split(',')) & {'mov','mp4','matroska','webm'}: raise ValueError('unsupported_video_container')
         if len(container.streams.video)!=1: raise ValueError('exactly_one_video_stream_required')
         stream=container.streams.video[0]
+        webm='webm' in container.format.name
+        if webm and stream.codec_context.name not in ('vp8','vp9','av1'):raise ValueError('unsupported_webm_codec')
+        upload_name='video.webm' if webm else 'video.mov' if container.metadata.get('major_brand','').strip()=='qt' else 'video.mp4'
         if stream.codec_context.name not in ('h264','hevc','vp8','vp9','av1','mpeg4'): raise ValueError('unsupported_video_codec')
         width,height=stream.codec_context.width,stream.codec_context.height
         if not 1<=width<=3840 or not 1<=height<=2160 or width*height>3840*2160: raise ValueError('video_resolution_limit')
         times=[];start=time.monotonic();first=None
         for index,frame in enumerate(container.decode(video=0)):
             if index>=3600 or time.monotonic()-start>90: raise ValueError('video_decode_budget_exceeded')
+            if not 1<=frame.width<=3840 or not 1<=frame.height<=2160:raise ValueError('decoded_frame_resolution_limit')
             if frame.pts is None or frame.time_base is None: raise ValueError('video_presentation_timestamps_unavailable')
             timestamp=float(frame.pts*frame.time_base)
             if not math.isfinite(timestamp): raise ValueError('invalid_video_pts')
@@ -35,7 +39,7 @@ def inspect_video(path,checkpoint=lambda *a:None):
             if index%20==0: checkpoint(index,relative)
         if len(times)<2: raise ValueError('video_requires_multiple_frames')
         intervals=[b-a for a,b in zip(times,times[1:])]
-        return {'width':width,'height':height,'codec':stream.codec_context.name,'container':container.format.name,
+        return {'upload_name':upload_name,'width':width,'height':height,'codec':stream.codec_context.name,'container':container.format.name,
                 'duration_s':times[-1],'source_start_pts_s':first,'frame_count':len(times),'frame_timestamps_s':times,
                 'average_observed_fps':(len(times)-1)/(times[-1]-times[0]),
                 'variable_frame_intervals':max(intervals)-min(intervals)>1e-5,'provenance':'MEASURED_MEDIA_METADATA'}
