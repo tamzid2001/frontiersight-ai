@@ -4,7 +4,9 @@ const state={scenario:null,data:null,t:0,playing:false,run:null,cf:null};
 let sceneryPainter=null;
 function paintSceneContext(context,w,h,items){if(sceneryPainter)sceneryPainter(context,w,h,items,window.frontierSceneryChoice||'auto');}
 // Keep hidden 3D and local-camera workbenches off the homepage's critical path.
-let physicalLoad, physicalStyles, edgeLoad, physicalWorkspaceEpoch=0;
+let physicalLoad, physicalStyles, edgeLoad, unifiedLoad, physicalWorkspaceEpoch=0;
+function ensureUnified(){return unifiedLoad??=import("/unified-lab.mjs").catch(error=>{unifiedLoad=null;throw error;});}
+window.ensureUnified=ensureUnified;
 function ensureWorkbenchStyles(){
  physicalStyles??=new Promise((resolve,reject)=>{const link=document.createElement('link');link.rel='stylesheet';link.href='/physical-intelligence.css';link.onload=resolve;link.onerror=()=>{link.remove();physicalStyles=null;reject(Error('3D styles unavailable. Try again.'));};document.head.append(link);});
  return physicalStyles;
@@ -84,8 +86,10 @@ function headingAt(track,t){const p0=posAt(track,t),p1=posAt(track,Math.min(t+0.
 const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc9ff",cyclist:"#c792ff",shelf:"#5b6b9f",person:"#f2b04a",object:"#e8edf6"};
 
 // tabs
-const VIEW_PATHS={physical:"/physical-intelligence",home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
+const VIEW_PATHS={devices:"/devices",evidence:"/evidence",physical:"/physical-intelligence",home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
 function showView(v,history=true){
+ const panel={physical:"world",studio:"video",counterfactual:"counterfactual"}[v]||new URLSearchParams(location.search).get("panel")||"world";
+ if(["physical","studio","counterfactual"].includes(v))v="create";
  if(!$("view-"+v))v="home";
  if(history&&VIEW_PATHS[v]&&location.pathname!==VIEW_PATHS[v])window.history.pushState({view:v},"",VIEW_PATHS[v]);
  document.title=(v==="home"?"FrontierSight AI — Build, simulate and inspect physical-world scenes":(v==="physical"?"Physical Intelligence 3D":v.charAt(0).toUpperCase()+v.slice(1))+" | FrontierSight AI");
@@ -96,8 +100,7 @@ function showView(v,history=true){
  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on",s.id==="view-"+v));
  window.scrollTo(0,0);
  if(v==="studio"){draw();syncLabToCfIfNewer().then(()=>{if($("view-studio").classList.contains("on"))draw();}).catch(error=>toast(error.message,"err"));}
- if(v==="create"){ensureLabStarted();if(typeof labDraw==="function")labDraw();
-   if(localStorage.getItem("fs-view-lab")==="3d"&&state.labView!=="3d")setLabView("3d");}
+ if(v==="create"||v==="devices")ensureUnified().then(module=>v==="devices"?module.openDevices():module.openPanel(panel)).catch(error=>toast(error.message,"err"));
  if(v==="studio"&&localStorage.getItem("fs-view-studio")==="3d"&&state.studioView!=="3d")setStudioView("3d");
  if(v==="counterfactual"&&localStorage.getItem("fs-view-cf")==="3d"&&state.cfView!=="3d")setCfView("3d");
  if(v==="physical")ensurePhysical().catch(error=>{$("pi-status").textContent=error.message;});
@@ -165,6 +168,7 @@ async function objectsToTracks(objects){
   for(let t=0;t<=T+1e-9;t=Math.round((t+0.1)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
   return {object_id:o.id||o.object_id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",occluded:[],points:pts};});}
 async function loadWorkspaceIntoStudio(w){
+ if(w.editorProject){const module=await ensureUnified();await window.frontierLab.openProject({...w,payload:w.editorProject});goto("create");return;}
  if(w.scene3d){await openPhysicalScene(w.scene3d);return;}
  let tracks=w.tracks;
  if(!tracks&&w.objects)tracks=await objectsToTracks(w.objects);
@@ -620,7 +624,7 @@ function posOnPath(o,t){if(!o.waypoints.length)return null;
  if(o.waypoints.length===1||o.speed<=0)return o.waypoints[0];
  const lt=Math.max(0,t-o.delay);
  return profPosition(o,lt);}
-function labDraw(){if(!$("view-create").classList.contains("on"))return;const floorCanvas=$("lab-canvas");if(floorCanvas){const height=Math.round(880*LAB.h/LAB.w);if(floorCanvas.width!==880)floorCanvas.width=880;if(floorCanvas.height!==height)floorCanvas.height=height;}if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
+function labDraw(){if(!$("view-planar").classList.contains("on"))return;const floorCanvas=$("lab-canvas");if(floorCanvas){const height=Math.round(880*LAB.h/LAB.w);if(floorCanvas.width!==880)floorCanvas.width=880;if(floorCanvas.height!==height)floorCanvas.height=height;}if(window.__lab3dSync)window.__lab3dSync(state.lab.objects,state.lab.t);
  const c=$("lab-canvas");if(!c)return;computeLabDuration();const x=c.getContext("2d"),W=c.width,H=c.height;
  x.clearRect(0,0,W,H);paintSceneContext(x,W,H,state.lab.objects);x.strokeStyle="rgba(34,65,70,.13)";for(let gx=0;gx<=LAB.w;gx+=2){const[a]=labXY(gx,0,W,H);x.beginPath();x.moveTo(a,0);x.lineTo(a,H);x.stroke();}
  for(let gy=0;gy<=LAB.h;gy+=2){const[,b]=labXY(0,gy,W,H);x.beginPath();x.moveTo(0,b);x.lineTo(W,b);x.stroke();}
@@ -655,7 +659,7 @@ function labReady(){const el=$("lab-ready");if(!el)return;const os=state.lab.obj
  el.style.color=os.length>=2&&moving?"var(--teal)":"var(--amber)";
  const warns=os.flatMap(o=>o.speed>0||o.waypoints.length>1?realismWarnings(o):[]);
  if(warns.length)el.innerHTML+=warns.map(w=>`<br><span style="color:var(--amber)">⚠ ${w}</span>`).join("");}
-document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace")&&$("view-create").classList.contains("on")
+document.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace")&&$("view-planar").classList.contains("on")
  &&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){const o=labObj(state.lab.selected);
  if(o&&o.waypoints.length){o.waypoints.pop();labRenderList();labDraw();}}});
 function labRenderList(){const el=$("lab-list");if(!el)return;labReady();
@@ -1314,7 +1318,7 @@ state.workspaces=[]; state.openWorkspace=null;
 function wsNormalizeLocal(w){return {...w, server:false, key:"local:"+w.id};}
 function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
  return {key:"server:"+s.id, server:true, id:s.id, version:s.version, name:s.name||w.name||"workspace",
-  scene3d:s.payload?.schema_version==="2.0"?s.payload:null,kind:s.payload?.schema_version==="2.0"?"physical":w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
+  editorProject:s.payload?.schema_version==="frontiersight.project/1.0"?s.payload:null,scene3d:s.payload?.schema_version==="2.0"?s.payload:null,kind:s.payload?.schema_version==="2.0"?"physical":w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
   objects:w.objects||(s.payload&&s.payload.objects)||null,stage_metres:w.stage_metres||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
   captures:w.captures||null, image:w.image||null};}
 async function loadWorkspaces(){
@@ -1395,6 +1399,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){
  if(window._lastKebab)window._lastKebab.focus();}});
 async function persistWorkspace(w){
  await initClerk();
+ if(w.editorProject){const result=await api("/api/v1/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,expectedVersion:w.version,name:w.name,scene:w.editorProject})});if(result.status>=300){toast(result.body.error,"err");return false;}w.version=result.body.version;return true;}
  if(w.scene3d){const result=await api("/api/v1/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,expectedVersion:w.version,name:w.name,scene:w.scene3d})});if(result.status>=300){toast(result.body.error||"3D save failed","err");return false;}w.version=result.body.version;return true;}
  if(hasSceneSession()&&!w.legacy){
   const payload={workspace:{kind:w.kind,objects:w.objects||null,stage_metres:w.stage_metres||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
@@ -1416,6 +1421,7 @@ async function deleteWorkspace(w){
  if(state.openWorkspace&&state.openWorkspace.key===w.key)state.openWorkspace=null;
  toast(`Workspace "${w.name}" deleted.`);}
 function openWorkspace(w){state.openWorkspace=w;
+ if(w.editorProject){ensureUnified().then(()=>window.frontierLab.openProject({...w,payload:w.editorProject})).then(()=>goto("create")).catch(error=>toast(error.message,"err"));return;}
  if(w.scene3d){openPhysicalScene(w.scene3d).catch(error=>toast(error.message,"err"));return;}
  if(w.kind==="frames"){
   state.samCaptures=w.captures||[];
@@ -1759,3 +1765,5 @@ window.addEventListener("popstate",()=>showView(Object.keys(VIEW_PATHS).find(key
 const initialView=Object.keys(VIEW_PATHS).find(key=>VIEW_PATHS[key]===location.pathname);
 if(initialView&&initialView!=="home")showView(initialView,false);
 if(new URLSearchParams(location.search).get("billing")==="success")toast("Checkout returned. Your plan is verified directly with Stripe when you use paid features.");
+
+window.frontierPlanar={scene:()=>currentLabScene(),start:()=>{ensureLabStarted();labDraw();},studio:()=>{loadScenery();draw();},counterfactual:()=>{loadScenery();syncLabToCfIfNewer().then(()=>{syncCounterfactual();drawCfMap();drawCfChart();});}};

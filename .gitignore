@@ -17,3 +17,6 @@ coverage/
 *.tsbuildinfo
 
 .env.*
+
+tests/browser/test-results/
+tests/browser/playwright-report/
