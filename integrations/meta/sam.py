@@ -94,7 +94,10 @@ def parse_output_text(text: str, *, decode_masks: bool = False) -> dict:
                             raise ValueError("unsupported mask origin or encoding")
                         raster = _decode_complete_mask(payload, width, height)
                         decoded_pixels += width * height
-                        rec["mask"].update(decoded=True, width=width, height=height,
+                        pixels=sum(raster)
+                        centroid=([b['x1']+sum(i%width for i,v in enumerate(raster) if v)/pixels,
+                                   b['y1']+sum(i//width for i,v in enumerate(raster) if v)/pixels] if pixels else None)
+                        rec["mask"].update(decoded=True, width=width, height=height, centroid_px=centroid,
                             png_data_url=_mask_png(raster, width, height), note="Decoded by the official Meta SAM parser; box-local raster.")
                     except (ValueError, ImportError):
                         diagnostics.append({"severity": "warning", "code": "mask_not_decoded", "object_id": rec["object_id"]})
@@ -115,7 +118,17 @@ def segment_video(video_ref: str, concept: str, is_file_id: bool = False, timeou
     parses frames with the same documented-grammar parser as images."""
     key = api_key()
     if not key: raise BlockedCredentials("BLOCKED_CREDENTIALS: MODEL_API_KEY not set (server-side only)")
-    if not concept or any(ch in concept for ch in ",;+\n"): raise ValueError("concept must be one short noun phrase")
+    if not isinstance(concept,str) or not 1<=len(concept)<=100 or any(ch in concept for ch in ",;+\n"): raise ValueError("concept must be one short noun phrase")
+    if not isinstance(video_ref,str) or not 1<=len(video_ref)<=2048: raise ValueError('invalid video reference')
+    if is_file_id:
+        if not re.fullmatch(r'file-[A-Za-z0-9_-]{1,160}',video_ref): raise ValueError('invalid provider file ID')
+    else:
+        from urllib.parse import urlparse
+        parsed=urlparse(video_ref)
+        allowed=set(os.environ.get('META_VIDEO_ALLOWED_HOSTS','').split(','))-{''}
+        if parsed.scheme!='https' or parsed.hostname not in allowed or parsed.username or parsed.password or parsed.port not in (None,443):
+            raise ValueError('video URLs require an explicitly allowlisted HTTPS host; use your own provider file ID')
+    timeout=min(180,max(1,int(timeout)))
     media = {"type": "input_video", "file_id": video_ref} if is_file_id else {"type": "input_video", "video_url": video_ref}
     payload = {"model": MODEL, "stream": True,
                "metadata": {"include_confidence": "true", "mask_encoding": "one_bit"},
@@ -123,23 +136,36 @@ def segment_video(video_ref: str, concept: str, is_file_id: bool = False, timeou
                    {"type": "input_text", "text": concept}, media]}]}
     req = urllib.request.Request(BASE + "/responses", data=json.dumps(payload).encode(), method="POST",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "X-Request-Id": str(uuid.uuid4())})
-    started, text_parts = time.time(), []
+    started, parts, size, completed = time.time(), [], 0, False
+    deadline=time.monotonic()+timeout
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            status = r.status
-            for raw in r:
-                line = raw.decode(errors="ignore").strip()
-                if line.startswith("data:"):
-                    try: ev = json.loads(line[5:])
-                    except Exception: continue
-                    if ev.get("type") == "response.output_text.delta": text_parts.append(ev.get("delta", ""))
-    except urllib.error.HTTPError as e:
-        raise ModelError(f"SAM video HTTP {e.code}; provider details withheld") from None
-    text = "".join(text_parts)
-    parsed = parse_output_text(text)
-    parsed.update({"model": MODEL, "concept": concept, "http_status": status,
-                   "latency_ms": round((time.time() - started) * 1000), "raw_output_chars": len(text)})
-    return parsed
+        with urllib.request.urlopen(req,timeout=min(timeout,30)) as response:
+            status=response.status
+            while True:
+                raw=response.readline(8*1024*1024+1)
+                if not raw: break
+                if len(raw)>8*1024*1024 or time.monotonic()>deadline: raise ModelError('SAM video exceeded its time/stream budget')
+                line=raw.decode(errors='strict').strip()
+                if not line.startswith('data:'): continue
+                try: event=json.loads(line[5:])
+                except ValueError: continue
+                if not isinstance(event,dict): continue
+                if event.get('type')=='response.output_text.delta':
+                    delta=event.get('delta','')
+                    if not isinstance(delta,str): raise ModelError('Invalid video stream')
+                    size+=len(delta)
+                    if size>8*1024*1024: raise ModelError('SAM video output exceeded budget')
+                    parts.append(delta)
+                elif event.get('type')=='response.completed': completed=True;break
+                elif event.get('type') in ('response.failed','response.incomplete','error'):
+                    raise ModelError('SAM video did not complete')
+    except urllib.error.HTTPError as error:
+        raise ModelError(f'SAM video HTTP {error.code}; provider details withheld') from None
+    if not completed: raise ModelError('SAM video ended without confirmed completion')
+    parsed=parse_output_text(''.join(parts),decode_masks=True)
+    if any(d['severity']=='error' for d in parsed['diagnostics']): raise ModelError('SAM video contained invalid records')
+    return {**parsed,'model':MODEL,'concept':concept,'http_status':status,
+            'latency_ms':round((time.time()-started)*1000),'raw_output_chars':size,'source':'MODEL_DERIVED'}
 
 def segment_image(image_data_url: str, concept: str, timeout: int = 50) -> dict:
     """One concept per request (documented constraint). Image as data URL."""
