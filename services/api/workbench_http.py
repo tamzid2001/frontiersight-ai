@@ -78,6 +78,9 @@ def handle(handler, route, method):
             if method != 'GET': raise WorkspaceError(405, 'get_required')
         elif method != 'POST':
             raise WorkspaceError(405, 'post_required')
+        if account_alias and not handler.headers.get('Authorization'):
+            handler._send(200,{'authenticated':False,'user':None,'plan':'explorer','entitlements':billing.entitlements('explorer'),'storage':'firestore','siteId':'frontiersight-ai'})
+            return True
         identity = actor(handler.headers.get('Authorization', ''))
         org = handler.headers.get('X-Workspace-Organization')
         if org is not None and org != (identity.org_id or 'personal'):
@@ -91,7 +94,7 @@ def handle(handler, route, method):
                     'plan':identity.plan,'profile':profile,'siteId':'frontiersight-ai',
                     'storage':'firestore' if enabled() else 'unavailable','billing':billing.checkout_configuration()}
             if account_alias:
-                common.update(user={'id':identity.user_id,'clerk_id':identity.user_id,'name':(profile or {}).get('name',''),
+                common.update(authenticated=True,user={'id':identity.user_id,'clerk_id':identity.user_id,'name':(profile or {}).get('name',''),
                                     'email':(profile or {}).get('email','')},entitlements=billing.entitlements(identity.plan))
             handler._send(200,common)
             return True

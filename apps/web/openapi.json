@@ -10991,6 +10991,11 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 500
+              },
+              "acceleration_interpretation": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
               }
             },
             "required": [

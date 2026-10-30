@@ -198,6 +198,7 @@ def simulate(value):
                     floor=extent(body['geometry'],pose).z
                     if model=='ground' or p.z<floor:
                         pose=Pose3D(V(p.x,p.y,floor),orientation);velocity=V(velocity.x,velocity.y,0)
+                acceleration=(velocity-local['velocity'])*(1/dt)
                 if limited and not any(e['object_id']==key and e['code']=='speed_limit' for e in constraints):
                     constraints.append({'object_id':key,'t_s':t,'code':'speed_limit'})
             current[key]={'pose':pose,'velocity':velocity,'acceleration':acceleration}
@@ -244,7 +245,7 @@ def simulate(value):
     return {'schema_version':'2.0','coordinate_frame':'world_enu','units':'SI','source_digest':digest(scene),'scene':scene,
             'provenance':'DETERMINISTIC','calibration':scene['calibration'],'frames':frames,'events':events,'constraints':constraints,
             'minimum_clearances':list(minimum.values()),'labels':{'simulation_only':True,'physical_actuation':False,
-            'contact_response':False,'clearances_include_conservative_bounds':True,'clearance_sampling':'minimum_of_emitted_frames; continuous contacts reported separately'},
+            'contact_response':False,'clearances_include_conservative_bounds':True,'clearance_sampling':'minimum_of_emitted_frames; continuous contacts reported separately','acceleration_interpretation':'Free-body interval mean after constraints; analytic waypoint derivative; articulated finite differences; initial free-body sample unavailable (zero sentinel).'},
             'assumptions':scene['assumptions']+['Fixed-step kinematic prediction; no contact response, tipping, structural compliance or aerodynamic validation.']}
 
 

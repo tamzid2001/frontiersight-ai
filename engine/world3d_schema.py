@@ -80,7 +80,7 @@ RESULT=obj({'schema_version':{'const':'2.0'},'coordinate_frame':{'const':'world_
             'events':{'type':'array','items':EVENT,'maxItems':240},'constraints':{'type':'array','items':CONSTRAINT,'maxItems':64},
             'minimum_clearances':{'type':'array','items':CLEARANCE,'maxItems':120},
             'labels':obj({'simulation_only':{'const':True},'physical_actuation':{'const':False},'contact_response':{'const':False},
-                          'clearances_include_conservative_bounds':{'const':True},'clearance_sampling':TEXT},
+                          'clearances_include_conservative_bounds':{'const':True},'clearance_sampling':TEXT,'acceleration_interpretation':TEXT},
                          ['simulation_only','physical_actuation','contact_response','clearances_include_conservative_bounds','clearance_sampling']),
             'assumptions':{'type':'array','items':TEXT,'maxItems':25}},
            ['schema_version','coordinate_frame','units','source_digest','scene','provenance','calibration','frames','events','constraints','minimum_clearances','labels','assumptions'])

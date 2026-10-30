@@ -43,12 +43,12 @@ def test_actual_account_endpoint_reads_only_frontier_firestore_profile(monkeypat
     http=ThreadingHTTPServer(('127.0.0.1',0),server.H);thread=threading.Thread(target=http.serve_forever,daemon=True);thread.start()
     try:
         for route in ('/api/me','/api/v1/account'):
-            with urllib.request.urlopen('http://127.0.0.1:'+str(http.server_port)+route) as response:result=json.load(response)
+            with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:'+str(http.server_port)+route,headers={'Authorization':'Bearer fixture-session'})) as response:result=json.load(response)
             assert result['storage']=='firestore' and result['siteId']=='frontiersight-ai'
             assert result['profile']['name']=='Frontier profile' and result['profile']['clerkUserId']==identity.user_id
         assert result['plan']=='researcher'
         monkeypatch.setattr(workbench_http,'actor',lambda _:Identity(identity.user_id,None,None,'researcher',('model',)))
-        try:urllib.request.urlopen('http://127.0.0.1:'+str(http.server_port)+'/api/me')
+        try:urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:'+str(http.server_port)+'/api/me',headers={'Authorization':'Bearer fixture-session'}))
         except urllib.error.HTTPError as error:
             assert error.code==403;error.close()
         else:raise AssertionError('model-only key must not read profile PII')

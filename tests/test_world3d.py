@@ -121,3 +121,14 @@ def test_invalid_intervention_and_profile():
     with pytest.raises(ValueError): compare(warehouse(),[{'object_id':'unknown'}])
     with pytest.raises(ValueError): compare(warehouse(),[])
     with pytest.raises(ValueError): validate_profile(profile('ground_air_hybrid'))
+
+
+def test_reported_acceleration_tracks_speed_constraint_not_unapplied_command():
+    scene=base('Saturated vertical speed',[body('a',[0,0,1],[.1,.1,.1],'constant_acceleration',
+               acceleration_mps2=[0,0,2],physics=profile('constant_acceleration',max_vertical_speed_mps=1))],2)
+    frames=simulate(scene)['frames']
+    assert frames[-1]['objects'][0]['velocity_mps'][2]==1
+    assert frames[-1]['objects'][0]['acceleration_mps2'][2]==0
+    for a,b in zip(frames,frames[1:]):
+        dt=b['t_s']-a['t_s'];va=a['objects'][0]['velocity_mps'];vb=b['objects'][0]['velocity_mps']
+        assert b['objects'][0]['acceleration_mps2']==pytest.approx([(y-x)/dt for x,y in zip(va,vb)])
