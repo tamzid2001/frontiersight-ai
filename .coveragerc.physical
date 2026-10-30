@@ -1,0 +1,15 @@
+[run]
+source = .
+branch = True
+
+[report]
+include =
+    engine/*
+    agents/*
+    integrations/*
+    services/*
+    edge/*
+    sdk/*
+
+[xml]
+output = coverage/physical-release-all.xml

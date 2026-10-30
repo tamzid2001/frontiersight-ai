@@ -1,6 +1,6 @@
 # FrontierSightAI workbench API and MCP
 
-Version 0.38.0. Base URL: `https://frontiersight-ai.vercel.app`.
+Version 0.39.0. Base URL: `https://frontiersight-ai.vercel.app`.
 The machine-readable contract is [OpenAPI](https://frontiersight-ai.vercel.app/openapi.json).
 The website, REST and authenticated MCP tools share the same simulation document,
 workspace identity and storage operations. No endpoint actuates a physical robot.
@@ -195,3 +195,48 @@ error without printing credentials, upstream bodies or making a second request.
 Saved Meta credentials apply to authenticated workbench generation, path edits and segmentation; paid Create Lab scene generation uses that same API when cloud workspace saving is enabled. Legacy guest demo requests use the host fair-use key. Candidate worker threads inherit only their own request context.
 
 The local key registry bounds each account to 10 active keys and 100 retained key records. Operators must purge expired/revoked history according to their retention policy before that history cap is reached; expiry alone is not a Firestore TTL deletion.
+
+## Physical Intelligence v2 (additive)
+
+The same canonical SI/ENU JSON drives the 3D workbench, HTTP and MCP. Existing v1
+planar scenes remain supported. See [the new workbench](/physical-intelligence).
+
+| REST POST path | MCP tool | Authority |
+|---|---|---|
+| `/api/v2/scenes/demo` | `get_scene_3d` | Public bounded synthetic warehouse/flying scene |
+| `/api/v2/scenes/prepare` | `prepare_scene_3d` | Validate/hash, no persistence |
+| `/api/v2/simulations/run` | `simulate_scene_3d` | Deterministic 3D prediction, no actuation |
+| `/api/v2/counterfactuals/compare` | `simulate_counterfactual_3d` | Typed interventions, baseline + counterfactual |
+| `/api/v2/geometry/closest-approach` | `closest_approach_3d` | Exact constant-velocity sphere CPA/TTC |
+| `/api/v2/physics/validate` | `validate_physics_profile` | Reject unknown/invalid dynamics |
+| `/api/v2/tracks/estimate` | `estimate_kinematics_3d` | Variable-dt alpha-beta estimates |
+| `/api/v2/tracks/extract` | `extract_video_tracks` | Join SAM response IDs to source PTS; pixel space |
+| `/api/v2/tracks/assumed-scene` | `tracks_to_assumed_scene_3d` | Explicit scale/height/radius assumptions |
+| `/api/v2/calibration/project` | `calibrate_scene` | Supplied depth or declared plane, never invented depth |
+| `/api/v2/scenes/upgrade` | `upgrade_planar_scene` | Preserve original 2D document; assumed initial-state 3D prediction |
+| `/api/v2/evidence/export` | `export_evidence_packet_3d` | Unsigned hash-bound evidence; not measurement authentication |
+| `/api/v1/physics/propose` | `propose_physics_profile` | Paid/session or model-scoped key, quota/idempotency receipt; one bounded model proposal; approval required |
+| `/api/v1/profile/get` | `get_profile` | Only your FrontierSight profile |
+| `/api/v1/profile/sync` | `sync_profile` | Clerk session; authoritative name/email; separate app namespace |
+| `/api/v1/profile/preferences` | `update_profile_preferences` | Locale/timezone/reduced motion only; no entitlement changes |
+
+GET `/api/v2/capabilities` reports supported geometry, limits and unverified
+hardware. V1 scene create/update accepts v2 scenes and preserves exact payloads.
+Version-2 simulations are kinematic: no contact response, pallet release, tipping
+or flight certification. Possible contacts may be conservative bounds. Clearances
+are sampled unless the exact continuous method is identified. Natural-language
+proposals cannot run arbitrary code or reach a physical controller.
+
+### Local video/edge service
+
+Local operator-token API: `POST /uploads`, `POST /jobs/{id}/chunk` with
+`Upload-Offset`, `POST /jobs/{id}/finish`, GET `/jobs/{id}`, POST
+`/jobs/{id}/{pause|resume|cancel|retry|delete}`, GET `/health`, GET `/state`.
+A separate authenticated local `/mcp` exposes `inspect_live_session` and
+`get_tracking_diagnostics`. Cloud MCP has no implicit camera access. Inspection
+is local; SAM mode explicitly transmits a clip using the local model key. A job
+that may have reached the provider is not automatically resubmitted. Never
+substitute the edge operator token for a cloud Clerk/agent key.
+
+Detailed installation, schema examples, hardware exclusions, source references
+and measured CPU results are in the repository's `docs/physical-intelligence/`.
