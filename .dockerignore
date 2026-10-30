@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+.clerk
+.vercel
+__pycache__
+**/__pycache__
+.pytest_cache
+.coverage
+coverage
+node_modules
+**/node_modules
+*.egg-info
+build
+dist
+data
+private

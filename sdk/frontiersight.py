@@ -28,17 +28,19 @@ class FrontierSight:
         self.last_request_key=None
         self.token=token if token is not None else os.environ.get('FRONTIERSIGHT_API_KEY','')
 
-    def call(self, path, body, *, request_key=None):
+    def call(self, path, body, *, request_key=None, api_version="v1"):
+        if api_version not in ("v1","v2"):raise ValueError("unsupported API version")
         if not isinstance(path,str) or not re.fullmatch(r'[a-z-]+/[a-z-]+',path):
             raise ValueError('path must be resource/operation, without URL or query')
         token=self.token() if callable(self.token) else self.token
-        if not isinstance(token,str) or not token or any(ch.isspace() for ch in token):
+        if not isinstance(token,str) or (not token and api_version=='v1') or any(ch.isspace() for ch in token):
             raise ValueError('a Bearer token/key is required')
         self.last_request_key=request_key or str(uuid.uuid4())
-        headers={'Authorization':'Bearer '+token,'Content-Type':'application/json',
+        headers={'Content-Type':'application/json',
                  'Idempotency-Key':self.last_request_key}
+        if token:headers['Authorization']='Bearer '+token
         if self.organization is not None:headers['X-Workspace-Organization']=self.organization
-        request=urllib.request.Request(self.base_url+'/api/v1/'+path,data=json.dumps(body,allow_nan=False).encode(),headers=headers)
+        request=urllib.request.Request(self.base_url+'/api/'+api_version+'/'+path,data=json.dumps(body,allow_nan=False).encode(),headers=headers)
         try:
             with urllib.request.urlopen(request,timeout=self.timeout) as response:
                 return json.loads(response.read(4_500_000))

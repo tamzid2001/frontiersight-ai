@@ -17,7 +17,7 @@ from integrations.meta import spark, sam
 from integrations.meta.spark import BlockedCredentials, ModelError
 
 WEB = Path(__file__).resolve().parents[2] / "apps" / "web"
-TYPES = {".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".json": "application/json", ".mjs": "text/javascript"}
+TYPES = {".mjs":"text/javascript", ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".json": "application/json", ".mjs": "text/javascript"}
 _cache: dict = {}
 MAX_BODY = 12 * 1024 * 1024          # 12 MB hard ingest bound
 RATE_LIMIT, RATE_WINDOW = 120, 60.0  # POST requests per IP per minute (best-effort, per-instance)
@@ -35,6 +35,8 @@ from services.api import store as _store
 from integrations import billing as _billing
 from services.api import workspace_http as _workspace
 from services.api import workbench_http as _workbench
+from services.api import physical as _physical
+from services.api.clerk_auth import WorkspaceError
 
 def _auth_user(handler):
     auth = handler.headers.get("Authorization", "")
@@ -118,12 +120,18 @@ class H(BaseHTTPRequestHandler):
         ep = parse_qs(u.query).get("ep", [None])[0]
         if ep == "apiguide": return "/api-guide.html"
         if ep == "path": return "/api/paths/" + parse_qs(u.query).get("operation", [""])[0]
+        if ep == "scopejs": return "/request-scope-core.mjs"
+        if ep == "edgejs": return "/edge-studio.mjs"
+        if ep == "physicaljs": return "/physical-intelligence.mjs"
+        if ep == "physicalcss": return "/physical-intelligence.css"
+        if ep == "v2":
+            return "/api/v2/" + parse_qs(u.query).get("resource", [""])[0]
         if ep == "v1":
             resource = parse_qs(u.query).get("resource", [""])[0]
             return "/api/v1/" + resource
         if ep == "asset":
             return "/assets/" + parse_qs(u.query).get("file", [""])[0]
-        if ep == "appview" or u.path in ("/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help"):
+        if ep == "appview" or u.path in ("/physical-intelligence","/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help"):
             return "/"
         return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "scenerequest": "/scene-request-core.js", "entityscale": "/entity-scale.mjs", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
                 "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
@@ -157,6 +165,7 @@ class H(BaseHTTPRequestHandler):
                           parse_constant=_bad_const)
     def do_GET(self):
         route = self._route()
+        if _physical.handle(self, route, "GET"): return
         if _workbench.handle(self, route, "GET"):
             return
         if _workspace.handle(self, route, "GET"):
@@ -177,9 +186,9 @@ class H(BaseHTTPRequestHandler):
                        '<image:title>FrontierSight AI demo — forklift and pedestrian near-miss analysis</image:title></image:image></url>\n'
                        '</urlset>\n')
                 xml=xml.replace('</urlset>', ''.join(f'<url><loc>{base}/{page}</loc><changefreq>weekly</changefreq></url>'
-                    for page in ('pricing','create','help','api-guide.html'))+'</urlset>')
+                    for page in ('physical-intelligence','pricing','create','help','api-guide.html'))+'</urlset>')
                 return self._send(200, xml.encode(), "application/xml")
-            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.38.0"})
+            if route.startswith("/api/health"): return self._send(200, {"ok": True, "service": "frontiersight-ai", "version": "0.39.0"})
             if route.startswith("/api/mcp"):
                 from services.api import mcp as _mcp
                 try: _workbench.check_origin(self)
@@ -262,10 +271,15 @@ class H(BaseHTTPRequestHandler):
                 if f.name=="index.html":
                     import re, html
                     view=parse_qs(urlparse(self.path).query).get("view",[urlparse(self.path).path.strip("/")])[0]
-                    titles={"pricing":"Pricing", "create":"Create Lab", "studio":"Video Studio", "counterfactual":"Counterfactuals", "settings":"Account Settings", "sign-in":"Sign In", "workspaces":"Workspaces", "help":"Help and Guides"}
+                    titles={"physical-intelligence":"Physical Intelligence 3D", "pricing":"Pricing", "create":"Create Lab", "studio":"Video Studio", "counterfactual":"Counterfactuals", "settings":"Account Settings", "sign-in":"Sign In", "workspaces":"Workspaces", "help":"Help and Guides"}
                     if view in titles:
                         document=content.decode();title=html.escape(titles[view]+" | FrontierSight AI")
                         document=re.sub(r"<title>.*?</title>","<title>"+title+"</title>",document,count=1)
+                        base=os.environ.get('APP_BASE_URL','https://frontiersight-ai.vercel.app').rstrip('/')
+                        canonical=html.escape(base+'/'+view,quote=True)
+                        document=re.sub(r'<link rel="canonical" href="[^"]*">','<link rel="canonical" href="'+canonical+'">',document,count=1)
+                        document=re.sub(r'<meta property="og:url" content="[^"]*">','<meta property="og:url" content="'+canonical+'">',document,count=1)
+                        document=re.sub(r'<meta property="og:title" content="[^"]*">','<meta property="og:title" content="'+title+'">',document,count=1)
                         if view in ("settings","sign-in","workspaces"):
                             document=document.replace("</head>",'<meta name="robots" content="noindex,nofollow"></head>')
                         content=document.encode()
@@ -274,8 +288,9 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(400, {"error": str(e)[:300]})
     def do_POST(self):
-        if self._route().startswith(("/api/v1/", "/api/paths/")) and not _rate_ok("workbench:"+self.client_address[0],limit=60):
+        if self._route().startswith(("/api/v1/", "/api/v2/", "/api/paths/")) and not _rate_ok("workbench:"+self.client_address[0],limit=60):
             return self._send(429,{"error":"workbench_request_rate_limit"})
+        if _physical.handle(self, self._route(), "POST"): return
         if _workbench.handle(self, self._route(), "POST"):
             return
         if _workspace.handle(self, self._route(), self.command):
@@ -476,6 +491,11 @@ class H(BaseHTTPRequestHandler):
                 try:
                     profile = _clerk.verified_profile(claims["sub"])
                     user = _store.provision_clerk_user(claims["sub"], profile["email"], profile["name"])
+                    if _workspace.enabled():
+                        from services.api.profiles import Profiles
+                        Profiles(_workspace.database(),_workbench.actor(auth)).sync(profile)
+                except WorkspaceError as error:
+                    return self._send(error.status,{"error":error.code})
                 except ValueError:
                     return self._send(409, {"error": "account linking requires owner verification"})
                 except Exception:
@@ -723,7 +743,7 @@ class H(BaseHTTPRequestHandler):
                     raise _billing.PaymentRequired("sam_video", plan)
                 ref = body.get("file_id") or body.get("video_url", "")
                 if not ref: return self._send(400, {"error": "video_url or file_id is required"})
-                out = sam.segment_video(ref, body.get("concept", "person"), is_file_id=bool(body.get("file_id")))
+                out = sam.segment_video(ref, body.get("concept", "person"), is_file_id=bool(body.get("file_id")), timeout=25)
                 return self._send(200, out)
             if route.startswith("/api/meta/segment"):
                 out = sam.segment_image(body["image_data_url"], body.get("concept", "person"))

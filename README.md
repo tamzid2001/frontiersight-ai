@@ -18,6 +18,19 @@ Owner: **Quantura Studio**. Submissions close **Nov 4, 2026, 9:00 PM ET**.
 > with a human approving the evidence before it leaves the building. Every number carries its
 > provenance: `MODEL_DERIVED`, `DETERMINISTIC`, `FIXTURE`, or `ASSUMPTION`.
 
+## Physical Intelligence v2
+
+Build and compare actual 3D states: independent forklift forks/payload, hypothetical
+vertical flight, timed XYZ paths, typed physics, height-aware contacts and explicit
+calibration assumptions. The same deterministic Python core powers the new
+[3D workbench](https://frontiersight-ai.vercel.app/physical-intelligence), REST and MCP.
+Existing planar workflows remain available.
+
+A separate local worker supports bounded video uploads, durable analysis jobs,
+actual presentation timestamps and camera/file shadow state. No physical actuation
+is enabled. [Run the demonstrations and inspect the numerical boundaries](docs/physical-intelligence/README.md)
+or [set up local video/ROS](docs/physical-intelligence/EDGE.md).
+
 ## Watch it (3 minutes)
 
 [![FrontierSight AI demo](https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg)](https://youtu.be/mYTkPqigoz8)
@@ -30,11 +43,12 @@ Owner: **Quantura Studio**. Submissions close **Nov 4, 2026, 9:00 PM ET**.
 
 ```bash
 git clone https://github.com/tamzid2001/frontiersight-ai && cd frontiersight-ai
-python3 -m pytest -q                                     # 42 tests, fully offline
+python3 -m pip install -e '.[dev]'
+python3 -m pytest -q                                     # no GPU or model key required
 PYTHONPATH=. python3 -m services.api.server --port 8000  # → http://127.0.0.1:8000
 ```
 
-Runtime dependencies: **none** (Python ≥3.10 standard library). Docker also works: `docker compose up`.
+Python ≥3.10; declared dependencies install via `pyproject.toml`. Optional local video/camera extras require Python ≥3.12. Docker also works: `docker compose up`.
 
 Add a Meta Model API key (server-side only) to unlock live AI features:
 
@@ -135,7 +149,7 @@ frontiersight-ai/
 ## Testing
 
 ```bash
-python3 -m pytest -q        # unit/property/integration-style API tests (42)
+python3 -m pytest -q        # unit, analytical, API/MCP and regression tests
 PYTHONPATH=. python3 -m services.api.server --smoke   # health + UI smoke
 ```
 
@@ -144,7 +158,7 @@ secret-pattern scan on every push.
 
 ## Deployment
 
-Deployed on Vercel as a zero-dependency Python serverless function:
+Deployed on Vercel as a Python serverless function:
 https://frontiersight-ai.vercel.app — deployment and browser validation evidence
 is recorded per release. See COVERAGE.md for executed tests and explicit limits;
 provider fixtures are not evidence of live model or hardware execution.

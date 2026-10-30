@@ -51,3 +51,19 @@ Emulator tests do not establish production IAM/index readiness or load capacity.
 Checkout remains gated until production Clerk DNS and a restricted Firestore
 credential are verified. The current development login is preserved. See
 CLERK_SETUP.md and BILLING_DEPLOYMENT.md. No customer was charged or emailed.
+
+## Physical intelligence 0.39 release
+
+317 local Python tests passed. Application scope (engine, agents, integrations,
+services, edge, SDK): **90.61% lines / 75.41% branches**; changed production
+executable lines: **91.63%** versus baseline `06e29d9`. Raw reports:
+`coverage/physical-release-all.xml` and `coverage/physical-release-all.lcov`.
+CI enforces ≥80% application lines, ≥70% branches, ≥90% changed executable lines,
+nonempty valid artifacts, actual hits and contract generation parity. It preserves
+existing stronger scene-editing and workbench gates. The physical workflow uses
+Python 3.12, real video encoding/decoding, actual local HTTP and Firestore emulator.
+
+The report includes uncovered native camera/ROS paths. It does not measure CUDA,
+GPU execution, real camera/robot control or browser DOM coverage. Existing browser
+helper LCOV is separate: 30 tests, 99.22% lines / 95.65% branches. Full evidence and
+remaining acceptance conditions: `docs/physical-intelligence/VALIDATION.md`.

@@ -55,6 +55,7 @@
  <button data-view="workspace">▦&nbsp; Workspace</button>
  <button data-view="pricing">◈&nbsp; Pricing</button>
  <div class="navlabel">Experiments</div>
+ <button data-view="physical">◇&nbsp; Physical Intelligence 3D</button>
  <button data-view="create">✦&nbsp; Create Lab</button>
  <button data-view="studio">▶&nbsp; Video Studio</button>
  <button data-view="counterfactual">⇄&nbsp; Counterfactual</button>
@@ -253,7 +254,22 @@
    <h3>Objects</h3><ul id="objects"></ul></aside>
  </div>
 
- <details class="card wide studio-tools" id="sam-panel" style="margin-top:14px"><summary>SAM 3.1 Vision — segment an image or video frame</summary>
+ <details class="card edge-studio" id="edge-studio-panel"><summary>Video upload jobs &amp; local shadow intelligence</summary>
+ <p>Run <code>python -m edge.server</code> locally. Videos remain local in inspection mode. Selecting SAM explicitly sends the clip to Meta for paid model processing with your configured key.</p>
+ <div class="edge-grid"><label>Local worker URL<input id="edge-url" type="url" value="http://127.0.0.1:8830"></label><label>Local operator token<input id="edge-token" type="password" autocomplete="off"></label><button id="edge-connect">Connect local worker</button></div>
+ <p id="edge-status" role="status">Disconnected · no camera or hardware connected.</p>
+ <div id="edge-drop" class="edge-drop"><label>Drop a video here or choose a file<input id="edge-file" type="file" accept=".mp4,.mov,.webm,video/mp4,video/quicktime,video/webm"></label><p>64 MiB · up to 120 seconds · 3,600 decoded frames (512 for SAM) · actual content validated.</p></div>
+ <div class="edge-grid"><label>Concepts · one short noun phrase per line<textarea id="edge-concepts" rows="3">person</textarea></label><label><input id="edge-send-meta" type="checkbox"> Send this video to Meta SAM 3.1 with my local model credentials</label></div>
+ <progress id="edge-progress" max="100" value="0" aria-label="Video upload progress"></progress>
+ <div class="pi-toolbar"><button id="edge-analyze" disabled>Upload &amp; analyze</button><button id="edge-pause-upload">Pause upload</button><button id="edge-resume">Resume</button><button id="edge-pause">Pause job</button><button id="edge-cancel">Cancel job</button><button id="edge-retry">Retry inspection</button><button id="edge-delete">Delete local footage</button></div>
+ <p>Model calls already sent cannot be paused/resubmitted safely. Uncertain attempts are retained for review.</p>
+ <div class="edge-preview"><video id="edge-video" controls playsinline preload="metadata"></video><canvas id="edge-overlay" aria-label="Model tracking overlays"></canvas></div>
+ <div class="edge-grid"><label>Resume an existing job<input id="edge-job-id" placeholder="Local job ID"></label><button id="edge-reopen">Inspect job</button><label>Tracked object<select id="edge-track-select"></select></label></div>
+ <pre id="edge-job"></pre><pre id="edge-track"></pre>
+ <details><summary>Convert tracks using declared assumptions</summary><p>Monocular segmentation does not measure depth. These values are assumptions and will be labeled as such.</p><div class="edge-grid"><label>Assumed metres / pixel<input id="edge-scale" type="number" step="0.001" min="0.000001" value="0.01"></label><label>Assumed elevation (m)<input id="edge-height" type="number" min="0" value="0"></label><label>Assumed collision radius (m)<input id="edge-radius" type="number" min="0.001" step="0.01" value="0.25"></label></div><button id="edge-convert" disabled>Convert to assumption-based 3D scene</button></details>
+ <details><summary>Live Intelligence · shadow runtime</summary><p>The edge camera process must be started separately. Connecting this page never turns on a camera or enables actuators.</p><button id="edge-live-refresh">Refresh live state</button><button id="edge-world" disabled>Open fresh predicted world</button><pre id="edge-live">No runtime connected.</pre><pre id="edge-health"></pre></details>
+</details>
+<details class="card wide studio-tools" id="sam-panel" style="margin-top:14px"><summary>SAM 3.1 Vision — segment an image or video frame</summary>
   <p class="dim">Load an image or video (stays in your browser), then segment the current frame with SAM 3.1.
   For video: segment at two or more moments, then build tracks from the boxes (greedy-IoU association) and run
   the full analysis on them. A still image can instead become a 2D cutout scene and an illustrative 3D mask extrusion. Detections are image-space — results stay in pixels unless you declare a scale in Create Lab terms.</p>
@@ -290,6 +306,27 @@
   <div class="row"><label class="chk"><input id="image-scene-background" type="checkbox" checked> Show original photograph for context</label><button id="image-scene-export" type="button" class="ghostbtn">Download scene JSON</button></div>
   <p id="image-scene-status" role="status"></p><div class="image-scene-views"><section><h3>2D image space</h3><canvas id="image-scene-2d" aria-label="Image-space scene with extracted objects"></canvas></section><section><h3>3D silhouette approximations</h3><div id="image-scene-3d"></div></section></div><fieldset id="image-scene-objects"><legend>Extracted objects</legend></fieldset>
  </div>
+</section>
+
+<section id="view-physical" class="view">
+ <div class="pi-heading"><div><span class="pill">3D · simulation &amp; declared assumptions</span><h2>Physical Intelligence</h2><p>Change an object's height, forces or lifting schedule. Inspect recomputed 3D trajectories and clearance.</p></div><a href="/api-guide.html">API &amp; MCP guide ↗</a></div>
+ <div class="pi-layout"><aside class="card pi-controls">
+ <label>Demonstration<select id="pi-demo"><option value="warehouse">Warehouse · independent fork lift</option><option value="flying">Hypothetical vertical-thrust vehicle</option></select></label>
+ <label>Warehouse comparison<select id="pi-warehouse-variant"><option value="normal">Normal approach then lift</option><option value="early">Earlier lifting</option><option value="fast">Faster lift</option><option value="unsafe">Unsafe beam clearance</option><option value="elevated">Translate with elevated load</option></select></label><p id="pi-calibration" class="pill">Not loaded</p><label>Component<select id="pi-object"></select></label><p id="pi-parent"></p>
+ <label>Position X, Y, Z (m)<input id="pi-position" value="0, 0, 0"></label>
+ <label>Orientation W, X, Y, Z (unit quaternion)<input id="pi-orientation" value="1, 0, 0, 0"></label>
+ <label>Linear velocity X, Y, Z (m/s)<input id="pi-velocity" value="0, 0, 0"></label>
+ <label>Acceleration X, Y, Z (m/s²)<input id="pi-acceleration" value="0, 0, 0"></label>
+ <details open><summary>Lift schedule</summary><label>Prismatic joint · SI units<textarea id="pi-joint" rows="8" spellcheck="false"></textarea></label></details>
+ <details><summary>Timed 3D waypoints</summary><label>Rest-to-rest waypoints · t_s and position_m<textarea id="pi-waypoints" rows="8" spellcheck="false"></textarea></label><p>Each segment is a C2 quintic curve. Speed and acceleration limits are checked analytically.</p></details><details><summary>Collision geometry &amp; physics</summary><label>Collision shape JSON<textarea id="pi-geometry" rows="3" spellcheck="false"></textarea></label><label>Physics profile JSON<textarea id="pi-profile" rows="12" spellcheck="false"></textarea></label></details>
+ <button id="pi-apply-object" data-pi-request>Validate &amp; apply component</button>
+ <details><summary>Physics from language</summary><label>Describe a supported change<textarea id="pi-instruction" rows="3" placeholder="Limit lift speed to 0.35 m/s and assume a 900 kg payload."></textarea></label><button id="pi-propose" data-pi-request>Propose with Muse</button><p>Authenticated Researcher plan and configured model access required. One request; changes wait for your approval.</p><pre id="pi-proposal"></pre><button id="pi-approve" disabled data-pi-request>Approve &amp; apply proposal</button></details>
+ </aside><div class="pi-main"><div class="card pi-stage-card"><div class="pi-toolbar"><label>View<select id="pi-camera"><option>perspective</option><option>top</option><option>side</option><option>front</option></select></label><button id="pi-run" data-pi-request>Recompute</button><button id="pi-compare" data-pi-request>Compare to baseline</button></div><div id="pi-viewport" role="img" aria-label="3D simulated world; numerical data follows below"></div><div class="pi-timeline"><button id="pi-play">Play</button><label class="pi-range">Timeline<input id="pi-time" type="range" min="0" max="12" step="0.01" value="0"></label><output id="pi-clock">0.00 s</output><label>Playback<select id="pi-rate"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label></div><p id="pi-values"></p></div>
+ <div id="pi-charts" class="pi-charts" aria-label="Selected component simulation charts"></div><p id="pi-status" role="status" aria-live="polite">Choose a demonstration. No camera or hardware is connected.</p>
+ <div class="pi-toolbar"><button id="pi-reset-baseline">Use current scene as baseline</button><button id="pi-save" data-pi-request>Save to workspace</button><button id="pi-export">Export scene JSON</button></div>
+ <div class="card"><h3>Contact evidence</h3><p>Solid objects show the current simulation. Green wireframes show the baseline. Possible contacts are conservative bounds, not confirmed impacts.</p><ul id="pi-events"></ul><h3>Declared constraints</h3><pre id="pi-constraints"></pre><details><summary>Pair clearance values</summary><div class="pi-table"><table><thead><tr><th>Components</th><th>Clearance</th><th>Time</th><th>Method</th></tr></thead><tbody id="pi-clearance"></tbody></table></div></details></div>
+ <details class="card"><summary>Canonical scene · same data for REST, MCP and rendering</summary><label>Version 2.0 scene JSON<textarea id="pi-source" rows="18" spellcheck="false"></textarea></label><button id="pi-source-apply" data-pi-request>Validate &amp; load document</button></details>
+ </div></div>
 </section>
 
 <section id="view-create" class="view"><h2>Create Lab — build a scene, set the paths, run the proof</h2>

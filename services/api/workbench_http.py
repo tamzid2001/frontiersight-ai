@@ -9,6 +9,8 @@ from services.api.clerk_auth import WorkspaceError
 from services.api.workbench import actor, Workbench
 
 ROUTES = {
+    '/api/v1/profile/get':'get_profile','/api/v1/profile/sync':'sync_profile','/api/v1/profile/preferences':'update_profile_preferences',
+    '/api/v1/physics/propose':'propose_physics_profile',
     '/api/v1/media/render-frame':'render_scene_frame', '/api/v1/media/render-preview':'render_video_preview',
     '/api/v1/model-requests/get':'get_model_request',
     '/api/v1/paths/plan': 'plan_path', '/api/v1/paths/predict': 'predict_path',
@@ -42,6 +44,7 @@ def body(handler, maximum=350000):
 
 
 def handle(handler, route, method):
+    account_alias=route=='/api/me' and os.environ.get('SCENE_STORE')=='firestore'
     legacy_billing = clerk_billing.enabled() and route in ('/api/billing/checkout', '/api/billing/portal', '/api/billing/webhook')
     public_path = route in ('/api/paths/plan', '/api/paths/predict')
     if public_path:
@@ -60,7 +63,7 @@ def handle(handler, route, method):
         except WorkspaceError as error: handler._send(error.status,{'error':error.code})
         except (ValueError, TypeError, OverflowError): handler._send(400,{'error':'invalid_path_request'})
         return True
-    if not route.startswith('/api/v1/') and not legacy_billing:
+    if not route.startswith('/api/v1/') and not legacy_billing and not account_alias:
         return False
     try:
         check_origin(handler)
@@ -69,19 +72,31 @@ def handle(handler, route, method):
             if not 0 < length <= 1_000_000: raise WorkspaceError(413, 'webhook_budget_exceeded')
             event = billing.verify_webhook(handler.rfile.read(length), handler.headers.get('Stripe-Signature', ''))
             handler._send(200, clerk_billing.webhook(event)); return True
-        if route not in ROUTES and route not in ('/api/v1/account', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/keys/create', '/api/v1/keys/list', '/api/v1/keys/revoke', '/api/v1/provider-key/save', '/api/v1/provider-key/status', '/api/v1/provider-key/delete') and not legacy_billing:
+        if route not in ROUTES and route not in ('/api/v1/account', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/keys/create', '/api/v1/keys/list', '/api/v1/keys/revoke', '/api/v1/provider-key/save', '/api/v1/provider-key/status', '/api/v1/provider-key/delete') and not legacy_billing and not account_alias:
             raise WorkspaceError(404, 'route_not_found')
-        if route == '/api/v1/account':
+        if route == '/api/v1/account' or account_alias:
             if method != 'GET': raise WorkspaceError(405, 'get_required')
         elif method != 'POST':
             raise WorkspaceError(405, 'post_required')
+        if account_alias and not handler.headers.get('Authorization'):
+            handler._send(200,{'authenticated':False,'user':None,'plan':'explorer','entitlements':billing.entitlements('explorer'),'storage':'firestore','siteId':'frontiersight-ai'})
+            return True
         identity = actor(handler.headers.get('Authorization', ''))
         org = handler.headers.get('X-Workspace-Organization')
         if org is not None and org != (identity.org_id or 'personal'):
             raise WorkspaceError(409, 'session_workspace_changed')
-        if route == '/api/v1/account':
-            handler._send(200, {'userId': identity.user_id, 'orgId': identity.org_id, 'orgRole': identity.org_role,
-                'plan': identity.plan, 'storage': 'firestore', 'billing': billing.checkout_configuration()})
+        if route == '/api/v1/account' or account_alias:
+            if identity.token_scopes is not None and 'read' not in identity.token_scopes:raise WorkspaceError(403,'api_key_scope_denied')
+            from services.api.profiles import Profiles
+            from services.api.workspace_http import database,enabled
+            profile=Profiles(database(),identity).get() if enabled() else None
+            common={'userId':identity.user_id,'orgId':identity.org_id,'orgRole':identity.org_role,
+                    'plan':identity.plan,'profile':profile,'siteId':'frontiersight-ai',
+                    'storage':'firestore' if enabled() else 'unavailable','billing':billing.checkout_configuration()}
+            if account_alias:
+                common.update(authenticated=True,user={'id':identity.user_id,'clerk_id':identity.user_id,'name':(profile or {}).get('name',''),
+                                    'email':(profile or {}).get('email','')},entitlements=billing.entitlements(identity.plan))
+            handler._send(200,common)
             return True
         request = body(handler)
         if route.startswith('/api/v1/provider-key/'):

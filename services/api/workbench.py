@@ -190,7 +190,7 @@ class Workbench:
         if not isinstance(body, dict):
             raise ValueError('request must be an object')
         if self.identity.token_scopes is not None:
-            scope = ('model' if operation in ('generate_scene','generate_object','describe_paths','segment_frame','segment_video')
+            scope = ('model' if operation in ('generate_scene','generate_object','describe_paths','segment_frame','segment_video','propose_physics_profile')
                      else 'write' if operation.startswith(('create_','update_','delete_')) else 'read')
             if scope not in self.identity.token_scopes:
                 raise WorkspaceError(403,'api_key_scope_denied')
@@ -198,6 +198,15 @@ class Workbench:
             raise WorkspaceError(413,'request_body_budget_exceeded')
         from services.api.workbench_contract import validate_operation
         validate_operation(operation, body)
+        if operation in ('get_profile','sync_profile','update_profile_preferences'):
+            from services.api.profiles import Profiles
+            profiles=Profiles(self.store('scenes').db,self.identity)
+            if operation=='get_profile':return {'profile':profiles.get(),'siteId':'frontiersight-ai'}
+            if operation=='sync_profile':
+                if self.identity.token_scopes is not None:raise WorkspaceError(403,'clerk_session_required_for_profile_sync')
+                from integrations.clerk_auth import verified_profile
+                return {'profile':profiles.sync(verified_profile(self.identity.user_id)),'siteId':'frontiersight-ai'}
+            return {'profile':profiles.preferences(body['preferences']),'siteId':'frontiersight-ai'}
         if operation == 'render_scene_frame':
             from engine.scene_media import render_frame
             return render_frame(body.get('scene'), body.get('timestamp_s',0),body.get('width',640),body.get('height',480))
@@ -219,8 +228,11 @@ class Workbench:
                 space=body.get('space', 'world'), stage_metres=body.get('stage_metres'), radius=body.get('radius', 0))
         if operation == 'prepare_scene':
             return prepare_scene(body.get('scene'))
-        if operation in ('generate_scene', 'generate_object', 'describe_paths', 'segment_frame', 'segment_video'):
+        if operation in ('generate_scene', 'generate_object', 'describe_paths', 'segment_frame', 'segment_video', 'propose_physics_profile'):
             def invoke():
+                if operation == 'propose_physics_profile':
+                    from integrations.meta.physics_edit import propose_physics
+                    return propose_physics(body.get('profile'),body.get('description'),body.get('model'))
                 if operation == 'generate_scene':
                     scene, meta = spark.generate_scene(body.get('description'), body.get('model'), body.get('candidates', 3))
                     # Assign stable IDs once; all later editors preserve them.
@@ -265,9 +277,13 @@ class Workbench:
         if action != 'delete':
             clean['name'] = name(body.get('name'))
             if kind == 'scenes':
-                clean['payload'] = validate_document(body.get('scene'))
+                raw=body.get('scene')
+                if isinstance(raw,dict) and raw.get('schema_version')=='2.0':
+                    from engine.world3d import validate_scene as validate_3d
+                    clean['payload']=validate_3d(raw)
+                else: clean['payload'] = validate_document(raw)
                 # Validate actual playback bounds; no silent repair on API saves.
-                if clean['payload']['objects']: prepare_scene(clean['payload'])
+                if clean['payload'].get('schema_version')!='2.0' and clean['payload']['objects']: prepare_scene(clean['payload'])
             elif kind == 'objects':
                 clean['payload'] = {'spec': spark.validate_custom_object(body.get('spec'))}
             else:

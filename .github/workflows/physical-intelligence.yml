@@ -1,0 +1,105 @@
+name: Physical intelligence verification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  cpu-video-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: pip install -e '.[dev,edge]'
+      - name: Verify universal dependency resolution
+        run: |
+          pip install uv==0.13.5
+          uv lock --check
+      - name: Verify SDK distribution outside the source checkout
+        run: |
+          python -m pip wheel --no-deps . -w /tmp/frontier-wheels
+          python - <<'PYSDK'
+          import pathlib,subprocess,sys,zipfile
+          wheel=next(pathlib.Path('/tmp/frontier-wheels').glob('frontiersight_ai-*.whl'))
+          with zipfile.ZipFile(wheel) as package:
+              assert 'sdk/__init__.py' in package.namelist()
+              assert 'sdk/frontiersight.py' in package.namelist()
+          code="import sys;sys.path.insert(0,sys.argv[1]);from sdk import FrontierSight;assert FrontierSight(token='').base_url.startswith('https://')"
+          subprocess.run([sys.executable,'-I','-c',code,str(wheel)],cwd='/tmp',check=True)
+          PYSDK
+      - name: Local Firestore emulator
+        run: |
+          curl --fail --silent --show-error https://storage.googleapis.com/firebase-preview-drop/emulator/cloud-firestore-emulator-v1.20.2.jar -o /tmp/firestore.jar
+          echo '4a117fc297b1441eac1b7756e80442e86ef88865b9e3caf6f59eabf83da574f8  /tmp/firestore.jar' | sha256sum -c -
+          java -Xms128m -Xmx512m -jar /tmp/firestore.jar --host 127.0.0.1 --port 56654 --project_id demo-quantura-web --single_project_mode --rules packages/enterprise-web/test/firestore-emulator.rules > /tmp/firestore.log 2>&1 &
+          python - <<'PY'
+          import socket,time
+          for attempt in range(30):
+              try:
+                  with socket.create_connection(('127.0.0.1',56654),timeout=1):break
+              except OSError:time.sleep(1)
+          else:raise SystemExit('Firestore emulator did not start')
+          PY
+      - name: Full application tests and real coverage
+        env:
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:56654
+        run: |
+          python -m pytest -q --cov=. --cov-config=.coveragerc.physical --cov-branch --cov-report=xml:coverage/physical-release-all.xml --cov-report=lcov:coverage/physical-release-all.lcov
+          coverage_base='${{ github.event.pull_request.base.sha || github.event.before }}'
+          if [ -z "$coverage_base" ] || [[ "$coverage_base" =~ ^0+$ ]]; then coverage_base=$(git merge-base HEAD origin/main); fi
+          python scripts/check_physical_coverage.py coverage/physical-release-all.xml --line .8 --branch .7 --base "$coverage_base"
+      - name: Canonical contracts and browser module syntax
+        run: |
+          PYTHONPATH=. python scripts/build_physical_contract.py
+          git diff --exit-code -- apps/web/openapi.json
+          python - <<'PY'
+          import json
+          from openapi_spec_validator import validate
+          validate(json.load(open('apps/web/openapi.json')))
+          PY
+          node --check apps/web/physical-intelligence.mjs
+          node --check apps/web/edge-studio.mjs
+          node --check apps/web/app.js
+      - name: Upload measured coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-intelligence-cobertura-lcov
+          if-no-files-found: error
+          path: |
+            coverage/physical-release-all.xml
+            coverage/physical-release-all.lcov
+  edge-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f Dockerfile.edge -t frontiersight-edge:ci .
+      - name: Non-root container and authenticated diagnostics
+        run: |
+          docker run -d --name frontier-edge-ci -p 127.0.0.1:8830:8830 frontiersight-edge:ci
+          trap 'docker rm -f frontier-edge-ci' EXIT
+          docker exec -i frontier-edge-ci python - <<'PY'
+          from pathlib import Path
+          import json,time,urllib.request
+          for attempt in range(30):
+              try:
+                  key=Path('/data/operator-token').read_text().strip()
+                  request=urllib.request.Request('http://127.0.0.1:8830/health',headers={'Authorization':'Bearer '+key})
+                  with urllib.request.urlopen(request,timeout=2) as response:record=json.load(response)
+                  assert record['physical_actuation'] is False
+                  print('Authenticated local container health passed; actuation disabled')
+                  break
+              except (OSError,ValueError):time.sleep(1)
+          else:raise SystemExit('Container health unavailable')
+          PY

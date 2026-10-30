@@ -18,7 +18,7 @@ from integrations.meta.spark import validate_scene, ModelError
 
 PROTOCOL = "2025-11-25"
 SUPPORTED_PROTOCOLS = ("2024-11-05", "2025-03-26", "2025-06-18", PROTOCOL)
-SERVER = {"name": "frontiersight-ai", "version": "0.38.0"}
+SERVER = {"name": "frontiersight-ai", "version": "0.39.0"}
 
 def _scene_schema():
     schema = _editor_schema("PrepareRequest")
@@ -92,18 +92,25 @@ from services.api.workbench_contract import schemas as workbench_schemas, DESCRI
 WORKBENCH_SCHEMAS = workbench_schemas(_scene_schema())
 for _name, _input in WORKBENCH_SCHEMAS.items():
     _schema_with_key = deepcopy(_input)
-    if _name.startswith(("create_", "update_", "delete_", "generate_", "segment_")) or _name == "describe_paths":
+    if _name.startswith(("create_", "update_", "delete_", "generate_", "segment_")) or _name in ("describe_paths","propose_physics_profile"):
         _schema_with_key['properties']['idempotency_key'] = {'type':'string','pattern':'^[A-Za-z0-9_-]{16,128}$'}
         _schema_with_key['required'].append('idempotency_key')
     TOOLS.append({'name': _name, 'description': DESCRIPTIONS[_name], 'inputSchema': _schema_with_key,
                   'annotations': {'readOnlyHint': _name.startswith(('list_', 'get_', 'validate_', 'plan_', 'predict_', 'prepare_')),
-                     'destructiveHint': _name.startswith(('delete_', 'update_')), 'openWorldHint': _name.startswith(('generate_', 'segment_')) or _name == 'describe_paths'}})
+                     'destructiveHint': _name.startswith(('delete_', 'update_')), 'openWorldHint': _name.startswith(('generate_', 'segment_')) or _name in ('describe_paths','propose_physics_profile')}})
 
 def _ok(result) -> dict:
     return {"content": [{"type": "text", "text": json.dumps(result, default=str)}],
             "structuredContent": result if isinstance(result, dict) else {"result": result}}
 
+from services.api import physical as physical_service
+for _name, _schema in physical_service.SCHEMAS.items():
+    TOOLS.append({'name':_name,'description':physical_service.DESCRIPTIONS[_name],'inputSchema':_schema,
+                  'annotations':{'readOnlyHint':True,'destructiveHint':False,'idempotentHint':True,'openWorldHint':False},
+                  **({'outputSchema':physical_service.OUTPUT_SCHEMAS[_name]} if _name in physical_service.OUTPUT_SCHEMAS else {})})
+
 def call_tool(name: str, args: dict) -> dict:
+    if name in physical_service.SCHEMAS: return _ok(physical_service.execute(name,args))
     if name == "resize_scene":
         return _ok(resize_scene(args.get("scene"),args.get("width"),args.get("height")))
     if name == "reposition_scene":

@@ -1,0 +1,65 @@
+{
+  "implementation_sha256": {
+    "engine/demos3d.py": "6af0461646bed3c0e06f9dd488e272c7719f2a0a9ca412edbbd5eb2b96a80efb",
+    "engine/geometry3d.py": "c6bbcddfaf144f6a349d5a062d70e9d2c07097f1a2472e37cfe0c76e80f9d5f5",
+    "engine/observations3d.py": "d5afd6e1879d8e2a1c74365a2c894409c93c0878e0c72b91382600f3ccf4adbc",
+    "engine/spatial3d.py": "c39eae177d2ed9e4e7d43ae18f601c42435ee7a3ccc3e2923649705e36b34ce4",
+    "engine/trajectory3d.py": "2eb45ea14760a6cded3618d1325345f4b4108e36e26fb41ef35e5273787724bd",
+    "engine/world3d.py": "182943395dc7b1b1fb56e6c8f7d4235d56cd94d84f58cf08a5018b38daeb8127",
+    "engine/world3d_schema.py": "aa11782d6e8c5d18689ebacb48edf2a0fd19a5ff4ef81d1e174758b66c694de3"
+  },
+  "platform": "macOS-26.2-arm64-arm-64bit-Mach-O",
+  "python": "3.14.2",
+  "runs": 10,
+  "reports": [
+    {
+      "demo": "warehouse",
+      "source_sha256": "0307294406fdfeafdf7928afa4345ba24b488fc4eb9063b8a5dee4885962386e",
+      "samples_ms": [
+        485.9827500185929,
+        484.9571670056321,
+        483.3176670363173,
+        484.0227920212783,
+        485.0719589740038,
+        484.76608301280066,
+        488.03779197623953,
+        486.42308299895376,
+        489.93412498384714,
+        492.5530830514617
+      ],
+      "latency_ms": {
+        "p50": 485.52735449629836,
+        "p95": 491.37455192103516,
+        "p99": 492.3173768253764
+      },
+      "peak_traced_python_bytes_separate_run": 941423,
+      "frames": 161,
+      "objects": 7
+    },
+    {
+      "demo": "flying",
+      "source_sha256": "37a07b0a3cc53a718e7a60ef598d6c0935ee1f8137609b35bce9545a7eef7595",
+      "samples_ms": [
+        57.32433299999684,
+        57.937624980695546,
+        56.365291005931795,
+        56.36516597587615,
+        57.29470803635195,
+        57.27887502871454,
+        57.82783398171887,
+        57.160249969456345,
+        56.51920801028609,
+        56.71695800265297
+      ],
+      "latency_ms": {
+        "p50": 57.21956249908544,
+        "p95": 57.88821903115604,
+        "p99": 57.927743790787645
+      },
+      "peak_traced_python_bytes_separate_run": 188182,
+      "frames": 81,
+      "objects": 3
+    }
+  ],
+  "scope": "CPU kinematic simulation; memory tracing measured in a separate run; no comparison/speedup, camera, inference or hardware claims."
+}

@@ -4,7 +4,7 @@
 <link rel="canonical" href="https://frontiersight-ai.vercel.app/api-guide.html"><link rel="icon" href="/favicon-32.png"><link rel="stylesheet" href="/app.css">
 <style>body{display:block;margin:0;padding:24px}main{max-width:1080px;margin:auto}header{max-width:1080px;margin:0 auto 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}pre{overflow:auto;padding:16px;border:1px solid #526174;border-radius:12px}code{overflow-wrap:anywhere}table{display:block;max-width:100%;overflow:auto;border-collapse:collapse}th,td{padding:12px;border:1px solid #526174;text-align:left;vertical-align:top}p,li{line-height:1.7}h1{font-size:clamp(2rem,5vw,3rem)}a{color:#56bace}h2{margin-top:2.2rem}header a{font-weight:600}</style>
 </head><body><header><a href="/">FrontierSight AI</a><a href="/create">Create Lab</a><a href="/pricing">Pricing</a><a href="/settings">Agent keys</a><a href="/openapi.json">OpenAPI JSON</a></header><main><h1>FrontierSightAI workbench API and MCP</h1>
-<p>Version 0.38.0. Base URL: <code>https://frontiersight-ai.vercel.app</code>.
+<p>Version 0.39.0. Base URL: <code>https://frontiersight-ai.vercel.app</code>.
 The machine-readable contract is <a href="https://frontiersight-ai.vercel.app/openapi.json">OpenAPI</a>.
 The website, REST and authenticated MCP tools share the same simulation document,
 workspace identity and storage operations. No endpoint actuates a physical robot.</p>
@@ -233,4 +233,115 @@ python3 scripts/mcp_stdio.py --url https://frontiersight-ai.vercel.app/api/mcp
 <p>Without <code>--url</code>, this command remains offline. Remote failures emit a JSON-RPC
 error without printing credentials, upstream bodies or making a second request.</p>
 <p>Saved Meta credentials apply to authenticated workbench generation, path edits and segmentation; paid Create Lab scene generation uses that same API when cloud workspace saving is enabled. Legacy guest demo requests use the host fair-use key. Candidate worker threads inherit only their own request context.</p>
-<p>The local key registry bounds each account to 10 active keys and 100 retained key records. Operators must purge expired/revoked history according to their retention policy before that history cap is reached; expiry alone is not a Firestore TTL deletion.</p></main><footer><a href="mailto:hello@quantura.studio">Contact support</a> · <a href="https://quantura.studio">Quantura</a></footer></body></html>
+<p>The local key registry bounds each account to 10 active keys and 100 retained key records. Operators must purge expired/revoked history according to their retention policy before that history cap is reached; expiry alone is not a Firestore TTL deletion.</p>
+<h2>Physical Intelligence v2 (additive)</h2>
+<p>The same canonical SI/ENU JSON drives the 3D workbench, HTTP and MCP. Existing v1
+planar scenes remain supported. See <a href="/physical-intelligence">the new workbench</a>.</p>
+<table>
+<thead>
+<tr>
+<th>REST POST path</th>
+<th>MCP tool</th>
+<th>Authority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/api/v2/scenes/demo</code></td>
+<td><code>get_scene_3d</code></td>
+<td>Public bounded synthetic warehouse/flying scene</td>
+</tr>
+<tr>
+<td><code>/api/v2/scenes/prepare</code></td>
+<td><code>prepare_scene_3d</code></td>
+<td>Validate/hash, no persistence</td>
+</tr>
+<tr>
+<td><code>/api/v2/simulations/run</code></td>
+<td><code>simulate_scene_3d</code></td>
+<td>Deterministic 3D prediction, no actuation</td>
+</tr>
+<tr>
+<td><code>/api/v2/counterfactuals/compare</code></td>
+<td><code>simulate_counterfactual_3d</code></td>
+<td>Typed interventions, baseline + counterfactual</td>
+</tr>
+<tr>
+<td><code>/api/v2/geometry/closest-approach</code></td>
+<td><code>closest_approach_3d</code></td>
+<td>Exact constant-velocity sphere CPA/TTC</td>
+</tr>
+<tr>
+<td><code>/api/v2/physics/validate</code></td>
+<td><code>validate_physics_profile</code></td>
+<td>Reject unknown/invalid dynamics</td>
+</tr>
+<tr>
+<td><code>/api/v2/tracks/estimate</code></td>
+<td><code>estimate_kinematics_3d</code></td>
+<td>Variable-dt alpha-beta estimates</td>
+</tr>
+<tr>
+<td><code>/api/v2/tracks/extract</code></td>
+<td><code>extract_video_tracks</code></td>
+<td>Join SAM response IDs to source PTS; pixel space</td>
+</tr>
+<tr>
+<td><code>/api/v2/tracks/assumed-scene</code></td>
+<td><code>tracks_to_assumed_scene_3d</code></td>
+<td>Explicit scale/height/radius assumptions</td>
+</tr>
+<tr>
+<td><code>/api/v2/calibration/project</code></td>
+<td><code>calibrate_scene</code></td>
+<td>Supplied depth or declared plane, never invented depth</td>
+</tr>
+<tr>
+<td><code>/api/v2/scenes/upgrade</code></td>
+<td><code>upgrade_planar_scene</code></td>
+<td>Preserve original 2D document; assumed initial-state 3D prediction</td>
+</tr>
+<tr>
+<td><code>/api/v2/evidence/export</code></td>
+<td><code>export_evidence_packet_3d</code></td>
+<td>Unsigned hash-bound evidence; not measurement authentication</td>
+</tr>
+<tr>
+<td><code>/api/v1/physics/propose</code></td>
+<td><code>propose_physics_profile</code></td>
+<td>Paid/session or model-scoped key, quota/idempotency receipt; one bounded model proposal; approval required</td>
+</tr>
+<tr>
+<td><code>/api/v1/profile/get</code></td>
+<td><code>get_profile</code></td>
+<td>Only your FrontierSight profile</td>
+</tr>
+<tr>
+<td><code>/api/v1/profile/sync</code></td>
+<td><code>sync_profile</code></td>
+<td>Clerk session; authoritative name/email; separate app namespace</td>
+</tr>
+<tr>
+<td><code>/api/v1/profile/preferences</code></td>
+<td><code>update_profile_preferences</code></td>
+<td>Locale/timezone/reduced motion only; no entitlement changes</td>
+</tr>
+</tbody>
+</table>
+<p>GET <code>/api/v2/capabilities</code> reports supported geometry, limits and unverified
+hardware. V1 scene create/update accepts v2 scenes and preserves exact payloads.
+Version-2 simulations are kinematic: no contact response, pallet release, tipping
+or flight certification. Possible contacts may be conservative bounds. Clearances
+are sampled unless the exact continuous method is identified. Natural-language
+proposals cannot run arbitrary code or reach a physical controller.</p>
+<h3>Local video/edge service</h3>
+<p>Local operator-token API: <code>POST /uploads</code>, <code>POST /jobs/{id}/chunk</code> with
+<code>Upload-Offset</code>, <code>POST /jobs/{id}/finish</code>, GET <code>/jobs/{id}</code>, POST
+<code>/jobs/{id}/{pause|resume|cancel|retry|delete}</code>, GET <code>/health</code>, GET <code>/state</code>.
+A separate authenticated local <code>/mcp</code> exposes <code>inspect_live_session</code> and
+<code>get_tracking_diagnostics</code>. Cloud MCP has no implicit camera access. Inspection
+is local; SAM mode explicitly transmits a clip using the local model key. A job
+that may have reached the provider is not automatically resubmitted. Never
+substitute the edge operator token for a cloud Clerk/agent key.</p>
+<p>Detailed installation, schema examples, hardware exclusions, source references
+and measured CPU results are in the repository's <code>docs/physical-intelligence/</code>.</p></main><footer><a href="mailto:hello@quantura.studio">Contact support</a> · <a href="https://quantura.studio">Quantura</a></footer></body></html>

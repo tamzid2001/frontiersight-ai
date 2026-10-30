@@ -365,7 +365,9 @@ def test_every_workbench_tool_matches_a_published_rest_operation():
     for route,operation in ROUTES.items():
         assert spec['paths'][route]['post']['operationId']==operation
         assert operation in tools and spec['components']['schemas']['Workbench_'+operation]==available[operation]
-    assert len(TOOLS)==38
+    assert len({tool['name'] for tool in TOOLS})==len(TOOLS)
+    from services.api.physical import SCHEMAS as PHYSICAL_SCHEMAS
+    assert len(TOOLS)==10+len(available)+len(PHYSICAL_SCHEMAS)
 
 
 def test_existing_website_object_routes_share_the_new_firestore_library(service,monkeypatch):

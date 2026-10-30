@@ -50,7 +50,7 @@ def test_create_lab_spawn_visibility_and_sections():
 def test_theme_and_grouped_nav():
     html = (ROOT / "apps" / "web" / "index.html").read_text()
     css = (ROOT / "apps" / "web" / "app.css").read_text()
-    assert html.count('data-view=') <= 9                       # grouped nav (7 sections + Settings + Help)
+    assert html.count('data-view=') <= 10                       # grouped nav (7 sections + Settings + Help)
     assert 'data-theme-mode="system"' in html and "prefers-color-scheme" in html
     assert '[data-theme="light"]' in css and 'id="cf-map"' in html and 'id="cf-target"' in html and 'id="cf-decel"' in html
 
