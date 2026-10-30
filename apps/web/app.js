@@ -71,11 +71,11 @@ function headingAt(track,t){const p0=posAt(track,t),p1=posAt(track,Math.min(t+0.
 const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc9ff",cyclist:"#c792ff",shelf:"#5b6b9f",person:"#f2b04a",object:"#e8edf6"};
 
 // tabs
-const VIEW_PATHS={home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
+const VIEW_PATHS={physical:"/physical-intelligence",home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
 function showView(v,history=true){
  if(!$("view-"+v))v="home";
  if(history&&VIEW_PATHS[v]&&location.pathname!==VIEW_PATHS[v])window.history.pushState({view:v},"",VIEW_PATHS[v]);
- document.title=(v==="home"?"FrontierSight AI — Build, simulate and inspect physical-world scenes":v.charAt(0).toUpperCase()+v.slice(1)+" | FrontierSight AI");
+ document.title=(v==="home"?"FrontierSight AI — Build, simulate and inspect physical-world scenes":(v==="physical"?"Physical Intelligence 3D":v.charAt(0).toUpperCase()+v.slice(1))+" | FrontierSight AI");
  if(["create","studio","counterfactual"].includes(v))loadScenery();
  if(v==="studio"){$("studio-source-pill").textContent=state.data?.kind==="USER_UPLOADED"?"Your scene":"Fixture replay";}
  document.querySelectorAll("#tabs button").forEach(x=>{const on=x.dataset.view===v;x.classList.toggle("on",on);
@@ -151,6 +151,7 @@ async function objectsToTracks(objects){
   for(let t=0;t<=T+1e-9;t=Math.round((t+0.1)*100)/100){const p=posOnPath(o,t);pts.push([t,p[0],p[1]]);}
   return {object_id:o.id||o.object_id,category:o.category,space:"world",radius:o.radius,source:"USER_CREATED",occluded:[],points:pts};});}
 async function loadWorkspaceIntoStudio(w){
+ if(w.scene3d){await window.frontierPhysical.load(w.scene3d);goto("physical");return;}
  let tracks=w.tracks;
  if(!tracks&&w.objects)tracks=await objectsToTracks(w.objects);
  if(!tracks||!tracks.length){toast("That workspace has no analysable tracks yet.","warn");return;}
@@ -1298,7 +1299,7 @@ state.workspaces=[]; state.openWorkspace=null;
 function wsNormalizeLocal(w){return {...w, server:false, key:"local:"+w.id};}
 function wsNormalizeServer(s){const w=(s.payload&&s.payload.workspace)||{};
  return {key:"server:"+s.id, server:true, id:s.id, version:s.version, name:s.name||w.name||"workspace",
-  kind:w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
+  scene3d:s.payload?.schema_version==="2.0"?s.payload:null,kind:s.payload?.schema_version==="2.0"?"physical":w.kind||(s.payload&&s.payload.tracks?"frames":"lab"), updated:(s.created_at||0)*1000,
   objects:w.objects||(s.payload&&s.payload.objects)||null,stage_metres:w.stage_metres||null, tracks:w.tracks||(s.payload&&s.payload.tracks)||null,
   captures:w.captures||null, image:w.image||null};}
 async function loadWorkspaces(){
@@ -1336,12 +1337,12 @@ function renderWorkspaces(){const more=$("workspace-more");if(more)more.hidden=!
   </div>
   <div class="ws-head"><h4>${w.kind==="frames"?"\u25a3":"\u2726"} ${htmlText(w.name)}</h4></div>
   <div>
-   <span class="pill ghost">${w.kind==="frames"?"SAM frame set":"Create Lab scene"}</span>
+   <span class="pill ghost">${w.kind==="frames"?"SAM frame set":w.kind==="physical"?"Physical Intelligence 3D":"Create Lab scene"}</span>
    <span class="pill ghost">${w.server?"server":"this browser"}</span>
   </div>
   <p class="ws-meta">${new Date(w.updated||Date.now()).toLocaleString()}${w.objects?` · ${w.objects.length} components`:""}${w.captures?` · ${w.captures.length} captured frame(s)`:""}${w.tracks?` · ${w.tracks.length} tracks`:""}</p>
   <div class="ws-foot"><button data-ws="open">Open</button>
-   <span class="dim">${w.kind==="frames"?"Reopen in the Studio SAM panel":"Reopen in Create Lab"}</span></div>
+   <span class="dim">${w.kind==="frames"?"Reopen in the Studio SAM panel":w.kind==="physical"?"Reopen in Physical Intelligence":"Reopen in Create Lab"}</span></div>
  </article>`).join("");
  host.querySelectorAll(".ws-card").forEach(card=>{const w=state.workspaces.find(x=>x.key===card.dataset.key);
   const menu=card.querySelector(".ws-menu");
@@ -1379,6 +1380,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"){
  if(window._lastKebab)window._lastKebab.focus();}});
 async function persistWorkspace(w){
  await initClerk();
+ if(w.scene3d){const result=await api("/api/v1/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,expectedVersion:w.version,name:w.name,scene:w.scene3d})});if(result.status>=300){toast(result.body.error||"3D save failed","err");return false;}w.version=result.body.version;return true;}
  if(hasSceneSession()&&!w.legacy){
   const payload={workspace:{kind:w.kind,objects:w.objects||null,stage_metres:w.stage_metres||null,tracks:w.tracks||null,captures:w.captures||null,image:w.image||null}};
   if(w.server&&w.id){const out=await api("/api/scenes/update",{method:"POST",body:JSON.stringify({id:w.id,name:w.name,payload,...(state.authConfig?.firestore_scenes_enabled?{expectedVersion:w.version}:{})})});
@@ -1399,6 +1401,7 @@ async function deleteWorkspace(w){
  if(state.openWorkspace&&state.openWorkspace.key===w.key)state.openWorkspace=null;
  toast(`Workspace "${w.name}" deleted.`);}
 function openWorkspace(w){state.openWorkspace=w;
+ if(w.scene3d){window.frontierPhysical.load(w.scene3d).then(()=>goto("physical"));return;}
  if(w.kind==="frames"){
   state.samCaptures=w.captures||[];
   const cnt=$("sam-count");if(cnt)cnt.textContent=state.samCaptures.length;
@@ -1508,7 +1511,7 @@ async function loadClerk() {
     if (ClerkApp.addListener) ClerkApp.addListener(({ user }) => {
       renderClerkSignIn(user);
       const currentTenant=sceneTenantKey();
-      if(currentTenant!==previousTenant){previousTenant=currentTenant;$("agent-key-once").textContent="";$("agent-key-list").replaceChildren();$("byok-key").value="";sceneRequest.cancel();pathRequest.cancel();state.customObjects=[];buildPalette();state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();
+      if(currentTenant!==previousTenant){previousTenant=currentTenant;$("agent-key-once").textContent="";$("agent-key-list").replaceChildren();$("byok-key").value="";sceneRequest.cancel();pathRequest.cancel();state.customObjects=[];buildPalette();state.workspaces=[];state.workspaceNext=null;state.openWorkspace=null;state.samCaptures=[];uncertainSceneWrites.clear();window.frontierPhysical?.reset();window.frontierEdge?.reset();
         if(state.lab){state.lab.objects=[];state.lab.running=false;touchLab();resetRunState();state.data=null;state.scenario=null;$("objects").replaceChildren();$("studio-scene-size").textContent="";$("cf-scene-size").textContent="";const canvas=$("stage");canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);window.__studio3dSync?.([],0);window.__cf3dSync?.(null,0);labRenderList();labDraw();}renderWorkspaces();loadWorkspaces();}
       if (user) syncClerkSession();
       else if (localStorage.getItem("fs-auth-provider") === "clerk") {

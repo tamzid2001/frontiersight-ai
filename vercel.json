@@ -2,6 +2,26 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/edge-studio.mjs",
+      "destination": "/api/index?ep=edgejs"
+    },
+    {
+      "source": "/physical-intelligence",
+      "destination": "/api/index?ep=appview&view=physical-intelligence"
+    },
+    {
+      "source": "/physical-intelligence.mjs",
+      "destination": "/api/index?ep=physicaljs"
+    },
+    {
+      "source": "/physical-intelligence.css",
+      "destination": "/api/index?ep=physicalcss"
+    },
+    {
+      "source": "/api/v2/:resource*",
+      "destination": "/api/index?ep=v2&resource=:resource*"
+    },
+    {
       "source": "/help",
       "destination": "/api/index?ep=appview&view=help"
     },

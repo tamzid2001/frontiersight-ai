@@ -33,13 +33,18 @@ def schemas(scene):
         'width':{'type':'integer','minimum':160,'maximum':1024},'height':{'type':'integer','minimum':120,'maximum':768}},('scene',))
     result['render_video_preview'] = obj({'scene':scene,'duration_s':{'type':'number','minimum':.2,'maximum':12},'fps':{'type':'integer','minimum':1,'maximum':15},
         'width':{'type':'integer','minimum':160,'maximum':1024},'height':{'type':'integer','minimum':120,'maximum':768}},('scene',))
+    from engine.world3d_schema import PROFILE, SCENE
+    result['propose_physics_profile']=obj({'profile':PROFILE,'description':{'type':'string','minLength':4,'maxLength':2000},'model':text},('profile','description'))
+    result['get_profile']=obj({})
+    result['sync_profile']=obj({})
+    result['update_profile_preferences']=obj({'preferences':obj({'timezone':{'type':'string','maxLength':80},'locale':{'type':'string','maxLength':30},'reducedMotion':{'type':'boolean'}})},('preferences',))
     result['get_model_request'] = obj({'request_key':key},('request_key',))
     for kind in ('scenes','objects','media'):
         result['list_'+kind] = obj({'limit':{'type':'integer','minimum':1,'maximum':100,'default':25},'after':rid})
         result['get_'+kind] = obj({'id':rid},('id',))
         fields = {'name':{'type':'string','minLength':1,'maxLength':120}}
         required = ['name']
-        if kind == 'scenes':fields['scene']=scene;required.append('scene')
+        if kind == 'scenes':fields['scene']={'oneOf':[scene,SCENE]};required.append('scene')
         elif kind == 'objects':fields['spec']={'type':'object'};required.append('spec')
         else:
             fields.update({'kind':{'type':'string','enum':['frame','video']},'data_url':{'type':'string','maxLength':180000},
@@ -53,6 +58,10 @@ def schemas(scene):
     return result
 
 DESCRIPTIONS = {
+    'get_profile':'Read only your FrontierSight-owned user profile; no Quantura profile lookup.',
+    'sync_profile':'Sync your own name/email from the configured Clerk application to the FrontierSight namespace. Session-only; cannot change entitlements.',
+    'update_profile_preferences':'Save only your locale, timezone and reduced-motion preferences in FrontierSight. Cannot change identity, org role or billing.',
+    'propose_physics_profile':'One Muse request (20s, no retries) produces a schema-validated physics proposal. Paid authenticated workspace, model key and idempotency receipt required. Does not apply changes or authorize actuation.',
     'render_scene_frame':'Render a bounded PNG top-down simulation frame with metre-space poses, preserving the playback motion profiles. No model call; no observed-camera claim.',
     'render_video_preview':'Export a bounded animated GIF simulation preview, maximum 60 frames and 20 megapixels. This is not MP4 or photorealistic 3D video.',
     'get_model_request':'Inspect your own durable model-request status/result by the original request key. Running or failed_or_unknown never automatically retries the provider.',

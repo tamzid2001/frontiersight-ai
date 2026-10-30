@@ -9,6 +9,8 @@ from services.api.clerk_auth import WorkspaceError
 from services.api.workbench import actor, Workbench
 
 ROUTES = {
+    '/api/v1/profile/get':'get_profile','/api/v1/profile/sync':'sync_profile','/api/v1/profile/preferences':'update_profile_preferences',
+    '/api/v1/physics/propose':'propose_physics_profile',
     '/api/v1/media/render-frame':'render_scene_frame', '/api/v1/media/render-preview':'render_video_preview',
     '/api/v1/model-requests/get':'get_model_request',
     '/api/v1/paths/plan': 'plan_path', '/api/v1/paths/predict': 'predict_path',
