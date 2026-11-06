@@ -95,9 +95,14 @@
   </div>
   <div class="card demo-card hero-video" id="demo-video">
    <div class="demo-frame" id="demo-frame">
-    <img src="https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg"
+    <picture>
+     <source type="image/webp"
+             srcset="https://i.ytimg.com/vi_webp/mYTkPqigoz8/mqdefault.webp 320w, https://i.ytimg.com/vi_webp/mYTkPqigoz8/maxresdefault.webp 1280w"
+             sizes="(max-width:1000px) calc(100vw - 64px), (max-width:1380px) 46vw, 610px">
+     <img src="https://i.ytimg.com/vi/mYTkPqigoz8/maxresdefault.jpg"
          alt="FrontierSight AI demo video thumbnail — forklift and pedestrian near-miss analysis with Muse Spark, SAM 3.1 and Muse Image"
          loading="eager" width="1280" height="720">
+    </picture>
     <button id="demo-play" aria-label="Play the FrontierSight AI demo video">▶</button>
    </div>
    <p style="margin:10px 0 4px"><b>I Built an AI That Tests Near-Misses with Meta SAM 3.1 + Physics | FrontierSight AI</b></p>
