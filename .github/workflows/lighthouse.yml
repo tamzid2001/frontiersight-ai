@@ -3,34 +3,46 @@ on: [push, workflow_dispatch]
 jobs:
   lighthouse:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - uses: actions/setup-node@v5
+        with: { node-version: '24' }
+      - name: Verify measurement-gate behavior and executed coverage
+        run: |
+          python -m pip install pytest==9.1.1 pytest-cov==7.1.0
+          python -m pytest -q tests/test_lighthouse_gate.py --cov=scripts.check_lighthouse --cov-branch \
+            --cov-fail-under=90 --cov-report=xml:lighthouse-gate-coverage.xml --cov-report=term-missing
+          python - <<'PY'
+          from xml.etree import ElementTree as E
+          r = E.parse('lighthouse-gate-coverage.xml').getroot()
+          assert int(r.attrib['lines-covered']) > 0 and r.findall('.//class')
+          assert float(r.attrib['line-rate']) >= .9 and float(r.attrib['branch-rate']) >= .7
+          PY
       - name: Serve the app
         run: |
           PYTHONPATH=. nohup python3 -m services.api.server --port 8799 > server.log 2>&1 &
           for i in $(seq 1 20); do curl -sf http://127.0.0.1:8799/api/health && break || sleep 1; done
-      - name: Run Lighthouse (a11y/BP/SEO >= 95, performance >= 90 under throttled emulation)
+          curl --fail --silent --show-error http://127.0.0.1:8799/api/health
+      - name: Three throttled Lighthouse runs (median performance >= 90, every other category >= 95)
         run: |
-          npx -y lighthouse@13.6.0 http://127.0.0.1:8799/ --output=json --output-path=lh.json \
-            --chrome-flags="--headless --no-sandbox" --quiet
-          python3 - << 'PY'
-          import json, sys
-          d = json.load(open("lh.json"))
-          scores = {k: round(v["score"] * 100) for k, v in d["categories"].items()}
-          print("Lighthouse:", scores)
-          print("Runner benchmark index:", d.get("environment", {}).get("benchmarkIndex"))
-          print("TBT:", d["audits"]["total-blocking-time"].get("displayValue"))
-          requests = d["audits"]["network-requests"]["details"]["items"]
-          assert not any("/assets/sam-gallery/" in r["url"] or "/image-scene.mjs" in r["url"] for r in requests), "Hidden segmentation views must load on demand"
-          assert not any(any(asset in r["url"] for asset in ("/physical-intelligence.mjs", "/physical-intelligence.css", "/edge-studio.mjs", "/vendor/three", "/api/mcp")) for r in requests), "Hidden 3D/video workbenches must load on demand"
-          limits = {"performance": 90}
-          failing = {k: v for k, v in scores.items() if v < limits.get(k, 95)}
-          if failing:
-              print("Below 95:", failing); sys.exit(1)
-          PY
-      - name: Upload Lighthouse report
+          mkdir -p lighthouse-reports
+          for run in 1 2 3; do
+            npx -y lighthouse@13.6.0 http://127.0.0.1:8799/ --output=json \
+              --output-path="lighthouse-reports/run-$run.json" \
+              --chrome-flags="--headless --no-sandbox" --quiet
+          done
+          python3 scripts/check_lighthouse.py lighthouse-reports/run-{1,2,3}.json --summary lighthouse-reports/summary.json
+          cat lighthouse-reports/summary.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload every raw Lighthouse report
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: lighthouse-report, path: lh.json }
+        with:
+          name: lighthouse-report
+          path: |
+            lighthouse-reports/*.json
+            lighthouse-gate-coverage.xml
+          if-no-files-found: error
+          retention-days: 7
