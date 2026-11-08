@@ -294,6 +294,14 @@
       "destination": "/api/index?ep=imagecore"
     },
     {
+      "source": "/wizard-core.mjs",
+      "destination": "/api/index?ep=wizardcore"
+    },
+    {
+      "source": "/guided",
+      "destination": "/api/index?ep=appview&view=guided"
+    },
+    {
       "source": "/scenery-core.mjs",
       "destination": "/api/index?ep=scenerycore"
     },

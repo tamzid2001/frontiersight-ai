@@ -84,7 +84,7 @@ function headingAt(track,t){const p0=posAt(track,t),p1=posAt(track,Math.min(t+0.
 const COL={forklift:"#38c6d9",pedestrian:"#f2b04a",robot:"#2dd4a8",vehicle:"#4dc9ff",cyclist:"#c792ff",shelf:"#5b6b9f",person:"#f2b04a",object:"#e8edf6"};
 
 // tabs
-const VIEW_PATHS={physical:"/physical-intelligence",home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
+const VIEW_PATHS={physical:"/physical-intelligence",home:"/",pricing:"/pricing",create:"/create",studio:"/studio",counterfactual:"/counterfactual",guided:"/guided",settings:"/settings",auth:"/sign-in",workspace:"/workspaces",help:"/help"};
 function showView(v,history=true){
  if(!$("view-"+v))v="home";
  if(history&&VIEW_PATHS[v]&&location.pathname!==VIEW_PATHS[v])window.history.pushState({view:v},"",VIEW_PATHS[v]);
@@ -106,7 +106,8 @@ function showView(v,history=true){
  if(v==="pricing")refreshBillingAvailability();
  if(v==="workspace"){loadScenarioCounts();loadWorkspaces();}
  if(v==="counterfactual"){syncLabToCfIfNewer().then(changed=>{syncCounterfactual();
-   if(!changed&&state.cfData){drawCfMap();drawCfChart();}}).catch(error=>{$("cf-results").textContent=error.message;});}}
+   if(!changed&&state.cfData){drawCfMap();drawCfChart();}}).catch(error=>{$("cf-results").textContent=error.message;});}
+ if(v==="guided")initWizard();}
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>showView(b.dataset.view));
 function goto(v){showView(v);}
 
@@ -1761,3 +1762,165 @@ window.addEventListener("popstate",()=>showView(Object.keys(VIEW_PATHS).find(key
 const initialView=Object.keys(VIEW_PATHS).find(key=>VIEW_PATHS[key]===location.pathname);
 if(initialView&&initialView!=="home")showView(initialView,false);
 if(new URLSearchParams(location.search).get("billing")==="success")toast("Checkout returned. Your plan is verified directly with Stripe when you use paid features.");
+
+/* ================= Guided proof wizard =================
+   Upload Scene → Inspect Tracks → Change an Intervention → Review Proof.
+   Reachable from the home CTA (first-run onboarding) and the /guided deep
+   link; it deliberately does NOT take a top-nav slot (the grouped-nav
+   budget in tests/test_regressions.py keeps the primary nav at ten).
+   Every number shown here comes from the same deterministic engine and
+   REST API the other views use; apps/web/wizard-core.mjs decides what may
+   advance and what an exported packet must contain. No model inference is
+   claimed anywhere in this flow. */
+let _wizardModule=null,wizard=null;
+function loadWizardCore(){return _wizardModule||( _wizardModule=import('/wizard-core.mjs').then(m=>m).catch(e=>{_wizardModule=null;throw e;}) );}
+function wzStatus(text,kind){const el=$("wz-status");if(!el)return;el.textContent=text;el.classList.toggle("err",kind==="err");}
+function wzTabs(step){
+ document.querySelectorAll(".wizard-steps button").forEach(b=>{
+  const on=b.dataset.step===step;b.classList.toggle("on",on);
+  if(on)b.setAttribute("aria-current","step");else b.removeAttribute("aria-current");});
+ ["upload","inspect","intervene","proof"].forEach(s=>{const p=$("wz-panel-"+s);if(p)p.classList.toggle("hidden",s!==step);});
+}
+function wzSceneBadge(){
+ const s=wizard.state,el=$("wz-scene-badge");if(!el)return;
+ if(!s.scene){el.textContent="No scene loaded yet.";return;}
+ const described=s.sceneShape==="scenario"?`fixture scenario "${s.scene.scenario??s.scene.id}"`
+  :s.sceneShape==="objects"?`${s.scene.objects.length} component(s) on a ${s.scene.stage_metres[0]} × ${s.scene.stage_metres[1]} m floor`
+  :`${s.scene.tracks.length} sampled track(s)`;
+ el.textContent=`${s.sceneLabel} · ${described}.`;
+}
+function wzRenderTracks(){
+ const host=$("wz-tracks");if(!host)return;
+ const data=state.data;
+ if(!data||!Array.isArray(data.tracks)){host.textContent="Load a scene first.";return;}
+ host.innerHTML=data.tracks.map(t=>`<p><b>${htmlText(t.object_id)}</b> (${htmlText(t.category)}) — ${t.points.length} sampled positions, radius ${t.radius} m${t.occluded&&t.occluded.length?`, <span style="color:var(--amber)">occluded ${htmlText(t.occluded.map(o=>o.join("–")).join(", "))}s — missing evidence, not numerical uncertainty</span>`:""}</p>`).join("");
+}
+function wzRenderRun(){
+ const host=$("wz-run-results");if(!host)return;
+ const run=wizard.state.run;
+ if(!run){host.textContent="No run yet — declare an intervention and run it.";return;}
+ const rows=Object.values(run.results||{}).map(v=>`${htmlText(v.object_id||"")}: d_min ${v.original_d_min} m → <b>${v.counterfactual_d_min} m</b>${v.contact_counterfactual?" · ⚠ still contact":" · contact avoided"}`);
+ host.innerHTML=`ASSUMPTION applied · DETERMINISTIC result · manifest <code>${htmlText(run.manifest_hash.slice(0,16))}…</code><br>`+(rows.join("<br>")||"no per-actor rows")+
+  `<br><span class="dim">Conditional prediction under declared assumptions — not a guarantee.</span>`;
+}
+function wzRenderProof(){
+ const approve=$("wz-approve"),exportBtn=$("wz-export"),s=wizard.state;
+ if(approve)approve.disabled=Boolean(s.approval);
+ if(exportBtn){exportBtn.disabled=!s.approval||s.exported;exportBtn.textContent=s.exported?"Proof packet exported":"Export proof packet (JSON)";}
+ if($("wz-approver")&&s.approval)$("wz-approver").value=s.approval.by;
+}
+function wzRenderAll(){
+ if(!wizard)return;
+ wzTabs(wizard.step);wzSceneBadge();wzRenderTracks();wzRenderRun();wzRenderProof();
+ wzStatus(`Step ${wizard.progress.index+1} of ${wizard.progress.total} — ${wizard.progress.title}.`);
+}
+async function initWizard(){
+ if(!wizard){
+  try{const mod=await loadWizardCore();wizard=mod.createWizard();}
+  catch(e){wzStatus("The guided proof module failed to load — nothing was simulated.","err");return;}
+  wzRenderAll();
+  const sel=$("wz-scenario");
+  if(sel&&state.scenarioList){sel.innerHTML=state.scenarioList.map(s=>`<option value="${s.id}">${s.id} — ${s.description}</option>`).join("");}
+  else if(sel){sel.innerHTML='<option value="">scenarios unavailable</option>';}
+ }
+ wzRenderAll();
+ if(!state.scenarioList)loadScenarios().then(()=>{const sel=$("wz-scenario");if(sel&&state.scenarioList)sel.innerHTML=state.scenarioList.map(s=>`<option value="${s.id}">${s.id} — ${s.description}</option>`).join("");}).catch(()=>{});
+}
+async function wzLoadScene(source){
+ const id=$("wz-scenario").value;
+ if(!id){toast("Pick a fixture scenario first.","warn");return;}
+ let d;try{d=await(await fetch("/api/scenarios?name="+encodeURIComponent(id))).json();}
+ catch(e){toast("Could not load the scenario — nothing was loaded.","err");return;}
+ /* Fixture scenarios arrive tracks-based ({scenario, id, tracks}); user
+    scenes arrive as {stage_metres, objects}. Both are valid engine shapes;
+    the wizard core validates whichever one the API returns. */
+ if(d.error||!(d.objects||d.tracks)){toast("Scenario response was unusable — nothing was loaded.","err");return;}
+ try{
+  if(wizard.step!=="upload"&&!wizard.state.scene)wizard.reset();
+  wizard.submitScene(d,{source});
+  state.data=d;state.scenario=id;state.t=0;
+  populateCfAgents();
+  const agentSel=$("wz-agent");
+  if(agentSel)agentSel.innerHTML=(d.tracks||[]).map(t=>`<option value="${t.object_id}">${t.object_id}</option>`).join("");
+  wzRenderAll();wizard.advance();wzRenderAll();
+  toast(`Scene loaded (${wizard.state.sceneLabel}) — tracks are ready to inspect.`);
+ }catch(e){toast(e.message,"err");}
+}
+async function wzInspect(){
+ if(!state.data||!Array.isArray(state.data.tracks)){toast("Load a scene before inspecting tracks.","warn");return;}
+ try{
+  const summary=wizard.inspectTracks(state.data.tracks);
+  wzRenderAll();wizard.advance();wzRenderAll();
+  toast(`Inspected ${summary.tracks} track(s).${summary.occlusionSeconds>0?` ${summary.occlusionSeconds.toFixed(2)}s of occlusion recorded as missing evidence.`:""}`);
+ }catch(e){toast(e.message,"err");}
+}
+async function wzUseWorkspace(){
+ let scenes;try{scenes=await(await fetch("/api/scenes")).json();}
+ catch(e){toast("Could not read your workspace scenes.","err");return;}
+ if(scenes.error||!scenes.scenes||!scenes.scenes.length){toast("No saved workspace scenes yet — save one from the Create Lab first.","warn");return;}
+ const scene=scenes.scenes[0],payload=scene.payload||{};
+ if(!payload.objects||!payload.stage_metres){toast("That saved scene has no usable components.","warn");return;}
+ try{
+  if(wizard.step!=="upload"&&!wizard.state.scene)wizard.reset();
+  wizard.submitScene(payload,{source:"workspace"});
+  state.data=null;state.scenario=null;
+  wzRenderAll();
+  toast(`Workspace scene loaded (${wizard.state.sceneLabel}). Tracks are sampled when you inspect them.`);
+ }catch(e){toast(e.message,"err");}
+}
+async function wzRun(){
+ const agent=$("wz-agent").value||(state.data&&state.data.tracks?state.data.tracks[0].object_id:"");
+ const intervention={agent_id:agent,speed_ratio:+$("wz-speed").value/100,intervention_time:+$("wz-time").value,deceleration:+$("wz-decel").value};
+ try{wizard.setIntervention(intervention);}
+ catch(e){toast(e.message,"err");return;}
+ const custom=state.data&&state.data.kind==="USER_UPLOADED";
+ const body=custom
+  ?{scene:{id:state.data.id,stage_metres:state.data.stage_metres,objects:state.data.objects},agent_id:agent,target_id:null,
+     speed_reduction_pct:Math.round(intervention.speed_ratio*100),intervention_t:intervention.intervention_time,braking_decel:intervention.deceleration}
+  :{scenario:state.scenario,agent_id:agent,target_id:null,
+     speed_reduction_pct:Math.round(intervention.speed_ratio*100),intervention_t:intervention.intervention_time,braking_decel:intervention.deceleration};
+ if(!custom&&!state.scenario){toast("Load a fixture scene before running the deterministic comparison.","warn");return;}
+ const host=$("wz-run-results");host.textContent="Simulating on the server…";
+ let r;try{r=await(await fetch(custom?"/api/counterfactual-custom":"/api/counterfactual",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();}
+ catch(e){host.textContent="Simulation failed: API unreachable. Nothing was recorded.";return;}
+ if(r.error){host.textContent="Simulation failed: "+r.error;return;}
+ try{
+  const results={};
+  for(const [oid,v] of Object.entries(r.results||{}))
+   results[oid]={object_id:oid,original_d_min:v.original.d_min,counterfactual_d_min:v.counterfactual.d_min,contact_counterfactual:v.counterfactual.contact};
+  wizard.recordRun({run_id:r.run_id||null,manifest_hash:r.manifest_hash,results});
+  wzRenderAll();wizard.advance();wzRenderAll();
+  toast("Deterministic comparison recorded — review and approve the proof.");
+ }catch(e){host.textContent=e.message;}
+}
+function wzApprove(){
+ const name=$("wz-approver").value;
+ try{wizard.approve(name,new Date().toISOString());wzRenderAll();toast(`Evidence approved by ${wizard.state.approval.by} — export is unlocked.`);}
+ catch(e){toast(e.message,"err");}
+}
+function wzExport(){
+ try{const packet=wizard.exportProof();download(new Blob([JSON.stringify(packet,null,2)],{type:"application/json"}),`frontiersight-guided-proof-${Date.now()}.json`);wzRenderAll();toast("Proof packet exported.");}
+ catch(e){toast(e.message,"err");}
+}
+function wzRestart(){wizard.reset();state.data=null;state.scenario=null;$("wz-run-results").textContent="No run yet — declare an intervention and run it.";$("wz-tracks").textContent="Load a scene first.";wzRenderAll();toast("Guided proof restarted.");}
+function wzGoto(target){
+ const targetIndex=wizard.steps.indexOf(target),current=wizard.progress.index;
+ if(targetIndex<current){for(let i=current;i>targetIndex;i--)wizard.back();}
+ else{for(let i=current;i<targetIndex;i++){if(!wizard.canAdvance()){toast("Complete this step before moving on.","warn");break;}wizard.advance();}}
+ wzRenderAll();
+}
+function wzBind(){
+ const bind=(id,fn)=>{const el=$(id);if(el)el.addEventListener("click",fn);};
+ bind("cta-guided",()=>goto("guided"));
+ bind("wz-load-scene",()=>wzLoadScene("fixture"));
+ bind("wz-load-workspace",wzUseWorkspace);
+ bind("wz-inspect",wzInspect);
+ bind("wz-run",wzRun);
+ bind("wz-approve",wzApprove);
+ bind("wz-export",wzExport);
+ bind("wz-restart",wzRestart);
+ const speed=$("wz-speed"),out=$("wz-speed-out");
+ if(speed&&out){speed.addEventListener("input",()=>{out.textContent=speed.value+"%";});}
+ document.querySelectorAll(".wizard-steps button").forEach(b=>b.addEventListener("click",()=>{if(wizard)wzGoto(b.dataset.step);}));
+}
+wzBind();

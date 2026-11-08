@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-11-08 — guided first-run proof flow (Upload → Inspect → Intervene → Review)
+
+- New `apps/web/wizard-core.mjs` (pure ESM state machine) gates the four-step
+  guided flow: upload a fixture or workspace scene, inspect engine-sampled
+  tracks, declare an intervention (labelled ASSUMPTION) and record the real
+  deterministic run (manifest hash, labelled DETERMINISTIC).
+- Export of the proof packet stays LOCKED until a named human approves the
+  evidence — the same approval rule the Evidence view applies — and every
+  packet states it is not a safety certification.
+- Scene validation mirrors the engine's accepted request shapes (fixture
+  scenario payload, object-based scene, raw tracks); fixture payloads keyed
+  by `id` and by `scenario` are both accepted.
+- The guided view is reachable from the home CTA and the `/guided` deep link;
+  it deliberately takes no primary-nav slot (the grouped-nav budget guard in
+  tests/test_regressions.py still holds).
+- `/wizard-core.mjs` and `/guided` are wired through the Vercel rewrite layer
+  (vercel.json + `_route()` in services/api/server.py) exactly like the other
+  app modules; the SPA title for `/guided` is "Guided Proof".
+- No model inference is claimed anywhere in the flow; FIXTURE / USER_SCENE /
+  ASSUMPTION / DETERMINISTIC provenance labels are carried end to end, and
+  occlusions are recorded as missing evidence, separate from uncertainty.
+
+Validation: 311 Python tests passed, 29 optional-integration tests skipped;
+32 Node tests for the new wizard core; 62 Node tests passed overall.
+Web helper coverage (node --test gate): 98.77% lines, 91.47% branches,
+97.65% functions — wizard-core.mjs alone: 98.40% / 84.83% / 93.33%.
+Live end-to-end check on the local server: fixture upload → 2-track inspect
+→ deterministic counterfactual run (manifest e317916e01f10233…, d_min
+0.166 m → 2.349 m) → approved, exported packet.
+
 ## 2026-10-29 — bounded scene candidates and human proportions
 
 - Choose 1–8 parallel candidates, display one scene, and stop without automatic retries.

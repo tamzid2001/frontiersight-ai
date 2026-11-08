@@ -81,6 +81,7 @@
    <b>independent deterministic physics engine</b>. Models propose and explain. Geometry decides.
    Every number carries its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
    <div class="cta"><button id="cta-demo">Run the warehouse near-miss demo →</button>
+    <button id="cta-guided" class="ghostbtn">🧭 Guided proof — upload → inspect → intervene → review</button>
     <button id="cta-create" class="ghostbtn">Open Create Lab — build your own scene</button>
     <button id="cta-video" class="ghostbtn">▶ Watch the 3-minute demo</button>
     <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub repository ↗</a></div>
@@ -494,6 +495,80 @@
    <div id="cf-results" class="mono dim" style="margin-top:10px">No run yet — pick a scene and press Rerun.</div>
    <label class="chk"><input type="checkbox" id="approve"> Human review: approve evidence export</label>
   </aside>
+ </div>
+</section>
+
+<section id="view-guided" class="view"><h2>Guided proof — upload a scene, inspect tracks, change an intervention, review the proof</h2>
+ <p class="dim">A first-run walkthrough of the whole product: every number below comes from the same deterministic engine
+ the other views use. Built-in scenarios are labelled <span class="pill">FIXTURE</span>; the intervention you declare is
+ an <span class="pill">ASSUMPTION</span> until the engine answers; engine output is <span class="pill">DETERMINISTIC</span>.
+ Nothing here is pre-baked and no model inference is claimed.</p>
+ <div class="wizard">
+  <ol class="wizard-steps" aria-label="Guided proof steps">
+   <li id="wz-tab-upload"><button type="button" class="ghostbtn" data-step="upload" aria-current="step">1 · Upload Scene</button></li>
+   <li id="wz-tab-inspect"><button type="button" class="ghostbtn" data-step="inspect">2 · Inspect Tracks</button></li>
+   <li id="wz-tab-intervene"><button type="button" class="ghostbtn" data-step="intervene">3 · Change an Intervention</button></li>
+   <li id="wz-tab-proof"><button type="button" class="ghostbtn" data-step="proof">4 · Review Proof</button></li>
+  </ol>
+  <p id="wz-status" class="dim" role="status" aria-live="polite">Loading the guided proof…</p>
+
+  <div class="wizard-panel" id="wz-panel-upload">
+   <div class="card">
+    <h3>1 · Upload Scene</h3>
+    <p class="dim">Start from a built-in fixture scenario or a scene you saved in your workspace. Both paths run the
+     same deterministic analysis; the badge tells you which one you picked.</p>
+    <div class="row" style="align-items:flex-end;gap:10px">
+     <label for="wz-scenario">Fixture scenario<select id="wz-scenario"><option value="">loading…</option></select></label>
+     <button id="wz-load-scene" type="button">Load scene</button>
+     <button id="wz-load-workspace" type="button" class="ghostbtn">Use my latest workspace scene</button>
+    </div>
+    <p id="wz-scene-badge" class="dim"></p>
+   </div>
+  </div>
+
+  <div class="wizard-panel hidden" id="wz-panel-inspect">
+   <div class="card">
+    <h3>2 · Inspect Tracks</h3>
+    <p class="dim">These are the tracks the engine sampled from the scene. Occluded windows are <b>missing evidence</b> —
+     reported separately from numerical uncertainty, never smoothed over.</p>
+    <div id="wz-tracks" class="mono dim">Load a scene first.</div>
+    <div class="row"><button id="wz-inspect" type="button">Inspect tracks</button></div>
+   </div>
+  </div>
+
+  <div class="wizard-panel hidden" id="wz-panel-intervene">
+   <div class="card">
+    <h3>3 · Change an Intervention</h3>
+    <p class="dim">Declare a what-if: which component brakes, how hard, and when. This is a hypothesis
+     (<span class="pill">ASSUMPTION</span>) until the deterministic simulation answers it
+     (<span class="pill">DETERMINISTIC</span>, replayable by its manifest hash).</p>
+    <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+     <label for="wz-agent">Braking component<select id="wz-agent"></select></label>
+     <label for="wz-speed">Speed reduction<input id="wz-speed" type="range" min="5" max="100" step="5" value="50"> <output id="wz-speed-out">50%</output></label>
+     <label for="wz-time">Intervention at t (s)<input id="wz-time" type="number" min="0" max="20" step="0.5" value="2"></label>
+     <label for="wz-decel">Braking decel (m/s²)<input id="wz-decel" type="number" min="0" max="15" step="0.5" value="4"></label>
+     <button id="wz-run" type="button">Run deterministic comparison</button>
+    </div>
+    <div id="wz-run-results" class="mono dim" style="margin-top:10px">No run yet — declare an intervention and run it.</div>
+   </div>
+  </div>
+
+  <div class="wizard-panel hidden" id="wz-panel-proof">
+   <div class="card">
+    <h3>4 · Review Proof</h3>
+    <p class="dim">The exported packet binds the scene provenance, the inspected tracks, your declared intervention and the
+     deterministic run manifest to a named human approval. Export stays locked until someone puts their name on it —
+     the same rule the Evidence view applies.</p>
+    <div class="row" style="align-items:flex-end;gap:10px">
+     <label for="wz-approver">Approver name<input id="wz-approver" type="text" placeholder="Full name" autocomplete="name"></label>
+     <button id="wz-approve" type="button">Approve evidence</button>
+     <button id="wz-export" type="button" class="ghostbtn" disabled>Export proof packet (JSON)</button>
+     <button id="wz-restart" type="button" class="ghostbtn">Start over</button>
+    </div>
+    <p class="dim" style="margin-top:8px">The packet states its limits: a conditional prediction under declared assumptions —
+     <b>not a safety certification</b>.</p>
+   </div>
+  </div>
  </div>
 </section>
 
