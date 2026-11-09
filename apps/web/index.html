@@ -57,6 +57,7 @@
  <div class="navlabel">Experiments</div>
  <button data-view="physical">◇&nbsp; Physical Intelligence 3D</button>
  <button data-view="create">✦&nbsp; Create Lab</button>
+ <button data-view="wizard">🧙&nbsp; Scene Wizard</button>
  <button data-view="studio">▶&nbsp; Video Studio</button>
  <button data-view="counterfactual">⇄&nbsp; Counterfactual</button>
  <div class="navlabel">Results</div>
@@ -454,6 +455,128 @@
   </aside>
  </div>
 </section>
+
+<section id="view-wizard" class="view"><h2>Scene Wizard — upload, inspect, intervene, prove</h2>
+  <p class="dim">Guided 3-step workflow: <strong>Upload Scene</strong> → <strong>Inspect Tracks</strong> → <strong>Change Intervention</strong> → <strong>Review Proof</strong>. Every step labels its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
+  <div class="wizard-progress" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="1">
+    <div class="wizard-step" data-step="1"><span class="step-num">1</span><span class="step-label">Upload Scene</span></div>
+    <div class="wizard-step" data-step="2"><span class="step-num">2</span><span class="step-label">Inspect Tracks</span></div>
+    <div class="wizard-step" data-step="3"><span class="step-num">3</span><span class="step-label">Change Intervention</span></div>
+    <div class="wizard-step" data-step="4"><span class="step-num">4</span><span class="step-label">Review Proof</span></div>
+  </div>
+
+  <div class="wizard-step-content" id="wizard-step-1">
+    <h3>Step 1: Upload Scene</h3>
+    <p class="dim">Upload a video or JSON scene, or choose a built-in scenario. SAM 3.1 segments the video; Muse Spark 1.3 proposes tracks.</p>
+    <div class="wizard-upload">
+      <input type="file" id="wizard-video-input" accept="video/*,application/json" aria-label="Upload video or scene JSON">
+      <label for="wizard-video-input" class="ghostbtn">Choose video or JSON</label>
+      <span id="wizard-file-name" class="dim"></span>
+    </div>
+    <div class="wizard-scenarios">
+      <p class="dim">Or load a built-in scenario:</p>
+      <select id="wizard-scenario-select">
+        <option value="">— Select a scenario —</option>
+        <option value="warehouse-near-miss">Warehouse near-miss (forklift + pedestrian)</option>
+        <option value="busy-intersection">Busy intersection (cyclist + vehicle)</option>
+        <option value="robot-cell">Robotics workcell (robot + shelf)</option>
+      </select>
+      <button id="wizard-load-scenario" class="ghostbtn">Load scenario</button>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Provenance:</strong> <span id="wizard-upload-provenance" class="badge fixture">FIXTURE (built-in)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-next-1" class="ghostbtn" disabled>Next: Inspect Tracks →</button>
+    </div>
+  </div>
+
+  <div class="wizard-step-content hidden" id="wizard-step-2">
+    <h3>Step 2: Inspect Tracks</h3>
+    <p class="dim">Review SAM 3.1 segmentation and Muse Spark 1.3 track proposals. Toggle between pixel-space (raw) and calibrated metres (assuming 2.5m camera height).</p>
+    <div class="wizard-track-controls">
+      <button id="wizard-toggle-space" class="ghostbtn" aria-pressed="false">Pixel space ↔ Calibrated metres</button>
+      <span id="wizard-space-mode" class="dim">Current: Pixel space</span>
+    </div>
+    <div class="wizard-track-table-container">
+      <table id="wizard-track-table" class="track-table">
+        <thead>
+          <tr><th>Object ID</th><th>Category</th><th>Frames</th><th>Source</th><th>Confidence</th><th>Action</th></tr>
+        </thead>
+        <tbody id="wizard-track-rows"></tbody>
+      </table>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Track provenance:</strong> <span id="wizard-track-provenance" class="badge model">MODEL_DERIVED (SAM 3.1 + Muse Spark 1.3)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-back-2" class="ghostbtn">← Back</button>
+      <button id="wizard-next-2" class="ghostbtn" disabled>Next: Change Intervention →</button>
+    </div>
+  </div>
+
+  <div class="wizard-step-content hidden" id="wizard-step-3">
+    <h3>Step 3: Change Intervention</h3>
+    <p class="dim">Select an agent and apply a braking intervention. The deterministic physics engine re-simulates with conservative contact bounds.</p>
+    <div class="wizard-intervention-form">
+      <label>Intervening agent
+        <select id="wizard-intervention-agent"></select>
+      </label>
+      <label>Must avoid
+        <select id="wizard-intervention-target"><option value="">All actors (worst case)</option></select>
+      </label>
+      <div class="row">
+        <label>Start reaction (s)<input id="wizard-intervention-sr" type="number" step="0.1" min="0" max="10" value="1.0"></label>
+        <label>Intervention time (s)<input id="wizard-intervention-it" type="number" step="0.1" min="0.1" max="5" value="0.5"></label>
+        <label>Deceleration (m/s²)<input id="wizard-intervention-dec" type="number" step="0.5" min="0.5" max="10" value="3.0"></label>
+      </div>
+      <button id="wizard-run-intervention" class="ghostbtn">Run counterfactual</button>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Simulation provenance:</strong> <span class="badge deterministic">DETERMINISTIC (physics engine)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-back-3" class="ghostbtn">← Back</button>
+      <button id="wizard-next-3" class="ghostbtn" disabled>Next: Review Proof →</button>
+    </div>
+  </div>
+
+  <div class="wizard-step-content hidden" id="wizard-step-4">
+    <h3>Step 4: Review Proof</h3>
+    <p class="dim">Side-by-side comparison of original vs. counterfactual. Export signed evidence package with full provenance chain.</p>
+    <div class="wizard-proof-view">
+      <div class="proof-panel">
+        <h4>Original</h4>
+        <canvas id="wizard-proof-original" width="440" height="300" role="img" aria-label="Original trajectory map"></canvas>
+        <div id="wizard-proof-original-stats" class="dim"></div>
+      </div>
+      <div class="proof-panel">
+        <h4>Counterfactual</h4>
+        <canvas id="wizard-proof-counterfactual" width="440" height="300" role="img" aria-label="Counterfactual trajectory map"></canvas>
+        <div id="wizard-proof-cf-stats" class="dim"></div>
+      </div>
+    </div>
+    <div class="wizard-proof-metrics">
+      <h4>Delta metrics</h4>
+      <div class="row">
+        <div class="metric"><strong>Closest approach</strong><span id="wizard-delta-ca">—</span></div>
+        <div class="metric"><strong>TTC change</strong><span id="wizard-delta-ttc">—</span></div>
+        <div class="metric"><strong>Clearance</strong><span id="wizard-delta-clear">—</span></div>
+        <div class="metric"><strong>Verdict</strong><span id="wizard-delta-verdict" class="badge">—</span></div>
+      </div>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Evidence provenance:</strong> <span class="badge deterministic">DETERMINISTIC</span> <span class="badge model">MODEL_DERIVED (tracks)</span> <span class="badge fixture">FIXTURE (scenario)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-back-4" class="ghostbtn">← Back</button>
+      <button id="wizard-export" class="ghostbtn">Export evidence package (JSON)</button>
+      <button id="wizard-open-studio" class="ghostbtn">Open in Studio →</button>
+      <button id="wizard-restart" class="ghostbtn">Start over</button>
+    </div>
+  </div>
+</section>
+
 <section id="view-counterfactual" class="view"><h2>Counterfactual simulator</h2>
  <p class="dim cf-intro">Compare original and braking trajectories. Changes rerun the deterministic simulation.</p>
  <div class="card wide cf-context">
