@@ -57,6 +57,7 @@
  <div class="navlabel">Experiments</div>
  <button data-view="physical">◇&nbsp; Physical Intelligence 3D</button>
  <button data-view="create">✦&nbsp; Create Lab</button>
+ <button data-view="wizard">🧙&nbsp; Scene Wizard</button>
  <button data-view="studio">▶&nbsp; Video Studio</button>
  <button data-view="counterfactual">⇄&nbsp; Counterfactual</button>
  <div class="navlabel">Results</div>
@@ -81,6 +82,7 @@
    <b>independent deterministic physics engine</b>. Models propose and explain. Geometry decides.
    Every number carries its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
    <div class="cta"><button id="cta-demo">Run the warehouse near-miss demo →</button>
+    <button id="cta-guided" class="ghostbtn">🧭 Guided proof — upload → inspect → intervene → review</button>
     <button id="cta-create" class="ghostbtn">Open Create Lab — build your own scene</button>
     <button id="cta-video" class="ghostbtn">▶ Watch the 3-minute demo</button>
     <a class="ghostbtn" href="https://github.com/tamzid2001/frontiersight-ai" target="_blank" rel="noopener">GitHub repository ↗</a></div>
@@ -453,6 +455,128 @@
   </aside>
  </div>
 </section>
+
+<section id="view-wizard" class="view"><h2>Scene Wizard — upload, inspect, intervene, prove</h2>
+  <p class="dim">Guided 3-step workflow: <strong>Upload Scene</strong> → <strong>Inspect Tracks</strong> → <strong>Change Intervention</strong> → <strong>Review Proof</strong>. Every step labels its provenance: <code>MODEL_DERIVED</code>, <code>DETERMINISTIC</code>, <code>FIXTURE</code>, or <code>ASSUMPTION</code>.</p>
+  <div class="wizard-progress" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="1">
+    <div class="wizard-step" data-step="1"><span class="step-num">1</span><span class="step-label">Upload Scene</span></div>
+    <div class="wizard-step" data-step="2"><span class="step-num">2</span><span class="step-label">Inspect Tracks</span></div>
+    <div class="wizard-step" data-step="3"><span class="step-num">3</span><span class="step-label">Change Intervention</span></div>
+    <div class="wizard-step" data-step="4"><span class="step-num">4</span><span class="step-label">Review Proof</span></div>
+  </div>
+
+  <div class="wizard-step-content" id="wizard-step-1">
+    <h3>Step 1: Upload Scene</h3>
+    <p class="dim">Upload a video or JSON scene, or choose a built-in scenario. SAM 3.1 segments the video; Muse Spark 1.3 proposes tracks.</p>
+    <div class="wizard-upload">
+      <input type="file" id="wizard-video-input" accept="video/*,application/json" aria-label="Upload video or scene JSON">
+      <label for="wizard-video-input" class="ghostbtn">Choose video or JSON</label>
+      <span id="wizard-file-name" class="dim"></span>
+    </div>
+    <div class="wizard-scenarios">
+      <p class="dim">Or load a built-in scenario:</p>
+      <select id="wizard-scenario-select">
+        <option value="">— Select a scenario —</option>
+        <option value="warehouse-near-miss">Warehouse near-miss (forklift + pedestrian)</option>
+        <option value="busy-intersection">Busy intersection (cyclist + vehicle)</option>
+        <option value="robot-cell">Robotics workcell (robot + shelf)</option>
+      </select>
+      <button id="wizard-load-scenario" class="ghostbtn">Load scenario</button>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Provenance:</strong> <span id="wizard-upload-provenance" class="badge fixture">FIXTURE (built-in)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-next-1" class="ghostbtn" disabled>Next: Inspect Tracks →</button>
+    </div>
+  </div>
+
+  <div class="wizard-step-content hidden" id="wizard-step-2">
+    <h3>Step 2: Inspect Tracks</h3>
+    <p class="dim">Review SAM 3.1 segmentation and Muse Spark 1.3 track proposals. Toggle between pixel-space (raw) and calibrated metres (assuming 2.5m camera height).</p>
+    <div class="wizard-track-controls">
+      <button id="wizard-toggle-space" class="ghostbtn" aria-pressed="false">Pixel space ↔ Calibrated metres</button>
+      <span id="wizard-space-mode" class="dim">Current: Pixel space</span>
+    </div>
+    <div class="wizard-track-table-container">
+      <table id="wizard-track-table" class="track-table">
+        <thead>
+          <tr><th>Object ID</th><th>Category</th><th>Frames</th><th>Source</th><th>Confidence</th><th>Action</th></tr>
+        </thead>
+        <tbody id="wizard-track-rows"></tbody>
+      </table>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Track provenance:</strong> <span id="wizard-track-provenance" class="badge model">MODEL_DERIVED (SAM 3.1 + Muse Spark 1.3)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-back-2" class="ghostbtn">← Back</button>
+      <button id="wizard-next-2" class="ghostbtn" disabled>Next: Change Intervention →</button>
+    </div>
+  </div>
+
+  <div class="wizard-step-content hidden" id="wizard-step-3">
+    <h3>Step 3: Change Intervention</h3>
+    <p class="dim">Select an agent and apply a braking intervention. The deterministic physics engine re-simulates with conservative contact bounds.</p>
+    <div class="wizard-intervention-form">
+      <label>Intervening agent
+        <select id="wizard-intervention-agent"></select>
+      </label>
+      <label>Must avoid
+        <select id="wizard-intervention-target"><option value="">All actors (worst case)</option></select>
+      </label>
+      <div class="row">
+        <label>Start reaction (s)<input id="wizard-intervention-sr" type="number" step="0.1" min="0" max="10" value="1.0"></label>
+        <label>Intervention time (s)<input id="wizard-intervention-it" type="number" step="0.1" min="0.1" max="5" value="0.5"></label>
+        <label>Deceleration (m/s²)<input id="wizard-intervention-dec" type="number" step="0.5" min="0.5" max="10" value="3.0"></label>
+      </div>
+      <button id="wizard-run-intervention" class="ghostbtn">Run counterfactual</button>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Simulation provenance:</strong> <span class="badge deterministic">DETERMINISTIC (physics engine)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-back-3" class="ghostbtn">← Back</button>
+      <button id="wizard-next-3" class="ghostbtn" disabled>Next: Review Proof →</button>
+    </div>
+  </div>
+
+  <div class="wizard-step-content hidden" id="wizard-step-4">
+    <h3>Step 4: Review Proof</h3>
+    <p class="dim">Side-by-side comparison of original vs. counterfactual. Export signed evidence package with full provenance chain.</p>
+    <div class="wizard-proof-view">
+      <div class="proof-panel">
+        <h4>Original</h4>
+        <canvas id="wizard-proof-original" width="440" height="300" role="img" aria-label="Original trajectory map"></canvas>
+        <div id="wizard-proof-original-stats" class="dim"></div>
+      </div>
+      <div class="proof-panel">
+        <h4>Counterfactual</h4>
+        <canvas id="wizard-proof-counterfactual" width="440" height="300" role="img" aria-label="Counterfactual trajectory map"></canvas>
+        <div id="wizard-proof-cf-stats" class="dim"></div>
+      </div>
+    </div>
+    <div class="wizard-proof-metrics">
+      <h4>Delta metrics</h4>
+      <div class="row">
+        <div class="metric"><strong>Closest approach</strong><span id="wizard-delta-ca">—</span></div>
+        <div class="metric"><strong>TTC change</strong><span id="wizard-delta-ttc">—</span></div>
+        <div class="metric"><strong>Clearance</strong><span id="wizard-delta-clear">—</span></div>
+        <div class="metric"><strong>Verdict</strong><span id="wizard-delta-verdict" class="badge">—</span></div>
+      </div>
+    </div>
+    <div class="wizard-provenance">
+      <strong>Evidence provenance:</strong> <span class="badge deterministic">DETERMINISTIC</span> <span class="badge model">MODEL_DERIVED (tracks)</span> <span class="badge fixture">FIXTURE (scenario)</span>
+    </div>
+    <div class="wizard-actions">
+      <button id="wizard-back-4" class="ghostbtn">← Back</button>
+      <button id="wizard-export" class="ghostbtn">Export evidence package (JSON)</button>
+      <button id="wizard-open-studio" class="ghostbtn">Open in Studio →</button>
+      <button id="wizard-restart" class="ghostbtn">Start over</button>
+    </div>
+  </div>
+</section>
+
 <section id="view-counterfactual" class="view"><h2>Counterfactual simulator</h2>
  <p class="dim cf-intro">Compare original and braking trajectories. Changes rerun the deterministic simulation.</p>
  <div class="card wide cf-context">
@@ -494,6 +618,80 @@
    <div id="cf-results" class="mono dim" style="margin-top:10px">No run yet — pick a scene and press Rerun.</div>
    <label class="chk"><input type="checkbox" id="approve"> Human review: approve evidence export</label>
   </aside>
+ </div>
+</section>
+
+<section id="view-guided" class="view"><h2>Guided proof — upload a scene, inspect tracks, change an intervention, review the proof</h2>
+ <p class="dim">A first-run walkthrough of the whole product: every number below comes from the same deterministic engine
+ the other views use. Built-in scenarios are labelled <span class="pill">FIXTURE</span>; the intervention you declare is
+ an <span class="pill">ASSUMPTION</span> until the engine answers; engine output is <span class="pill">DETERMINISTIC</span>.
+ Nothing here is pre-baked and no model inference is claimed.</p>
+ <div class="wizard">
+  <ol class="wizard-steps" aria-label="Guided proof steps">
+   <li id="wz-tab-upload"><button type="button" class="ghostbtn" data-step="upload" aria-current="step">1 · Upload Scene</button></li>
+   <li id="wz-tab-inspect"><button type="button" class="ghostbtn" data-step="inspect">2 · Inspect Tracks</button></li>
+   <li id="wz-tab-intervene"><button type="button" class="ghostbtn" data-step="intervene">3 · Change an Intervention</button></li>
+   <li id="wz-tab-proof"><button type="button" class="ghostbtn" data-step="proof">4 · Review Proof</button></li>
+  </ol>
+  <p id="wz-status" class="dim" role="status" aria-live="polite">Loading the guided proof…</p>
+
+  <div class="wizard-panel" id="wz-panel-upload">
+   <div class="card">
+    <h3>1 · Upload Scene</h3>
+    <p class="dim">Start from a built-in fixture scenario or a scene you saved in your workspace. Both paths run the
+     same deterministic analysis; the badge tells you which one you picked.</p>
+    <div class="row" style="align-items:flex-end;gap:10px">
+     <label for="wz-scenario">Fixture scenario<select id="wz-scenario"><option value="">loading…</option></select></label>
+     <button id="wz-load-scene" type="button">Load scene</button>
+     <button id="wz-load-workspace" type="button" class="ghostbtn">Use my latest workspace scene</button>
+    </div>
+    <p id="wz-scene-badge" class="dim"></p>
+   </div>
+  </div>
+
+  <div class="wizard-panel hidden" id="wz-panel-inspect">
+   <div class="card">
+    <h3>2 · Inspect Tracks</h3>
+    <p class="dim">These are the tracks the engine sampled from the scene. Occluded windows are <b>missing evidence</b> —
+     reported separately from numerical uncertainty, never smoothed over.</p>
+    <div id="wz-tracks" class="mono dim">Load a scene first.</div>
+    <div class="row"><button id="wz-inspect" type="button">Inspect tracks</button></div>
+   </div>
+  </div>
+
+  <div class="wizard-panel hidden" id="wz-panel-intervene">
+   <div class="card">
+    <h3>3 · Change an Intervention</h3>
+    <p class="dim">Declare a what-if: which component brakes, how hard, and when. This is a hypothesis
+     (<span class="pill">ASSUMPTION</span>) until the deterministic simulation answers it
+     (<span class="pill">DETERMINISTIC</span>, replayable by its manifest hash).</p>
+    <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+     <label for="wz-agent">Braking component<select id="wz-agent"></select></label>
+     <label for="wz-speed">Speed reduction<input id="wz-speed" type="range" min="5" max="100" step="5" value="50"> <output id="wz-speed-out">50%</output></label>
+     <label for="wz-time">Intervention at t (s)<input id="wz-time" type="number" min="0" max="20" step="0.5" value="2"></label>
+     <label for="wz-decel">Braking decel (m/s²)<input id="wz-decel" type="number" min="0" max="15" step="0.5" value="4"></label>
+     <button id="wz-run" type="button">Run deterministic comparison</button>
+    </div>
+    <div id="wz-run-results" class="mono dim" style="margin-top:10px">No run yet — declare an intervention and run it.</div>
+   </div>
+  </div>
+
+  <div class="wizard-panel hidden" id="wz-panel-proof">
+   <div class="card">
+    <h3>4 · Review Proof</h3>
+    <p class="dim">The exported packet binds the scene provenance, the inspected tracks, your declared intervention and the
+     deterministic run manifest to a named human approval. Export stays locked until someone puts their name on it —
+     the same rule the Evidence view applies.</p>
+    <div class="row" style="align-items:flex-end;gap:10px">
+     <label for="wz-approver">Approver name<input id="wz-approver" type="text" placeholder="Full name" autocomplete="name"></label>
+     <button id="wz-approve" type="button">Approve evidence</button>
+     <button id="wz-export" type="button" class="ghostbtn" disabled>Export proof packet (JSON)</button>
+     <button id="wz-restart" type="button" class="ghostbtn">Start over</button>
+    </div>
+    <p class="dim" style="margin-top:8px">The packet states its limits: a conditional prediction under declared assumptions —
+     <b>not a safety certification</b>.</p>
+   </div>
+  </div>
  </div>
 </section>
 

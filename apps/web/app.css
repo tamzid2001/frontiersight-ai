@@ -433,3 +433,13 @@ button.tilelink:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
 #lab-path-tools input,#lab-path-tools textarea{box-sizing:border-box;width:100%;min-width:0}
 #lab-path-tools button{white-space:normal;max-width:100%}#lab-path-tools textarea{resize:vertical}
 #agent-key-form label{display:block;margin:10px 0}#agent-key-list p{overflow-wrap:anywhere}
+.wizard-steps{display:flex;gap:8px;list-style:none;padding:0;margin:14px 0;flex-wrap:wrap}
+.wizard-steps button{min-height:44px}
+.wizard-steps button.on{border-color:var(--teal);color:var(--teal)}
+.wizard-panel{margin-bottom:14px}
+.wizard-panel .card h3{margin-top:0}
+.wizard-panel label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--dim)}
+.wizard-panel input[type=range]{max-width:180px}
+.wizard-panel output{color:var(--ink);font-variant-numeric:tabular-nums}
+.wizard #wz-status{margin:0 0 12px}
+.wizard #wz-status.err{color:var(--amber)}

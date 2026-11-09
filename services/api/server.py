@@ -131,10 +131,10 @@ class H(BaseHTTPRequestHandler):
             return "/api/v1/" + resource
         if ep == "asset":
             return "/assets/" + parse_qs(u.query).get("file", [""])[0]
-        if ep == "appview" or u.path in ("/physical-intelligence","/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help"):
+        if ep == "appview" or u.path in ("/physical-intelligence","/pricing","/create","/studio","/counterfactual","/settings","/sign-in","/workspaces","/help","/guided"):
             return "/"
         return {"openapi": "/openapi.json", "scene-prepare": "/api/scenes/prepare", "scene-resize": "/api/scenes/resize", "scene-reposition": "/api/scenes/reposition", "stageedit": "/stage-edit-core.js", "scenerequest": "/scene-request-core.js", "entityscale": "/entity-scale.mjs", "mobilenav": "/mobile-nav.js", "imageview": "/image-scene.mjs", "imagecore": "/image-scene-core.mjs",
-                "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
+                "scenerycore": "/scenery-core.mjs", "scenerythree": "/scenery-three.mjs", "wizardcore": "/wizard-core.mjs", "gallery": "/sam-gallery.json", "health": "/api/health", "diagnostics": "/api/diagnostics", "scenarios": "/api/scenarios",
                 "robots": "/robots.txt", "sitemap": "/sitemap.xml", "logo": "/logo-mark.svg", "favicon": "/favicon-32.png",
                 "samdefault": "/sam-default.jpg", "three": "/vendor/three.module.min.js", "orbit": "/vendor/addons/OrbitControls.js", "threeview": "/three-view.js",
                 "analyze": "/api/analyze", "counterfactual": "/api/counterfactual", "report": "/api/report",
@@ -271,7 +271,7 @@ class H(BaseHTTPRequestHandler):
                 if f.name=="index.html":
                     import re, html
                     view=parse_qs(urlparse(self.path).query).get("view",[urlparse(self.path).path.strip("/")])[0]
-                    titles={"physical-intelligence":"Physical Intelligence 3D", "pricing":"Pricing", "create":"Create Lab", "studio":"Video Studio", "counterfactual":"Counterfactuals", "settings":"Account Settings", "sign-in":"Sign In", "workspaces":"Workspaces", "help":"Help and Guides"}
+                    titles={"physical-intelligence":"Physical Intelligence 3D", "pricing":"Pricing", "create":"Create Lab", "studio":"Video Studio", "counterfactual":"Counterfactuals", "guided":"Guided Proof", "settings":"Account Settings", "sign-in":"Sign In", "workspaces":"Workspaces", "help":"Help and Guides"}
                     if view in titles:
                         document=content.decode();title=html.escape(titles[view]+" | FrontierSight AI")
                         document=re.sub(r"<title>.*?</title>","<title>"+title+"</title>",document,count=1)

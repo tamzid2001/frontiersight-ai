@@ -68,6 +68,7 @@ model call is ever claimed that didn't happen.
 | Generate a scene from a sentence | Create Lab → ✦ | Muse Spark designs the scene as strict JSON; schema-validated before it touches the editor, fully editable afterwards |
 | Test a counterfactual | Counterfactual | Scene/agent/target pickers, braking presets + deceleration control, top-down trajectory map (original vs counterfactual), separation chart with contact band, Monte-Carlo intervals |
 | Audit the reasoning | Evidence & Trace | 9-stage bounded agent workflow with per-stage attribution and artifact hashes; export a hash-bound evidence packet (JSON/HTML) |
+| Walk the whole product once | Guided proof | A four-step first-run tour — Upload Scene → Inspect Tracks → Change an Intervention → Review Proof. Loads a built-in fixture (or your saved workspace scene), shows the engine-sampled tracks with occlusions labelled as missing evidence, runs the SAME deterministic counterfactual engine with your declared intervention, and exports an approval-bound proof packet. Export stays locked until a named human approves it; the packet carries FIXTURE / ASSUMPTION / DETERMINISTIC provenance labels and states it is not a safety certification |
 | Segment real imagery | API (`/api/meta/segment`) | SAM 3.1 over the documented special-token wire format — boxes, stable ids, confidences parsed live |
 
 ![Create Lab — author a scene, set paths, preview motion](docs/assets/create-lab.png)
