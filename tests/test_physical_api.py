@@ -31,6 +31,8 @@ def test_actual_http_mcp_and_direct_parity(http_server):
     assert capabilities['physical_actuation'] is False
     for path in ('/physical-intelligence','/physical-intelligence.mjs','/physical-intelligence.css','/request-scope-core.mjs'):
         with urllib.request.urlopen(http_server+path) as response: assert response.status==200
+    with urllib.request.urlopen(http_server+'/api/index?ep=labasset&file=lab-store-core.mjs') as asset:assert asset.status==200
+    with pytest.raises(urllib.error.HTTPError):urllib.request.urlopen(http_server+'/api/index?ep=labasset&file=../../secret')
     bad=deepcopy(scene);bad['schema_version']='0'
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(urllib.request.Request(http_server+'/api/v2/simulations/run',data=json.dumps({'scene':bad}).encode(),headers={'Content-Type':'application/json'}))
@@ -108,3 +110,15 @@ def test_every_openapi_security_requirement_names_a_real_scheme():
                 assert set(requirement)<=names
     assert spec['paths']['/api/v1/physics/propose']['post']['security']==[{'ClerkSession':[]},{'FrontierAgentKey':[]}]
     assert spec['paths']['/api/v1/profile/sync']['post']['security']==[{'ClerkSession':[]}]
+
+
+def test_complete_scene_comparison_keeps_structural_edits_and_shared_mcp():
+    left=flying();right=deepcopy(left);right['objects'].pop();right['objects'][0]['pose']['position_m'][2]=2
+    request={'baseline':left,'alternative':right}
+    direct=physical.execute('compare_scene_documents_3d',request)
+    from engine.world3d_schema import validate
+    validate(physical.OUTPUT_SCHEMAS['compare_scene_documents_3d'],direct)
+    assert direct['changed_object_ids']==['flying-vehicle','gantry']
+    assert direct['baseline_digest']!=direct['alternative_digest']
+    assert len(direct['baseline']['scene']['objects'])==3 and len(direct['counterfactual']['scene']['objects'])==2
+    assert json.loads(mcp.call_tool('compare_scene_documents_3d',request)['content'][0]['text'])==direct
