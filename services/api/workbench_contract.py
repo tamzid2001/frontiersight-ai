@@ -34,6 +34,7 @@ def schemas(scene):
     result['render_video_preview'] = obj({'scene':scene,'duration_s':{'type':'number','minimum':.2,'maximum':12},'fps':{'type':'integer','minimum':1,'maximum':15},
         'width':{'type':'integer','minimum':160,'maximum':1024},'height':{'type':'integer','minimum':120,'maximum':768}},('scene',))
     from engine.world3d_schema import PROFILE, SCENE
+    from engine.editor_document import PROJECT
     result['propose_physics_profile']=obj({'profile':PROFILE,'description':{'type':'string','minLength':4,'maxLength':2000},'model':text},('profile','description'))
     result['get_profile']=obj({})
     result['sync_profile']=obj({})
@@ -44,7 +45,7 @@ def schemas(scene):
         result['get_'+kind] = obj({'id':rid},('id',))
         fields = {'name':{'type':'string','minLength':1,'maxLength':120}}
         required = ['name']
-        if kind == 'scenes':fields['scene']={'oneOf':[scene,SCENE]};required.append('scene')
+        if kind == 'scenes':fields['scene']={'oneOf':[scene,SCENE,PROJECT]};required.append('scene')
         elif kind == 'objects':fields['spec']={'type':'object'};required.append('spec')
         else:
             fields.update({'kind':{'type':'string','enum':['frame','video']},'data_url':{'type':'string','maxLength':180000},

@@ -62,7 +62,7 @@ def validate_payload(payload):
     while pending:
         value, depth = pending.pop()
         count += 1
-        if depth > 8 or count > 10000:
+        if depth > (20 if payload.get('schema_version')=='frontiersight.project/1.0' else 8) or count > (30000 if payload.get('schema_version')=='frontiersight.project/1.0' else 10000):
             raise WorkspaceError(400, "payload_budget_exceeded")
         if isinstance(value, dict):
             if any(not isinstance(key, str) or key in ("__proto__", "constructor", "prototype") for key in value):

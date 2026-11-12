@@ -433,3 +433,6 @@ button.tilelink:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
 #lab-path-tools input,#lab-path-tools textarea{box-sizing:border-box;width:100%;min-width:0}
 #lab-path-tools button{white-space:normal;max-width:100%}#lab-path-tools textarea{resize:vertical}
 #agent-key-form label{display:block;margin:10px 0}#agent-key-list p{overflow-wrap:anywhere}
+
+/* Unified panes remain hidden until their shared editor activates them. */
+.lab-pane{display:none;min-width:0}.lab-pane.on{display:block}

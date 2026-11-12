@@ -3,10 +3,14 @@ from copy import deepcopy
 from engine import world3d, world3d_schema as s
 from engine.demos3d import demonstration, upgrade_2d
 from engine.observations3d import estimate_track, pixel_to_world, sam_tracks, assumption_scene
+from engine.editor_document import EDITOR_ID
 
 CHANGE=s.obj({'object_id':s.IDENTITY,'physics':s.PROFILE,'joint':s.JOINT,'pose':s.POSE,
               'velocity_mps':s.vec(-200,200),'acceleration_mps2':s.vec(-100,100),'waypoints':s.BODY['properties']['waypoints'],'geometry':s.GEOMETRY,'angular_velocity_radps':s.vec(-20,20)},['object_id'])
 SCHEMAS={
+    'export_project_evidence_3d':s.obj({'scene':s.SCENE,'baseline':s.SCENE,'document_id':EDITOR_ID,
+        'scene_revision':{'type':'integer','minimum':0,'maximum':2**31-1}},['scene','document_id','scene_revision']),
+    'compare_scene_documents_3d':s.obj({'baseline':s.SCENE,'alternative':s.SCENE},['baseline','alternative']),
     'closest_approach_3d':s.obj({'position_a':s.vec(),'velocity_a':s.vec(-200,200),'radius_a':s.num(0,100),'position_b':s.vec(),'velocity_b':s.vec(-200,200),'radius_b':s.num(0,100),'horizon_s':s.num(.001,30)},['position_a','velocity_a','radius_a','position_b','velocity_b','radius_b','horizon_s']),
     'tracks_to_assumed_scene_3d':s.obj({'tracks':{'type':'array','items':{'type':'object'},'minItems':1,'maxItems':16},'metres_per_pixel':s.num(.000001,100),'height_m':s.num(0,100),'radius_m':s.num(.001,20)},['tracks','metres_per_pixel']),
     'get_scene_3d':s.obj({'demo':{'enum':['warehouse','flying']}},['demo']),
@@ -25,6 +29,8 @@ SCHEMAS={
     'export_evidence_packet_3d':s.obj({'scene':s.SCENE},['scene']),
 }
 DESCRIPTIONS={
+    'export_project_evidence_3d':'Recompute a bounded scene or baseline comparison and hash the complete evidence packet. Caller-supplied document context is not authentication; no persistence, model call or hardware actuation.',
+    'compare_scene_documents_3d':'Recompute complete baseline and alternative canonical scenes, including structural edits; source hashes and changed identities retained. Simulation only.',
     'closest_approach_3d':'Exact sphere separation, closest approach and time-to-contact under declared constant 3D velocities and horizon. No measured-depth claim.',
     'tracks_to_assumed_scene_3d':'Convert pixel tracks using explicit user scale, constant height and sphere-radius assumptions. Never claims measured depth; use aligned track timestamps.',
     'get_scene_3d':'Get a synthetic warehouse or hypothetical flight scene in canonical SI/ENU format; no hardware observation.',
@@ -39,6 +45,8 @@ DESCRIPTIONS={
     'export_evidence_packet_3d':'Export hash-bound scene, simulation and interpretation; hashes provide integrity, not measurement authenticity or a safety certificate.',
 }
 ROUTES={
+    '/api/v2/evidence/project':'export_project_evidence_3d',
+    '/api/v2/counterfactuals/scenes':'compare_scene_documents_3d',
     '/api/v2/geometry/closest-approach':'closest_approach_3d',
     '/api/v2/tracks/assumed-scene':'tracks_to_assumed_scene_3d',
     '/api/v2/scenes/demo':'get_scene_3d','/api/v2/scenes/prepare':'prepare_scene_3d',
@@ -50,6 +58,24 @@ ROUTES={
 
 
 OUTPUT_SCHEMAS={'simulate_scene_3d':s.RESULT,'simulate_counterfactual_3d':s.obj({'schema_version':{'const':'2.0'},'baseline':s.RESULT,'counterfactual':s.RESULT,'changes':{'type':'array','items':CHANGE,'minItems':1,'maxItems':16},'interpretation':s.TEXT},['schema_version','baseline','counterfactual','changes','interpretation'])}
+
+
+OUTPUT_SCHEMAS['compare_scene_documents_3d']=s.obj({'schema_version':{'const':'2.0'},'baseline':s.RESULT,'counterfactual':s.RESULT,
+    'baseline_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},'alternative_digest':{'type':'string','pattern':'^[a-f0-9]{64}$'},
+    'changed_object_ids':{'type':'array','items':s.IDENTITY,'maxItems':32},'interpretation':s.TEXT},
+    ['schema_version','baseline','counterfactual','baseline_digest','alternative_digest','changed_object_ids','interpretation'])
+
+OUTPUT_SCHEMAS['export_project_evidence_3d']=s.obj({
+    'packet':s.obj({'schema_version':{'const':'frontiersight.project-evidence/1.0'},
+        'document_context':s.obj({'id':EDITOR_ID,'revision':{'type':'integer','minimum':0},
+            'authority':{'const':'caller_supplied_not_authenticated'}},['id','revision','authority']),
+        'kind':{'enum':['scene_simulation','counterfactual_comparison']},
+        'result':{'oneOf':[s.RESULT,OUTPUT_SCHEMAS['compare_scene_documents_3d']]},
+        'simulation_only':{'const':True},'physical_actuation':{'const':False},'interpretation':s.TEXT},
+        ['schema_version','document_context','kind','result','simulation_only','physical_actuation','interpretation']),
+    'packet_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},'signature':{'type':'null'},
+    'authenticity':{'const':'unsigned_integrity_only'},'persisted':{'const':False}},
+    ['packet','packet_sha256','signature','authenticity','persisted'])
 
 def capabilities():
     return {'schema_version':'2.0','coordinate_frame':'world_enu','units':'SI','physical_actuation':False,
@@ -64,6 +90,19 @@ def capabilities():
 def _execute(name,request):
     if name not in SCHEMAS: raise ValueError('unknown physical intelligence operation')
     request=s.validate(SCHEMAS[name],request)
+    if name=='export_project_evidence_3d':
+        compared='baseline' in request
+        result=(world3d.compare_documents(request['baseline'],request['scene']) if compared
+                else world3d.simulate(request['scene']))
+        packet={'schema_version':'frontiersight.project-evidence/1.0',
+                'document_context':{'id':request['document_id'],'revision':request['scene_revision'],
+                                    'authority':'caller_supplied_not_authenticated'},
+                'kind':'counterfactual_comparison' if compared else 'scene_simulation',
+                'result':result,'simulation_only':True,'physical_actuation':False,
+                'interpretation':'Conditional kinematic computation under declared assumptions. Integrity is not measurement authenticity or safety certification.'}
+        return {'packet':packet,'packet_sha256':world3d.digest(packet),'signature':None,
+                'authenticity':'unsigned_integrity_only','persisted':False}
+    if name=='compare_scene_documents_3d':return world3d.compare_documents(request['baseline'],request['alternative'])
     if name=='closest_approach_3d':
         from engine.geometry3d import closest_approach
         return closest_approach(**request)

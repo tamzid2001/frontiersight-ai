@@ -2,6 +2,46 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/world-visuals.mjs",
+      "destination": "/api/index?ep=labasset&file=world-visuals.mjs"
+    },
+    {
+      "source": "/guided-lab.css",
+      "destination": "/api/index?ep=labasset&file=guided-lab.css"
+    },
+    {
+      "source": "/guided-lab-core.mjs",
+      "destination": "/api/index?ep=labasset&file=guided-lab-core.mjs"
+    },
+    {
+      "source": "/guided-lab.mjs",
+      "destination": "/api/index?ep=labasset&file=guided-lab.mjs"
+    },
+    {
+      "source": "/lab-store-core.mjs",
+      "destination": "/api/index?ep=labasset&file=lab-store-core.mjs"
+    },
+    {
+      "source": "/unified-lab.mjs",
+      "destination": "/api/index?ep=labasset&file=unified-lab.mjs"
+    },
+    {
+      "source": "/unified-lab.css",
+      "destination": "/api/index?ep=labasset&file=unified-lab.css"
+    },
+    {
+      "source": "/vendor/addons/TransformControls.js",
+      "destination": "/api/index?ep=labasset&file=vendor/addons/TransformControls.js"
+    },
+    {
+      "source": "/devices",
+      "destination": "/api/index?ep=appview&view=devices"
+    },
+    {
+      "source": "/evidence",
+      "destination": "/api/index?ep=appview&view=evidence"
+    },
+    {
       "source": "/request-scope-core.mjs",
       "destination": "/api/index?ep=scopejs"
     },

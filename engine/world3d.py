@@ -265,3 +265,13 @@ def compare(scene,changes):
         if any(k in change for k in ('pose','geometry','velocity_mps','acceleration_mps2','waypoints','joint')):by_id[identity]['provenance']='ASSUMPTION'
     return {'schema_version':'2.0','baseline':simulate(scene),'counterfactual':simulate(altered),'changes':deepcopy(changes),
             'interpretation':'Conditional simulations under declared assumptions, not causal proof or hardware authorization.'}
+
+
+def compare_documents(baseline,alternative):
+    """Compare complete canonical revisions, including added/removed components."""
+    baseline=validate_scene(baseline);alternative=validate_scene(alternative)
+    left={o['id']:o for o in baseline['objects']};right={o['id']:o for o in alternative['objects']}
+    changed=sorted(key for key in left.keys()|right.keys() if left.get(key)!=right.get(key))
+    return {'schema_version':'2.0','baseline':simulate(baseline),'counterfactual':simulate(alternative),
+            'baseline_digest':digest(baseline),'alternative_digest':digest(alternative),'changed_object_ids':changed,
+            'interpretation':'Independent canonical scene revisions; conditional kinematic comparison, not causal proof or hardware authorization.'}

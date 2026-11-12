@@ -278,12 +278,15 @@ class Workbench:
             clean['name'] = name(body.get('name'))
             if kind == 'scenes':
                 raw=body.get('scene')
-                if isinstance(raw,dict) and raw.get('schema_version')=='2.0':
+                if isinstance(raw,dict) and raw.get('schema_version')=='frontiersight.project/1.0':
+                    from engine.editor_document import validate_project
+                    clean['payload']=validate_project(raw)
+                elif isinstance(raw,dict) and raw.get('schema_version')=='2.0':
                     from engine.world3d import validate_scene as validate_3d
                     clean['payload']=validate_3d(raw)
                 else: clean['payload'] = validate_document(raw)
                 # Validate actual playback bounds; no silent repair on API saves.
-                if clean['payload'].get('schema_version')!='2.0' and clean['payload']['objects']: prepare_scene(clean['payload'])
+                if clean['payload'].get('schema_version') not in ('2.0','frontiersight.project/1.0') and clean['payload']['objects']: prepare_scene(clean['payload'])
             elif kind == 'objects':
                 clean['payload'] = {'spec': spark.validate_custom_object(body.get('spec'))}
             else:

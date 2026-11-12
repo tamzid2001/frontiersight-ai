@@ -54,13 +54,11 @@
  <button data-view="home" class="on" aria-current="page">⌂&nbsp; Overview</button>
  <button data-view="workspace">▦&nbsp; Workspace</button>
  <button data-view="pricing">◈&nbsp; Pricing</button>
- <div class="navlabel">Experiments</div>
- <button data-view="physical">◇&nbsp; Physical Intelligence 3D</button>
- <button data-view="create">✦&nbsp; Create Lab</button>
- <button data-view="studio">▶&nbsp; Video Studio</button>
- <button data-view="counterfactual">⇄&nbsp; Counterfactual</button>
+ <div class="navlabel">Create</div>
+ <button data-view="create">Create Lab</button>
  <div class="navlabel">Results</div>
- <button data-view="evidence">▤&nbsp; Evidence &amp; Trace</button>
+ <button data-view="evidence">Evidence &amp; Trace</button>
+ <button data-view="devices">Devices &amp; Worker Endpoints</button>
  <div class="navspacer"></div>
  <button data-view="settings">⚙&nbsp; Settings</button>
  <button data-view="help">?&nbsp; Help &amp; guides</button>
@@ -232,7 +230,40 @@
  <div class="card wide"><h3>Analytical validation cases</h3><ul id="validation-list"><li class="dim">loading…</li></ul></div>
 </section>
 
-<section id="view-studio" class="view">
+<section id="view-create" class="view unified-create">
+ <div class="lab-project-heading"><div><span class="eyebrow">PHYSICAL INTELLIGENCE WORKSPACE</span><h2>Create Lab</h2><p>One scene. One timeline. Inspect every assumption.</p></div><div><output id="ul-revision">No scene loaded</output><span id="ul-save-status" role="status">Not saved</span></div></div>
+ <section class="guide-shell" aria-labelledby="guide-phase-title">
+  <nav aria-label="Scene to evidence progress"><ol class="guide-steps">
+   <li><button type="button" data-guide-step="input" aria-current="step"><span>1</span> Input</button></li>
+   <li><button type="button" data-guide-step="inspect"><span>2</span> Inspect &amp; compare</button></li>
+   <li><button type="button" data-guide-step="proof"><span>3</span> Review proof</button></li>
+  </ol></nav>
+  <div id="guide-content"><h3 id="guide-phase-title" tabindex="-1">Choose an input</h3>
+   <div data-guide-pane="input"><p>Start with a synthetic warehouse or import your own scene. Video analysis is available in the observations panel through your local worker.</p>
+    <div class="guide-actions"><button id="guide-sample" type="button" data-guide-action>Try warehouse sample</button><label class="guide-file-label" for="guide-file">Import scene JSON<input id="guide-file" type="file" accept="application/json,.json" aria-describedby="guide-file-help" data-guide-action></label><button id="guide-inspect" type="button" disabled>Inspect current scene</button></div>
+    <details class="guide-ai"><summary>AI &amp; authoring tools</summary><p>Keep Muse, custom objects and dictation in the 2D authoring panel. Convert to the shared 3D scene only after reviewing its scale and height assumptions.</p><button type="button" data-legacy-panel="planar">Open Muse, dictation &amp; objects</button></details><p id="guide-file-help" class="dim">Canonical v2 scenes and editor recovery files, up to 512 KiB. No automatic cloud upload. Use Export to keep a recoverable draft.</p>
+   </div>
+   <div data-guide-pane="inspect" hidden><p><span id="guide-object-count">No components</span>. Select a component, inspect its declared dimensions and physics, then recompute. The sample's fork carriage moves independently from its chassis.</p><div class="guide-actions"><button id="guide-earlier" type="button" data-guide-action>Lift two seconds earlier &amp; compare</button><button id="guide-review" type="button" disabled>Review current computation</button></div></div>
+   <div data-guide-pane="proof" hidden><p id="guide-proof-state">Run the current scene to compute evidence.</p><button id="guide-evidence" type="button" disabled data-guide-action>Download evidence JSON</button><p class="dim">Server-recomputed, hash-bound results. Unsigned integrity evidence; no measurement authentication or safety certification.</p><output id="guide-proof-digest" class="guide-digest">Not exported for this revision</output><details><summary>Recent scene edits</summary><ol id="guide-history"></ol></details></div>
+  </div>
+  <div class="guide-provenance"><span id="guide-source" class="pill">No scene</span><span id="guide-coordinates" class="pill ghost">Depth unavailable</span><span id="guide-observations" class="dim">No measured video observations</span></div><p id="guide-status" role="status"></p>
+ </section>
+ <div id="ul-toolbar" class="ul-toolbar" role="toolbar" aria-label="Scene editor controls">
+ <button data-ul="save" title="Save — Ctrl/Cmd+S">Save</button><button data-ul="undo" title="Undo — Ctrl/Cmd+Z" disabled>Undo</button><button data-ul="redo" title="Redo — Ctrl/Cmd+Shift+Z" disabled>Redo</button>
+ <button data-ul="zoom-in" title="Increase viewport magnification">Zoom in</button><button data-ul="zoom-out" title="Decrease viewport magnification">Zoom out</button><button data-ul="fit" title="Fit all modeled geometry — F">Fit</button><button data-ul="reset-camera" title="Reset perspective camera">Reset camera</button>
+ <button data-ul="select" aria-pressed="true" title="Select an object — 1">Select</button><button data-ul="move" aria-pressed="false" title="Move selected object — 2">Move</button><button data-ul="rotate" aria-pressed="false" title="Rotate selected object — 3">Rotate</button><button data-ul="scale" aria-pressed="false" title="Scale selected collision geometry — 4">Scale</button>
+ <button data-ul="duplicate" title="Duplicate the selected object">Duplicate</button><button data-ul="delete" title="Delete selected object — Delete">Delete</button><button data-ul="grid" aria-pressed="true" title="Show or hide the visual grid">Grid</button><button data-ul="axes" aria-pressed="true" title="Show or hide ENU axes">Axes</button><button data-ul="snap" aria-pressed="false" title="Snap edited positions to a 0.1 metre grid">Snap</button>
+ <button data-ul="run" class="primary" title="Evaluate declared physics; no real hardware">Run simulation</button><button data-ul="pause" title="Pause timeline playback">Pause</button><button data-ul="compare" title="Recompute against the locked baseline">Compare</button><button data-ul="export" title="Export canonical editor document and history">Export</button>
+ </div>
+ <div class="ul-panel-tabs" role="tablist" aria-label="Create Lab capabilities"><button data-lab-panel="world" role="tab" aria-selected="true">3D world</button><button data-lab-panel="video" role="tab" aria-selected="false">Video &amp; observations</button><button data-lab-panel="planar" role="tab" aria-selected="false">2D top view</button><button data-lab-panel="counterfactual" role="tab" aria-selected="false">Counterfactual</button></div>
+ <div id="ul-message" role="status" class="ul-message">Simulation only · model geometry is distinct from measured observations.</div>
+ <div id="ul-panel-host"></div>
+ <div class="ul-timeline card"><div class="ul-timeline-controls"><button data-ul="frame-back" title="Previous simulation sample">Previous frame</button><button data-ul="play" title="Play or pause — Space">Play</button><button data-ul="frame-next" title="Next simulation sample">Next frame</button><output id="ul-clock">0.00 s</output><label>Time<input id="ul-time" type="range" min="0" max="30" step="0.01" value="0"></label><button data-ul="timeline-out" title="Zoom timeline out around the playhead">− Time</button><button data-ul="timeline-in" title="Zoom timeline in around the playhead">+ Time</button><button data-ul="timeline-fit" title="Fit the entire sequence">Fit sequence</button></div><div id="ul-tracks" aria-label="Computed scene and event tracks"></div></div>
+ <details class="card ul-documents"><summary>Import / recover a canonical editor document</summary><label>Editor JSON file<input id="ul-document-file" type="file" accept="application/json,.json"></label><button data-ul="download-draft">Download recoverable draft</button><p>Drafts include scene history and media references, never model keys or video bytes.</p><button data-legacy-panel="planar">Open archived 2D authoring</button><button data-legacy-panel="counterfactual">Open archived planar analysis</button></details>
+</section>
+<section id="view-devices" class="view"><div class="lab-project-heading"><div><span class="eyebrow">RESULTS</span><h2>Devices &amp; Worker Endpoints</h2><p>Private local workers and observed health. Physical actuation remains disabled.</p></div><a href="/api-guide.html">API &amp; MCP documentation</a></div><div class="card" id="ul-worker-card"><h3>Local-only worker</h3><p>Loopback connects this browser to the worker on the same computer. It is not an internet robot endpoint.</p><div id="ul-worker-connection"></div><button id="ul-copy-worker">Copy worker URL</button><p id="ul-worker-copy-status" role="status"></p><pre id="ul-worker-capabilities"></pre><pre id="ul-worker-example">curl http://127.0.0.1:8830/health -H "Authorization: Bearer $EDGE_OPERATOR_TOKEN"</pre></div><div id="ul-worker-live"></div></section>
+
+<section id="view-studio" class="lab-pane">
  <div class="row studio-heading"><h2>Video intelligence studio</h2>
   <select id="scenario-select" aria-label="Scenario"></select>
   <span id="studio-source-pill" class="pill ghost" title="Stored synthetic tracks; ground truth is held separately">Fixture replay</span><button id="studio-open-vision" type="button" class="ghostbtn" aria-controls="sam-panel" aria-expanded="false">Segment image / video</button></div>
@@ -261,7 +292,7 @@
 
  <details class="card edge-studio" id="edge-studio-panel"><summary>Video upload jobs &amp; local shadow intelligence</summary>
  <p>Run <code>python -m edge.server</code> locally. Videos remain local in inspection mode. Selecting SAM explicitly sends the clip to Meta for paid model processing with your configured key.</p>
- <div class="edge-grid"><label>Local worker URL<input id="edge-url" type="url" value="http://127.0.0.1:8830"></label><label>Local operator token<input id="edge-token" type="password" autocomplete="off"></label><button id="edge-connect">Connect local worker</button></div>
+ <div id="edge-connection-controls" class="edge-grid"><label>Local worker URL<input id="edge-url" type="url" value="http://127.0.0.1:8830"></label><label>Local operator token<input id="edge-token" type="password" autocomplete="off"></label><button id="edge-connect">Connect local worker</button></div>
  <p id="edge-status" role="status">Disconnected · no camera or hardware connected.</p>
  <div id="edge-drop" class="edge-drop"><label>Drop a video here or choose a file<input id="edge-file" type="file" accept=".mp4,.mov,.webm,video/mp4,video/quicktime,video/webm"></label><p>64 MiB · up to 120 seconds · 3,600 decoded frames (512 for SAM) · actual content validated.</p></div>
  <div class="edge-grid"><label>Concepts · one short noun phrase per line<textarea id="edge-concepts" rows="3">person</textarea></label><label><input id="edge-send-meta" type="checkbox"> Send this video to Meta SAM 3.1 with my local model credentials</label></div>
@@ -272,7 +303,7 @@
  <div class="edge-grid"><label>Resume an existing job<input id="edge-job-id" placeholder="Local job ID"></label><button id="edge-reopen">Inspect job</button><label>Tracked object<select id="edge-track-select"></select></label></div>
  <pre id="edge-job"></pre><pre id="edge-track"></pre>
  <details><summary>Convert tracks using declared assumptions</summary><p>Monocular segmentation does not measure depth. These values are assumptions and will be labeled as such.</p><div class="edge-grid"><label>Assumed metres / pixel<input id="edge-scale" type="number" step="0.001" min="0.000001" value="0.01"></label><label>Assumed elevation (m)<input id="edge-height" type="number" min="0" value="0"></label><label>Assumed collision radius (m)<input id="edge-radius" type="number" min="0.001" step="0.01" value="0.25"></label></div><button id="edge-convert" disabled>Convert to assumption-based 3D scene</button></details>
- <details><summary>Live Intelligence · shadow runtime</summary><p>The edge camera process must be started separately. Connecting this page never turns on a camera or enables actuators.</p><button id="edge-live-refresh">Refresh live state</button><button id="edge-world" disabled>Open fresh predicted world</button><pre id="edge-live">No runtime connected.</pre><pre id="edge-health"></pre></details>
+ <details id="edge-live-panel"><summary>Live Intelligence · shadow runtime</summary><p>The edge camera process must be started separately. Connecting this page never turns on a camera or enables actuators.</p><button id="edge-live-refresh">Refresh live state</button><button id="edge-world" disabled>Open fresh predicted world</button><pre id="edge-live">No runtime connected.</pre><pre id="edge-health"></pre></details>
 </details>
 <details class="card wide studio-tools" id="sam-panel" style="margin-top:14px"><summary>SAM 3.1 Vision — segment an image or video frame</summary>
   <p class="dim">Load an image or video (stays in your browser), then segment the current frame with SAM 3.1.
@@ -313,7 +344,7 @@
  </div>
 </section>
 
-<section id="view-physical" class="view">
+<section id="view-physical" class="lab-pane">
  <div class="pi-heading"><div><span class="pill">3D · simulation &amp; declared assumptions</span><h2>Physical Intelligence</h2><p>Change an object's height, forces or lifting schedule. Inspect recomputed 3D trajectories and clearance.</p></div><a href="/api-guide.html">API &amp; MCP guide ↗</a></div>
  <div class="pi-layout"><aside class="card pi-controls">
  <label>Demonstration<select id="pi-demo"><option value="warehouse">Warehouse · independent fork lift</option><option value="flying">Hypothetical vertical-thrust vehicle</option></select></label>
@@ -326,7 +357,7 @@
  <details><summary>Timed 3D waypoints</summary><label>Rest-to-rest waypoints · t_s and position_m<textarea id="pi-waypoints" rows="8" spellcheck="false"></textarea></label><p>Each segment is a C2 quintic curve. Speed and acceleration limits are checked analytically.</p></details><details><summary>Collision geometry &amp; physics</summary><label>Collision shape JSON<textarea id="pi-geometry" rows="3" spellcheck="false"></textarea></label><label>Physics profile JSON<textarea id="pi-profile" rows="12" spellcheck="false"></textarea></label></details>
  <button id="pi-apply-object" data-pi-request>Validate &amp; apply component</button>
  <details><summary>Physics from language</summary><label>Describe a supported change<textarea id="pi-instruction" rows="3" placeholder="Limit lift speed to 0.35 m/s and assume a 900 kg payload."></textarea></label><button id="pi-propose" data-pi-request>Propose with Muse</button><p>Authenticated Researcher plan and configured model access required. One request; changes wait for your approval.</p><pre id="pi-proposal"></pre><button id="pi-approve" disabled data-pi-request>Approve &amp; apply proposal</button></details>
- </aside><div class="pi-main"><div class="card pi-stage-card"><div class="pi-toolbar"><label>View<select id="pi-camera"><option>perspective</option><option>top</option><option>side</option><option>front</option></select></label><button id="pi-run" data-pi-request>Recompute</button><button id="pi-compare" data-pi-request>Compare to baseline</button></div><div id="pi-viewport" role="img" aria-label="3D simulated world; numerical data follows below"></div><div class="pi-timeline"><button id="pi-play">Play</button><label class="pi-range">Timeline<input id="pi-time" type="range" min="0" max="12" step="0.01" value="0"></label><output id="pi-clock">0.00 s</output><label>Playback<select id="pi-rate"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label></div><p id="pi-values"></p></div>
+ </aside><div class="pi-main"><div class="card pi-stage-card"><div class="pi-toolbar"><label>View<select id="pi-camera"><option>perspective</option><option>top</option><option>side</option><option>front</option></select></label><button id="pi-run" data-pi-request>Recompute</button><button id="pi-compare" data-pi-request>Compare to baseline</button></div><p class="pi-visual-note">Illustrative objects and scenery · only declared collision bounds enter the computation</p><div id="pi-viewport" role="img" aria-label="3D simulated world; numerical data follows below"></div><div class="pi-timeline"><button id="pi-play">Play</button><label class="pi-range">Timeline<input id="pi-time" type="range" min="0" max="12" step="0.01" value="0"></label><output id="pi-clock">0.00 s</output><label>Playback<select id="pi-rate"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label></div><p id="pi-values"></p></div>
  <div id="pi-charts" class="pi-charts" aria-label="Selected component simulation charts"></div><p id="pi-status" role="status" aria-live="polite">Choose a demonstration. No camera or hardware is connected.</p>
  <div class="pi-toolbar"><button id="pi-reset-baseline">Use current scene as baseline</button><button id="pi-save" data-pi-request>Save to workspace</button><button id="pi-export">Export scene JSON</button></div>
  <div class="card"><h3>Contact evidence</h3><p>Solid objects show the current simulation. Green wireframes show the baseline. Possible contacts are conservative bounds, not confirmed impacts.</p><ul id="pi-events"></ul><h3>Declared constraints</h3><pre id="pi-constraints"></pre><details><summary>Pair clearance values</summary><div class="pi-table"><table><thead><tr><th>Components</th><th>Clearance</th><th>Time</th><th>Method</th></tr></thead><tbody id="pi-clearance"></tbody></table></div></details></div>
@@ -334,7 +365,7 @@
  </div></div>
 </section>
 
-<section id="view-create" class="view"><h2>Create Lab — build a scene, set the paths, run the proof</h2>
+<section id="view-planar" class="lab-pane"><h2>Create Lab — build a scene, set the paths, run the proof</h2>
  <p class="dim">Create components, give each one a path and a speed, watch them move, then run the same deterministic
  analysis and counterfactual pipeline used for the built-in scenarios. The stage is a <b><span id="lab-stage-label">16 × 14</span> metre</b> floor plan (editable above);
  positions are metres, so metric claims are valid by construction. Nothing here is pre-baked: tracks are sampled
@@ -453,7 +484,7 @@
   </aside>
  </div>
 </section>
-<section id="view-counterfactual" class="view"><h2>Counterfactual simulator</h2>
+<section id="view-counterfactual" class="lab-pane"><h2>Counterfactual simulator</h2>
  <p class="dim cf-intro">Compare original and braking trajectories. Changes rerun the deterministic simulation.</p>
  <div class="card wide cf-context">
   <div class="cf-fields">
