@@ -178,7 +178,9 @@ def test_world_class_form_system():
         assert marker in css, marker
     assert "passwrap" in js and "paintRange" in js
     html = (ROOT / "apps" / "web" / "index.html").read_text()
-    assert 'src="/logo-mark.svg"' in html and 'type="image/svg+xml" href="/logo-mark.svg"' in html
+    assert 'src="/assets/brand/frontiersight.png"' in html
+    assert 'type="image/png" sizes="32x32" href="/favicon-32.png"' in html
+    assert (ROOT / "apps/web/assets/brand/frontiersight.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 def test_3d_and_mcp_assets():
     html = (ROOT / "apps" / "web" / "index.html").read_text()

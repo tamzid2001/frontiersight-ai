@@ -22,7 +22,6 @@
 <meta name="twitter:description" content="From video to verifiable physical-world intelligence.">
 <link rel="canonical" href="https://frontiersight-ai.vercel.app">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"FrontierSight AI","applicationCategory":"DeveloperApplication","operatingSystem":"Web","url":"https://frontiersight-ai.vercel.app","author":{"@type":"Organization","name":"Quantura Studio","url":"https://quantura.studio","email":"hello@quantura.studio","sameAs":["https://quantura.studio","https://www.youtube.com/@quanturaaimarketforecast","https://github.com/tamzid2001/frontiersight-ai"]},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
-<link rel="icon" type="image/svg+xml" href="/logo-mark.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <script>try{var m=localStorage.getItem("fs-theme")||"system";var r=m==="system"?(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):m;document.documentElement.dataset.theme=r;}catch(e){document.documentElement.dataset.theme="dark";}</script>
 <link rel="stylesheet" href="app.css">
@@ -45,7 +44,7 @@
 <span id="desktop-navigation-anchor" hidden></span>
 <nav id="tabs" aria-label="Primary">
  <div class="sidebrand">
-  <img class="logomark" src="/logo-mark.svg" alt="FrontierSight AI logo" width="36" height="36">
+  <img class="logomark" src="/assets/brand/frontiersight.png" alt="FrontierSight AI logo" width="36" height="36">
   <div class="brandtext"><div class="brandname">Frontier<b>Sight</b> <span class="tag">AI</span></div>
   <div class="brandsub">Quantura Studio</div></div>
  </div>
@@ -328,7 +327,7 @@
  <details><summary>Physics from language</summary><label>Describe a supported change<textarea id="pi-instruction" rows="3" placeholder="Limit lift speed to 0.35 m/s and assume a 900 kg payload."></textarea></label><button id="pi-propose" data-pi-request>Propose with Muse</button><p>Authenticated Researcher plan and configured model access required. One request; changes wait for your approval.</p><pre id="pi-proposal"></pre><button id="pi-approve" disabled data-pi-request>Approve &amp; apply proposal</button></details>
  </aside><div class="pi-main"><div class="card pi-stage-card"><div class="pi-toolbar"><label>View<select id="pi-camera"><option>perspective</option><option>top</option><option>side</option><option>front</option></select></label><button id="pi-run" data-pi-request>Recompute</button><button id="pi-compare" data-pi-request>Compare to baseline</button></div><div id="pi-viewport" role="img" aria-label="3D simulated world; numerical data follows below"></div><div class="pi-timeline"><button id="pi-play">Play</button><label class="pi-range">Timeline<input id="pi-time" type="range" min="0" max="12" step="0.01" value="0"></label><output id="pi-clock">0.00 s</output><label>Playback<select id="pi-rate"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label></div><p id="pi-values"></p></div>
  <div id="pi-charts" class="pi-charts" aria-label="Selected component simulation charts"></div><p id="pi-status" role="status" aria-live="polite">Choose a demonstration. No camera or hardware is connected.</p>
- <div class="pi-toolbar"><button id="pi-reset-baseline">Use current scene as baseline</button><button id="pi-save" data-pi-request>Save to workspace</button><button id="pi-export">Export scene JSON</button></div>
+ <div class="pi-toolbar"><button id="pi-reset-baseline">Use current scene as baseline</button><button id="pi-save" data-pi-request>Save to workspace</button><button id="pi-export">Export scene JSON</button><button id="pi-export-run" type="button" disabled>Download run evidence</button></div>
  <div class="card"><h3>Contact evidence</h3><p>Solid objects show the current simulation. Green wireframes show the baseline. Possible contacts are conservative bounds, not confirmed impacts.</p><ul id="pi-events"></ul><h3>Declared constraints</h3><pre id="pi-constraints"></pre><details><summary>Pair clearance values</summary><div class="pi-table"><table><thead><tr><th>Components</th><th>Clearance</th><th>Time</th><th>Method</th></tr></thead><tbody id="pi-clearance"></tbody></table></div></details></div>
  <details class="card"><summary>Canonical scene · same data for REST, MCP and rendering</summary><label>Version 2.0 scene JSON<textarea id="pi-source" rows="18" spellcheck="false"></textarea></label><button id="pi-source-apply" data-pi-request>Validate &amp; load document</button></details>
  </div></div>
@@ -576,7 +575,7 @@
  </div>
 </section>
 
-<section id="view-auth" class="view"><div class="auth-intro"><img src="/logo-mark.svg" alt="" width="48" height="48"><span class="eyebrow">Your workspace, ready when you are</span><h2 id="auth-title">Welcome to FrontierSight.</h2><p>Save your scenes. Revisit your experiments. Build your next insight.</p></div>
+<section id="view-auth" class="view"><div class="auth-intro"><img src="/assets/brand/frontiersight.png" alt="" width="48" height="48"><span class="eyebrow">Your workspace, ready when you are</span><h2 id="auth-title">Welcome to FrontierSight.</h2><p>Save your scenes. Revisit your experiments. Build your next insight.</p></div>
  <div id="auth-card">
   <div id="clerk-block">
    <p id="clerk-note" class="dim" role="status">Loading secure sign-in…</p>
