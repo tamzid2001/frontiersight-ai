@@ -1,0 +1,16 @@
+{
+  "name": "frontiersight-ai-ui-assets",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild entry.js --bundle --minify --legal-comments=inline --outfile=../../apps/web/ui-speed.js"
+  },
+  "dependencies": {
+    "@ui-sdk/core": "0.1.0-beta.13",
+    "@ui-sdk/web": "0.1.0-beta.13"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

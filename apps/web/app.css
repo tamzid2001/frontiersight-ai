@@ -1,3 +1,4 @@
+@layer ui-sdk;
 :root{--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
 :root,[data-theme="dark"]{--bg:#080a0e;--panel:#10141c;--panel2:#0b0f16;--line:#232b3a;--ink:#e8edf6;--dim:#9db1cc;--cyan:#38c6d9;--teal:#2dd4a8;--amber:#f2b04a;--red:#f26d7d;--canvas:#070a10;--code:#a9c6d8;--field:#0a0e1a;--glow:#10222b;--accent-ink:#03222e}
 [data-theme="light"]{--bg:#edf0f6;--panel:#ffffff;--panel2:#f6f8fb;--line:#ccd6e4;--ink:#0c1524;--dim:#43536c;--cyan:#0a6d85;--teal:#0b7a5f;--amber:#8a5f0d;--red:#b02640;--canvas:#eef2f8;--code:#2f4a68;--field:#ffffff;--glow:#d8ecf3;--accent-ink:#ffffff}
@@ -433,3 +434,6 @@ button.tilelink:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
 #lab-path-tools input,#lab-path-tools textarea{box-sizing:border-box;width:100%;min-width:0}
 #lab-path-tools button{white-space:normal;max-width:100%}#lab-path-tools textarea{resize:vertical}
 #agent-key-form label{display:block;margin:10px 0}#agent-key-list p{overflow-wrap:anywhere}
+
+.speedseg ui-toolbar-button { display: inline-flex; }
+.speedseg button:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }

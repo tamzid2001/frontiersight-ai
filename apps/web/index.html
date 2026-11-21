@@ -245,8 +245,8 @@
    <p id="studio-scene-size" class="scene-size dim" role="status"></p><div class="studio-surface"><canvas id="stage" width="880" height="560" role="img" aria-label="Scene stage: tracked entities moving along their observed paths"></canvas></div>
    <div id="studio-3d" class="hidden" style="height:560px;border:1px solid var(--line);border-radius:12px;overflow:hidden" role="img" aria-label="3D view of the scenario tracks"></div>
    <div class="transport"><button id="play">▶ Play</button>
-    <div class="speedseg" role="group" aria-label="Playback speed">
-    <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button><button type="button" data-speed="1" class="on" aria-pressed="true">1×</button><button type="button" data-speed="2" aria-pressed="false">2×</button></div>
+    <ui-toolbar class="speedseg" aria-label="Playback speed">
+    <ui-toolbar-button><button type="button" data-speed="0.5" aria-pressed="false">0.5×</button></ui-toolbar-button><ui-toolbar-button><button type="button" data-speed="1" class="on" aria-pressed="true">1×</button></ui-toolbar-button><ui-toolbar-button><button type="button" data-speed="2" aria-pressed="false">2×</button></ui-toolbar-button></ui-toolbar>
     <input id="scrub" type="range" aria-label="Scene time scrubber" min="0" max="8" step="0.05" value="0"><span id="clock" class="mono">t = 0.00s</span></div>
    <details class="studio-legend"><summary>Track legend</summary><p class="dim">Entities are drawn to scale and oriented to their heading:
    <span class="sw" style="--sw:#e9a13b">forklift</span> <span class="sw" style="--sw:#ff7847">pedestrian</span>
@@ -810,4 +810,4 @@ Cursor / VS Code (mcp.json):  {"mcpServers": {"frontiersight": {"url": "https://
  <span class="dim">Deterministic fixture verified ≠ real-video evaluation. No physical safety certification is claimed.</span>
 </footer>
 <div id="toasts" aria-live="polite"></div>
-<script src="scene-request-core.js" defer></script><script src="stage-edit-core.js" defer></script><script src="app.js" defer></script></body></html>
+<script src="scene-request-core.js" defer></script><script src="stage-edit-core.js" defer></script><script src="ui-speed.js" defer></script><script src="app.js" defer></script></body></html>

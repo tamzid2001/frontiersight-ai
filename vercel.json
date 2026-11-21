@@ -282,6 +282,10 @@
       "destination": "/api/index?ep=contact"
     },
     {
+      "source": "/ui-speed.js",
+      "destination": "/api/index?ep=uispeed"
+    },
+    {
       "source": "/mobile-nav.js",
       "destination": "/api/index?ep=mobilenav"
     },
