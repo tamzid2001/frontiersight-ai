@@ -142,3 +142,5 @@ export function OrganizationSettings() {
     {orgId ? <OrganizationProfile routing="hash" /> : <UserProfile routing="hash" />}
   </section>;
 }
+
+export { DemoWorkbench } from './demo-workbench.js'
