@@ -12,3 +12,10 @@ Firestore-emulator validation passed. The server library measured **98.32% line
 coverage and 92.74% branch coverage**, with valid Cobertura and LCOV artifacts.
 Model preparation, HTTP authorization and MCP negotiation were exercised.
 No NVIDIA inference or hardware execution is implied by these tests.
+
+## Visitor data analysis release
+
+The Firestore-emulator run passed all 71 tests. Instrumented TypeScript line
+coverage was 98.78%, branch coverage was 92.11%, and function coverage was 100%.
+The suite includes a real signed-in HTTP and MCP round trip, analytical expected
+values for each analyzer, and public-provider schema and failure fixtures.

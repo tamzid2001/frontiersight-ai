@@ -1,3 +1,4 @@
+import { analysisGuide } from "./analysis.ts";
 import type { WorkspaceConfiguration } from "./api.ts";
 
 /** The implemented HTTP surface only. Planned Python APIs are not advertised
@@ -16,11 +17,23 @@ export function workspaceOpenApi(config: WorkspaceConfiguration, origin: string)
   const recordFields = { id: { type: "string", format: "uuid" }, title: { type: "string", maxLength: 160 },
     stage: { type: "integer", minimum: 0, maximum: config.stages.length - 1 }, version: { type: "integer", minimum: 1 },
     createdBy: { type: "string" }, createdAt: { type: "string", format: "date-time" }, updatedAt: { type: "string", format: "date-time" } };
+  const analyzer = analysisGuide(config.siteId);
   return {
     openapi: "3.1.0", info: { title: config.name + " workspace API", version: "1.0.0",
       description: "Clerk-authenticated, Firestore-backed records. Paid programmatic access is checked on every request in the active personal or organization workspace. Stage changes only record status; they do not execute domain actions." },
     servers: [{ url: origin }], security: [{ ClerkSession: [] }],
     paths: {
+      ...(analyzer ? { "/api/v1/analysis": {
+        get: { operationId: "getAnalysisSchema", description: "Read input schema and example.",
+          responses: { 200: response({ type: "object" }), ...errors } },
+        post: { operationId: "analyzeData", description: analyzer.description,
+          requestBody: body(analyzer.schema), responses: { 200: response({
+            type: "object", required: ["schemaVersion", "product", "analysis", "inputSource", "metrics"],
+            properties: { schemaVersion: { const: "1.0" }, product: { type: "string" },
+              analysis: { type: "string" }, inputSource: { const: "user_supplied" },
+              metrics: { type: "object" }, rows: { type: "array", items: { type: "object" } } },
+          }), ...errors } },
+      } } : {}),
       "/api/v1/models": { get: { operationId: "listApplicableModels", description: "Reviewed model capabilities applicable to this product. Free development endpoints have provider trial terms and rate limits; no model is invoked.", responses: { 200: response({ type: "object" }), ...errors } } },
       "/api/v1/models/prepare": { post: { operationId: "prepareModelRequest", description: "Validate a bounded reasoning or tabular regression payload and return a provider request with a placeholder key. This operation never invokes NVIDIA or uploads workspace data. Protein jobs require a dedicated scientific adapter and are rejected here.",
         requestBody: body({ type: "object", required: ["model"], additionalProperties: false, properties: { model: {type:"string"}, prompt:{type:"string",minLength:1,maxLength:4000}, table:{type:"object",description:"columns [{name,dtype: float64|string}], target name, context rows including numeric target last (2–200), predict rows excluding target (1–32). 1–24 feature columns, finite numbers, strings <=256 characters or missing null features."}} }),

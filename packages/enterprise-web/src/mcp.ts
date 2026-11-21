@@ -1,5 +1,6 @@
 /** Official SDK transport. A new request owns its verified identity and server;
  * no globally cached callback can retain another tenant's credentials. */
+import { analysisGuide, MAX_INPUT_BYTES } from "./analysis.ts";
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { createWorkspaceApi, storagePolicy, type WorkspaceConfiguration, type WorkspaceDependencies } from "./api.ts";
@@ -14,7 +15,7 @@ export function createWorkspaceMcp(config: WorkspaceConfiguration, dependencies:
       const principal = await dependencies.authenticate(request);
       requireFeature(principal, "api_access");
       if (request.method !== "POST") throw new AccessError(405, "stateless_mcp_requires_post");
-      const body = await readJson(request, 64 * 1024);
+      const body = await readJson(request, MAX_INPUT_BYTES + 8192, 50_000);
       const store = new FirestoreWorkspace(dependencies.database(), config.siteId, principal,
         storagePolicy(principal, config.stages.length), dependencies.auditSecret);
       await store.consumeRequest(principal.plan === "free" || !principal.plan ? 60 : 300);
@@ -36,7 +37,22 @@ export function createWorkspaceMcp(config: WorkspaceConfiguration, dependencies:
         }));
         return {content:[{type:"text" as const,text:JSON.stringify(await response.json())}],isError:!response.ok};
       }
+      const guide = analysisGuide(config.siteId);
       const handler = createMcpHandler(server => {
+        if (guide) {
+          server.registerTool("get_analysis_schema", { description: "Read the analyzer input schema and an illustrative example.",
+            inputSchema: z.object({}).strict(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+          }, async () => ({ content: [{ type: "text" as const, text: JSON.stringify(guide) }] }));
+          server.registerTool("analyze_data", { description: guide.description,
+            inputSchema: z.object({ input: z.record(z.string(), z.unknown()) }).strict(),
+            annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+          }, async ({ input }) => {
+            const response = await api(new Request(new URL("/api/v1/analysis", request.url), {
+              method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+            }));
+            return { content: [{ type: "text" as const, text: JSON.stringify(await response.json()) }], isError: !response.ok };
+          });
+        }
         server.registerTool("list_applicable_models", {description:"List this product's reviewed NVIDIA research model capabilities. No provider inference.",inputSchema:z.object({}).strict(),annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},async()=>modelRequest(""));
         server.registerTool("prepare_model_request", {description:"Prepare one bounded provider payload with a placeholder key. Never invokes a model, sends data externally or grants execution approval.",inputSchema:z.object({model:z.string().max(128),prompt:z.string().min(1).max(4000).optional(),table:z.record(z.string(),z.unknown()).optional()}).strict(),annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},async input=>modelRequest("/prepare",input));
 

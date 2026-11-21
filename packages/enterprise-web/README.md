@@ -68,3 +68,22 @@ See `docs/research/NVIDIA_MODELS_2026-10-29.md` in the source repository for the
 catalog review, exact provider references, trial terms and verification limits.
 The support assistant's optional free-provider integration now accepts only
 reviewed model IDs; a boolean setting cannot route an arbitrary model as free.
+
+## Domain analyzers
+
+The public analyzers process pasted JSON, files and screenshots in the browser. Each
+product supplies its own input schema, example and deterministic computation. JSON
+reports include the input provenance, computed metrics and detailed result rows.
+
+Signed-in workspaces with `api_access` can use `GET /api/v1/analysis` for the
+schema and `POST /api/v1/analysis` for the result. MCP exposes the same computations
+via `get_analysis_schema` and `analyze_data`, with data under `input`. Analysis
+input is limited to 512 KiB and is separate from saved workflow records.
+
+Flaky Test Forensics can import public GitHub Actions run metadata. Atmospheric
+Calibrated Forecast can import recent US station temperatures from the National
+Weather Service. These optional imports retrieve public records on request and
+include source URLs in browser reports.
+
+- [GitHub Actions workflow runs API](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository)
+- [National Weather Service API](https://www.weather.gov/documentation/services-web-api)

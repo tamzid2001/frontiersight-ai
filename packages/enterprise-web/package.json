@@ -1,6 +1,6 @@
 {
   "name": "@quantura/enterprise-web",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "description": "Clerk-verified, Firestore-backed tenant workspaces and authenticated MCP for Quantura websites",
@@ -77,6 +77,18 @@
     "./models": {
       "types": "./dist/models.d.ts",
       "import": "./dist/models.js"
+    },
+    "./analysis": {
+      "types": "./dist/analysis.d.ts",
+      "import": "./dist/analysis.js"
+    },
+    "./analysis-workbench": {
+      "types": "./dist/analysis-workbench.d.ts",
+      "import": "./dist/analysis-workbench.js"
+    },
+    "./analysis-sources": {
+      "types": "./dist/analysis-sources.d.ts",
+      "import": "./dist/analysis-sources.js"
     }
   },
   "peerDependencies": {

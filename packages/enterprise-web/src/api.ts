@@ -1,4 +1,5 @@
 /** One authenticated service for both website and programmatic adapters. */
+import { AnalysisError, analysisGuide, MAX_INPUT_BYTES, runAnalysis } from "./analysis.ts";
 import { modelCapabilities, prepareModelRequest, MODEL_REVIEW_DATE } from "./models.ts";
 import type { Firestore } from "@google-cloud/firestore";
 import { FirestoreWorkspace, type StoragePolicy } from "./firestore.ts";
@@ -35,7 +36,8 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
       const programmatic = path.startsWith("/api/v1/");
       if (programmatic) requireFeature(principal, "api_access");
       const modelPath = programmatic && (path === "/api/v1/models" || path.startsWith("/api/v1/models/"));
-      const prefix = modelPath ? "/api/v1/models" : programmatic ? "/api/v1/workflows" : "/api/workspace";
+      const analysisPath = path === "/api/v1/analysis" && programmatic;
+      const prefix = analysisPath ? "/api/v1/analysis" : modelPath ? "/api/v1/models" : programmatic ? "/api/v1/workflows" : "/api/workspace";
       if (path !== prefix && !path.startsWith(prefix + "/")) throw new AccessError(404, "endpoint_not_found");
       const store = new FirestoreWorkspace(dependencies.database(), config.siteId, principal,
         storagePolicy(principal, config.stages.length), dependencies.auditSecret);
@@ -44,6 +46,22 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
       const url = new URL(request.url);
       const limit = () => pageSize(url.searchParams.get("limit"));
       const key = () => request.headers.get("idempotency-key") ?? "";
+      if (analysisPath) {
+        const guide = analysisGuide(config.siteId);
+        if (!guide) throw new AccessError(404, "analysis_not_available");
+        if (method === "GET") return jsonResponse(guide);
+        if (method === "POST") {
+          const input = await readJson(request, MAX_INPUT_BYTES, 50_000);
+          try { return jsonResponse(runAnalysis(config.siteId, input)); }
+          catch (error) {
+            if (error instanceof AnalysisError) return jsonResponse({ error: {
+              code: "invalid_analysis_input", message: error.message, requestId: crypto.randomUUID(),
+            } }, 400);
+            throw error;
+          }
+        }
+        throw new AccessError(405, "method_or_endpoint_not_supported");
+      }
       if (modelPath) {
         if (method === "GET" && suffix === "") return jsonResponse({ reviewedAt: MODEL_REVIEW_DATE,
           execution: "request_preparation_only", models: modelCapabilities(config.siteId) });

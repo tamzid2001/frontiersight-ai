@@ -7,6 +7,7 @@ import { createWorkspaceApi, storagePolicy } from "../src/api.ts";
 import { createWorkspaceMcp } from "../src/mcp.ts";
 import { createBearerAuthenticator } from "../src/auth.ts";
 import { config, origin, token } from "./auth.fixture.ts";
+import { analysisGuide, runAnalysis } from "../src/analysis.ts";
 
 const emulator = process.env.FIRESTORE_EMULATOR_HOST;
 const db = emulator ? firestoreClient({ FIRESTORE_PROJECT_ID: "demo-quantura-web", FIRESTORE_EMULATOR_HOST: emulator }) : null;
@@ -121,4 +122,41 @@ test("model HTTP contracts preserve paid access, validation and zero external ex
  assert.equal((await run("/prepare","POST",{model:"unknown"})).status,400);
  assert.equal((await run("/unknown")).status,405);
  assert.equal((await run("","GET",undefined,token({fea:"",pla:"u:free"}))).status,403);
+});
+
+test("browser, authenticated REST and real MCP transport agree on domain analysis", { skip: !emulator }, async () => {
+  const siteId = "energy-grid-operations-platform";
+  const analyzer = { ...site, siteId };
+  const http = createWorkspaceApi(analyzer, deps);
+  const mcp = createWorkspaceMcp(analyzer, deps);
+  const url = origin + "/api/v1/analysis";
+  const headers = { authorization: "Bearer " + token(), "content-type": "application/json" };
+  const guide = analysisGuide(siteId)!;
+  assert.deepEqual(await (await http(new Request(url, { headers }))).json(), guide);
+  const actual = await http(new Request(url, { method: "POST", headers, body: JSON.stringify(guide.example) }));
+  assert.deepEqual(await actual.json(), runAnalysis(siteId, guide.example));
+  const invalid = await http(new Request(url, { method: "POST", headers, body: "{}" }));
+  assert.equal(invalid.status, 400);
+  assert.equal((await invalid.json()).error.code, "invalid_analysis_input");
+  assert.equal((await http(new Request(url))).status, 401);
+  assert.equal((await http(new Request(url, { method: "PUT", headers }))).status, 405);
+  assert.equal((await api(new Request(url, { headers }))).status, 404);
+
+  const client = new Client({ name: "analysis-contract-test", version: "1" });
+  const transport = new StreamableHTTPClientTransport(new URL(origin + "/api/mcp"), {
+    fetch: async (input, init) => {
+      const request = new Request(input, init);
+      request.headers.set("authorization", headers.authorization);
+      return mcp(request);
+    },
+  });
+  try {
+    await client.connect(transport);
+    const schema = await client.callTool({ name: "get_analysis_schema", arguments: {} });
+    assert.deepEqual(JSON.parse((schema.content as { text: string }[])[0].text), guide);
+    const result = await client.callTool({ name: "analyze_data", arguments: { input: guide.example } });
+    assert.deepEqual(JSON.parse((result.content as { text: string }[])[0].text), runAnalysis(siteId, guide.example));
+    const rejected = await client.callTool({ name: "analyze_data", arguments: { input: {} } });
+    assert.equal(rejected.isError, true);
+  } finally { await client.close(); }
 });

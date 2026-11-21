@@ -25,7 +25,7 @@ export function enforceOrigin(request: Request, allowed: readonly string[]) {
   if (origin && !allowed.includes(origin)) throw new AccessError(403, "request_origin_not_allowed");
 }
 
-export async function readJson(request: Request, maximumBytes = 256 * 1024): Promise<Record<string, unknown>> {
+export async function readJson(request: Request, maximumBytes = 256 * 1024, maxNodes = 10_000): Promise<Record<string, unknown>> {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1 || maximumBytes > 1024 * 1024) {
     throw new AccessError(500, "invalid_body_budget");
   }
@@ -54,7 +54,7 @@ export async function readJson(request: Request, maximumBytes = 256 * 1024): Pro
   let parsed: unknown;
   try { parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
   catch { throw new AccessError(400, "invalid_json"); }
-  return validatePayload(parsed);
+  return validatePayload(parsed, maxNodes);
 }
 
 export function strictFields(value: Record<string, unknown>, allowed: readonly string[]) {
