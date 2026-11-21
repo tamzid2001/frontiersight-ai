@@ -329,7 +329,12 @@
  <div id="pi-charts" class="pi-charts" aria-label="Selected component simulation charts"></div><p id="pi-status" role="status" aria-live="polite">Choose a demonstration. No camera or hardware is connected.</p>
  <div class="pi-toolbar"><button id="pi-reset-baseline">Use current scene as baseline</button><button id="pi-save" data-pi-request>Save to workspace</button><button id="pi-export">Export scene JSON</button><button id="pi-export-run" type="button" disabled>Download run evidence</button></div>
  <div class="card"><h3>Contact evidence</h3><p>Solid objects show the current simulation. Green wireframes show the baseline. Possible contacts are conservative bounds, not confirmed impacts.</p><ul id="pi-events"></ul><h3>Declared constraints</h3><pre id="pi-constraints"></pre><details><summary>Pair clearance values</summary><div class="pi-table"><table><thead><tr><th>Components</th><th>Clearance</th><th>Time</th><th>Method</th></tr></thead><tbody id="pi-clearance"></tbody></table></div></details></div>
- <details class="card"><summary>Canonical scene · same data for REST, MCP and rendering</summary><label>Version 2.0 scene JSON<textarea id="pi-source" rows="18" spellcheck="false"></textarea></label><button id="pi-source-apply" data-pi-request>Validate &amp; load document</button></details>
+ <details class="card"><summary>Canonical scene · same data for REST, MCP and rendering</summary>
+  <label>Import a scene or run evidence JSON<input id="pi-scene-file" type="file" accept=".json,application/json" data-pi-request aria-describedby="pi-file-hint"></label>
+  <p id="pi-file-hint">Choose a Version 2.0 scene or a FrontierSight run export up to 2 MiB. Importing sets the starting point for comparison.</p>
+  <label>Version 2.0 scene JSON<textarea id="pi-source" rows="18" spellcheck="false"></textarea></label>
+  <button id="pi-source-apply" data-pi-request>Validate &amp; load document</button>
+ </details>
  </div></div>
 </section>
 

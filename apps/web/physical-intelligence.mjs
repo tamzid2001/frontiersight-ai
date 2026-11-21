@@ -13,7 +13,7 @@ async function call(operation,data){const ticket=workspaceScope.capture();const 
 async function action(work){if(busy)return;busy=true;root.setAttribute('aria-busy','true');root.querySelectorAll('[data-pi-request],#pi-demo,#pi-warehouse-variant,#pi-object,#pi-camera').forEach(b=>b.disabled=true);try{await work();}catch(error){status(error.name==='TimeoutError'?'Request timed out; no automatic retry.':error.message,true);}finally{busy=false;root.removeAttribute('aria-busy');root.querySelectorAll('[data-pi-request],#pi-demo,#pi-warehouse-variant,#pi-object,#pi-camera').forEach(b=>b.disabled=false);$('pi-approve').disabled=!proposal||proposal.missing_parameters.length>0;}}
 function selected(){return sceneData?.objects.find(o=>o.id===$('pi-object').value);}
 function edit(){revision++;computedRevision=-1;$('pi-export-run').disabled=true;proposal=null;$('pi-approve').disabled=true;comparison=null;$('pi-proposal').textContent='';}
-function loadEditor(){if(!sceneData)return;const old=$('pi-object').value;$('pi-object').replaceChildren(...sceneData.objects.map(o=>new Option(o.label||o.id,o.id)));if(sceneData.objects.some(o=>o.id===old))$('pi-object').value=old;loadObject();$('pi-source').textContent=JSON.stringify(sceneData,null,2);$('pi-calibration').textContent=sceneData.calibration.status+' · ENU · SI';}
+function loadEditor(){if(!sceneData)return;const old=$('pi-object').value;$('pi-object').replaceChildren(...sceneData.objects.map(o=>new Option(o.label||o.id,o.id)));if(sceneData.objects.some(o=>o.id===old))$('pi-object').value=old;loadObject();$('pi-source').value=JSON.stringify(sceneData,null,2);$('pi-calibration').textContent=sceneData.calibration.status+' · ENU · SI';}
 function loadObject(){const object=selected();if(!object)return;$('pi-position').value=object.pose.position_m.join(', ');$('pi-orientation').value=(object.pose.orientation_wxyz||[1,0,0,0]).join(', ');$('pi-velocity').value=(object.velocity_mps||[0,0,0]).join(', ');$('pi-acceleration').value=(object.acceleration_mps2||[0,0,0]).join(', ');$('pi-profile').value=JSON.stringify(object.physics,null,2);$('pi-geometry').value=JSON.stringify(object.geometry);$('pi-joint').value=object.joint?JSON.stringify(object.joint,null,2):'';$('pi-joint').disabled=!object.joint;$('pi-waypoints').value=object.waypoints?JSON.stringify(object.waypoints,null,2):'';$('pi-parent').textContent=object.parent_id?'Local to '+object.parent_id+' · attachment/joint retained':'World ENU body centre';}
 function vector(id,n){const a=$(id).value.split(',').map(Number);if(a.length!==n||!a.every(Number.isFinite))throw Error('Enter '+n+' finite comma-separated numbers');return a;}
 function applyFields(){const object=selected();if(!object)throw Error('Load a scene first');const next=clone(object);next.pose={position_m:vector('pi-position',3),orientation_wxyz:vector('pi-orientation',4)};next.velocity_mps=vector('pi-velocity',3);next.acceleration_mps2=vector('pi-acceleration',3);next.physics=JSON.parse($('pi-profile').value);next.physics_provenance='ASSUMPTION';next.provenance='ASSUMPTION';next.geometry=JSON.parse($('pi-geometry').value);if($('pi-waypoints').value.trim())next.waypoints=JSON.parse($('pi-waypoints').value);else delete next.waypoints;if(next.joint)next.joint=JSON.parse($('pi-joint').value);return next;}
@@ -37,7 +37,32 @@ $('pi-apply-object').onclick=()=>action(applyObject);
 $('pi-run').onclick=()=>action(run);
 $('pi-compare').onclick=()=>action(async()=>{const ticket=workspaceScope.capture();if(!baseline)throw Error('Load a baseline first');const changes=sceneData.objects.map(o=>({object_id:o.id,pose:o.pose,physics:o.physics,geometry:o.geometry,...(o.waypoints?{waypoints:o.waypoints}:{}),...(o.angular_velocity_radps?{angular_velocity_radps:o.angular_velocity_radps}:{}),...(o.joint?{joint:o.joint}:{}),velocity_mps:o.velocity_mps||[0,0,0],acceleration_mps2:o.acceleration_mps2||[0,0,0]}));const compared=await call('counterfactuals/compare',{scene:baseline,changes});if(!workspaceScope.current(ticket))return;comparison=compared;simulation=comparison.counterfactual;buildWorld();updateEvidence(simulation);status('Counterfactual recomputed; green wireframe shows the original baseline.');draw();});
 $('pi-reset-baseline').onclick=()=>{if(sceneData){baseline=clone(sceneData);comparison=null;status('Current scene set as comparison baseline.');}};
-$('pi-source-apply').onclick=()=>action(async()=>{const ticket=workspaceScope.capture();const validated=await call('scenes/prepare',{scene:JSON.parse($('pi-source').value)});if(!workspaceScope.current(ticket))return;sceneData=validated.scene;edit();loadEditor();await run();});
+async function loadDocument(draft, setBaseline=false){
+ const ticket=workspaceScope.capture();
+ const validated=await call('scenes/prepare',{scene:draft});
+ if(!workspaceScope.current(ticket))return;
+ sceneData=validated.scene;
+ if(setBaseline)baseline=clone(sceneData);
+ edit();
+ loadEditor();
+ await run();
+}
+$('pi-source-apply').onclick=()=>action(()=>loadDocument(JSON.parse($('pi-source').value)));
+$('pi-scene-file').onchange=event=>{
+ const file=event.currentTarget.files[0];
+ event.currentTarget.value='';
+ if(!file)return;
+ void action(async()=>{
+  if(file.size>2*1024*1024)throw Error('Choose a JSON file up to 2 MiB.');
+  const ticket=workspaceScope.capture();
+  let value;
+  try{value=JSON.parse((await file.text()).replace(/^\uFEFF/,''));}
+  catch{throw Error('Choose a valid scene or run evidence JSON file.');}
+  if(!workspaceScope.current(ticket))return;
+  const draft=value?.schema_version===1 && value.simulation ? value.scene : value;
+  await loadDocument(draft,true);
+ });
+};
 $('pi-propose').onclick=()=>action(async()=>{const object=selected();if(!object)throw Error('Load a scene first');const version=revision;const result=await window.api('/api/v1/physics/propose',{method:'POST',body:JSON.stringify({profile:object.physics,description:$('pi-instruction').value})});if(result.status!==200)throw Error(result.body.error||'Physics proposal unavailable');if(version!==revision)throw Error('Scene changed while the proposal was running; no change applied.');proposal={...result.body,object_id:object.id,revision};$('pi-proposal').textContent=JSON.stringify(proposal,null,2);$('pi-approve').disabled=proposal.missing_parameters.length>0;status('Review the complete proposal and assumptions. Applying it requires your click.');});
 $('pi-approve').onclick=()=>action(async()=>{const ticket=workspaceScope.capture();if(!proposal||proposal.revision!==revision||proposal.missing_parameters.length)throw Error('Proposal expired after a scene edit');const candidate=clone(sceneData);const body=candidate.objects.find(o=>o.id===proposal.object_id);body.physics=clone(proposal.profile);body.physics_provenance='MODEL_DERIVED';candidate.assumptions.push(...proposal.assumptions);const validated=await call('scenes/prepare',{scene:candidate});if(!workspaceScope.current(ticket))return;sceneData=validated.scene;edit();loadEditor();await run();});
 $('pi-save').onclick=()=>action(async()=>{const result=await window.api('/api/v1/scenes/create',{method:'POST',body:JSON.stringify({name:sceneData.name,scene:sceneData})});if(result.status>=300)throw Error(result.body.error||'Cloud save unavailable');status('Saved to your authenticated FrontierSight workspace.');});
