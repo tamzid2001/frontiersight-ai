@@ -87,3 +87,8 @@ include source URLs in browser reports.
 
 - [GitHub Actions workflow runs API](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository)
 - [National Weather Service API](https://www.weather.gov/documentation/services-web-api)
+
+
+### Verify browser sign-in
+
+Run `npm run test:clerk` with a local website on its production build and a disposable Clerk development instance. Set `CLERK_E2E_ORIGIN` to its loopback URL. Supply its `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and the synthetic `+clerk_test@example.com` account through `CLERK_E2E_EMAIL` and `CLERK_E2E_PASSWORD`. Playwright uses installed Chromium or `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. The test checks actual password rejection, accessible feedback, device verification, dashboard reload, and access to the managed Clerk options.

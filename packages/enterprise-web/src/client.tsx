@@ -3,6 +3,8 @@ import { useAuth, SignInButton, OrganizationProfile, OrganizationSwitcher, UserP
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceSummary } from "./firestore.ts";
 
+export { WorkspaceSignIn } from "./sign-in.tsx";
+
 type Context = { product: string; stages: string[]; principal: {
   orgId: string | null; orgRole: string | null; plan: string; features: string[];
 }; usage: { mutations: number; records: number; maximumRecords: number; monthlyMutations: number; period: string } };
