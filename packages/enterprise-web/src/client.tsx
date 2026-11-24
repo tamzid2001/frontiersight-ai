@@ -3,6 +3,8 @@ import { useAuth, SignInButton, OrganizationProfile, OrganizationSwitcher, UserP
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspaceSummary } from "./firestore.ts";
 
+export { WorkspaceSignIn } from "./sign-in.tsx";
+
 type Context = { product: string; stages: string[]; principal: {
   orgId: string | null; orgRole: string | null; plan: string; features: string[];
 }; usage: { mutations: number; records: number; maximumRecords: number; monthlyMutations: number; period: string } };
@@ -16,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   workspace_record_limit: "This workspace has reached its saved-record allowance.",
   request_rate_limit: "Too many requests. Wait a minute before retrying.",
   authentication_required: "Sign in again to continue.",
+  invalid_csrf_token: "Your request verification expired. Retry the action.",
+  workspace_csrf_not_configured: "Workspace changes are awaiting server configuration.",
   firestore_project_not_configured: "Saved workspaces are awaiting server configuration. No record was saved.",
   firestore_credentials_not_configured: "Saved workspaces are awaiting server configuration. No record was saved.",
   authentication_not_configured: "Authentication is awaiting server configuration.",
@@ -46,9 +50,19 @@ function WorkspaceSession({ name, stages }: { name: string; stages: readonly str
     let key = mutationKeys.current.get(signature);
     if (method !== "GET" && !key) { key = crypto.randomUUID(); mutationKeys.current.set(signature, key); }
     try {
+      const headers: Record<string, string> = {
+        authorization: "Bearer " + token, "x-workspace-organization": orgId ?? "personal",
+      };
+      if (method !== "GET") {
+        const challenge = await fetch("/api/workspace/csrf", { signal: controller.signal, cache: "no-store", headers });
+        const data = await challenge.json();
+        if (!challenge.ok || typeof data.token !== "string") {
+          throw new Error(MESSAGES[data.error?.code] ?? "Workspace verification is unavailable. Please retry.");
+        }
+        headers["x-csrf-token"] = data.token;
+      }
       const response = await fetch("/api/workspace" + path, { method, signal: controller.signal, cache: "no-store",
-        headers: { authorization: "Bearer " + token, "x-workspace-organization": orgId ?? "personal",
-          ...(body === undefined ? {} : { "content-type": "application/json", "idempotency-key": key! }) },
+        headers: { ...headers, ...(body === undefined ? {} : { "content-type": "application/json", "idempotency-key": key! }) },
         body: body === undefined ? undefined : JSON.stringify(body) });
       const value = await response.json();
       if (!response.ok) throw new Error(MESSAGES[value.error?.code] ?? "The request could not be completed. Try again; if it persists, contact support with request " + (value.error?.requestId ?? "unavailable") + ".");

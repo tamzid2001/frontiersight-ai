@@ -3,6 +3,10 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { comparePixels, MAX_INPUT_BYTES, parseInput, runAnalysis, type AnalysisReport } from "./analysis.ts";
 
+import { readJsonUpload, uploadName } from "./upload.ts";
+
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
 type Guide = { title: string; description: string; example: Record<string, unknown>; schema: unknown };
 type SourceGuide = { label: string; placeholder: string; button: string };
 
@@ -10,6 +14,7 @@ async function compareFiles(baseline: File, candidate: File, tolerance: number) 
   const bitmaps: ImageBitmap[] = [];
   try {
     for (const file of [baseline, candidate]) {
+      uploadName(file.name, IMAGE_EXTENSIONS);
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 15 * 1024 * 1024) {
         throw new Error("Choose a PNG, JPEG or WebP file up to 15 MiB for each image.");
       }
@@ -168,8 +173,9 @@ export function AnalysisWorkbench({ siteId, guide, sourceGuide }: { siteId: stri
                   if (!file) return;
                   setBusy(true);
                   try {
-                    if (file.size > MAX_INPUT_BYTES) throw new Error("Choose a file up to 512 KiB.");
-                    changeText(await file.text(), "user_supplied");
+                    const uploaded = await readJsonUpload(file, MAX_INPUT_BYTES);
+                    changeText(uploaded.text, "user_supplied");
+                    setStatus(uploaded.name + " loaded. Run the analysis to see the results.");
                   } catch (cause) { showError(cause); }
                   finally { setBusy(false); }
                 }} />
@@ -188,7 +194,7 @@ export function AnalysisWorkbench({ siteId, guide, sourceGuide }: { siteId: stri
             onClick={() => changeText(JSON.stringify(guide.example, null, 2), "example")}>Load example</button>}
         </div>
         <p className="analysis-status" role="status">{status}</p>
-        {error && <p className="analysis-error" tabIndex={-1} ref={errorBox}>{error}</p>}
+        <p className={error ? "analysis-error" : undefined} role="alert" aria-live="assertive" tabIndex={-1} ref={errorBox}>{error}</p>
       </form>
       {report && <section className="card analysis-results" aria-labelledby={prefix + "-results"}>
         <div className="analysis-result-heading">
