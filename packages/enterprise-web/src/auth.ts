@@ -60,7 +60,7 @@ export function createBearerAuthenticator(configuration: ClerkConfiguration) {
       throw new AccessError(401, "invalid_session");
     }
     const verified = state.toAuth();
-    if (!verified.userId || verified.sessionClaims.iss !== configuration.issuer
+    if (!verified.userId || !verified.sessionId || verified.sessionClaims.iss !== configuration.issuer
         || !configuration.authorizedParties.includes(verified.sessionClaims.azp ?? "")) {
       throw new AccessError(401, "invalid_session_origin");
     }
@@ -70,7 +70,7 @@ export function createBearerAuthenticator(configuration: ClerkConfiguration) {
     const prefix = verified.orgId ? "org:" : "user:";
     const features = FEATURE_NAMES.filter(feature => verified.has({ feature: prefix + feature }));
     const plan = (["enterprise", "pro", "starter"] as const).find(name => verified.has({ plan: prefix + name })) ?? "free";
-    const principal = Object.freeze({ userId: verified.userId, orgId: verified.orgId ?? null,
+    const principal = Object.freeze({ userId: verified.userId, sessionId: verified.sessionId, orgId: verified.orgId ?? null,
       orgRole: verified.orgRole ?? null, plan, features: Object.freeze(features) });
     return requirePrincipal(principal);
   };

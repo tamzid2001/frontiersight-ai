@@ -1,5 +1,6 @@
 /** One authenticated service for both website and programmatic adapters. */
 import { AnalysisError, analysisGuide, MAX_INPUT_BYTES, runAnalysis } from "./analysis.ts";
+import { issueCsrf, needsCsrf, verifyCsrf } from "./csrf.ts";
 import { modelCapabilities, prepareModelRequest, MODEL_REVIEW_DATE } from "./models.ts";
 import type { Firestore } from "@google-cloud/firestore";
 import { FirestoreWorkspace, type StoragePolicy } from "./firestore.ts";
@@ -39,6 +40,16 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
       const analysisPath = path === "/api/v1/analysis" && programmatic;
       const prefix = analysisPath ? "/api/v1/analysis" : modelPath ? "/api/v1/models" : programmatic ? "/api/v1/workflows" : "/api/workspace";
       if (path !== prefix && !path.startsWith(prefix + "/")) throw new AccessError(404, "endpoint_not_found");
+      // The browser workspace uses session-bound tokens. Explicit bearer REST
+      // clients use the existing separate /api/v1 contract.
+      if (!programmatic) {
+        if (path === "/api/workspace/csrf" && request.method === "GET") {
+          return jsonResponse({ token: issueCsrf(config.siteId, principal, dependencies.auditSecret) });
+        }
+        if (needsCsrf(request.method)) {
+          verifyCsrf(request.headers.get("x-csrf-token") ?? "", config.siteId, principal, dependencies.auditSecret);
+        }
+      }
       const store = new FirestoreWorkspace(dependencies.database(), config.siteId, principal,
         storagePolicy(principal, config.stages.length), dependencies.auditSecret);
       await store.consumeRequest(principal.plan === "free" || !principal.plan ? 60 : 300);
@@ -73,7 +84,8 @@ export function createWorkspaceApi(config: WorkspaceConfiguration, dependencies:
         throw new AccessError(405, "method_or_endpoint_not_supported");
       }
       if (method === "GET" && suffix === "/context") {
-        return jsonResponse({ product: config.name, principal, stages: config.stages, usage: await store.usage() });
+        const { sessionId: _sessionId, ...workspacePrincipal } = principal;
+        return jsonResponse({ product: config.name, principal: workspacePrincipal, stages: config.stages, usage: await store.usage() });
       }
       if (method === "GET" && suffix === "/audit") {
         requireFeature(principal, "audit_logs");

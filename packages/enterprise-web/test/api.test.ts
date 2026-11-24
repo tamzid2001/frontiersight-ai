@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { firestoreClient, FirestoreWorkspace } from "../src/firestore.ts";
+import { issueCsrf } from "../src/csrf.ts";
 import { createWorkspaceApi, storagePolicy } from "../src/api.ts";
 import { createWorkspaceMcp } from "../src/mcp.ts";
 import { createBearerAuthenticator } from "../src/auth.ts";
@@ -16,8 +17,12 @@ const site = { siteId: "api-test-" + randomBytes(6).toString("hex"), name: "API 
 const deps = { database: () => db!, authenticate: createBearerAuthenticator(config), auditSecret: randomBytes(32).toString("hex") };
 const api = createWorkspaceApi(site, deps);
 function request(path = "", method = "GET", body?: unknown, jwt = token(), key = randomUUID()) {
+  const claims = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString());
+  const csrf = issueCsrf(site.siteId, { userId: claims.sub, sessionId: claims.sid, orgId: claims.o?.id ?? null,
+    orgRole: null, features: [] }, deps.auditSecret);
   return new Request(origin + "/api/workspace" + path, { method, headers: {
     authorization: "Bearer " + jwt, "content-type": "application/json", "idempotency-key": key,
+    ...(method === "GET" ? {} : { "x-csrf-token": csrf }),
   }, body: body === undefined ? undefined : JSON.stringify(body) });
 }
 
@@ -29,7 +34,10 @@ test("unauthenticated and cross-origin requests are rejected before database acc
 
 test("signed identity roundtrip, bounded list/export, idempotency and concurrency through HTTP", { skip: !emulator }, async () => {
   const input = { title: "HTTP saved record", payload: { check: [1, 2, 3] } }, key = randomUUID();
-  const first = await api(request("", "POST", input, token(), key));
+  const challenge = await (await api(request("/csrf"))).json();
+  const saved = request("", "POST", input, token(), key);
+  saved.headers.set("x-csrf-token", challenge.token);
+  const first = await api(saved);
   assert.equal(first.status, 201); const row = await first.json();
   assert.equal((await api(request("", "POST", input, token(), key))).status, 200);
   const list = await (await api(request("?limit=1"))).json();

@@ -5,6 +5,7 @@
 export type Feature = "analytics" | "export" | "api_access" | "audit_logs" | "priority_support";
 export type Principal = Readonly<{
   userId: string;
+  sessionId?: string;
   orgId: string | null;
   orgRole: string | null;
   plan?: "free" | "starter" | "pro" | "enterprise";
